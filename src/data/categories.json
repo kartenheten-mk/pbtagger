@@ -1,44 +1,478 @@
-[
-  {
-    "id": "requirement",
-    "name": "Requirement",
-    "color": "#3b82f6",
-    "description": "Functional or non-functional requirements stated in the document"
-  },
-  {
-    "id": "area",
-    "name": "Area",
-    "color": "#10b981",
-    "description": "References to a spatial area, zone, or district"
-  },
-  {
-    "id": "building",
-    "name": "Building",
-    "color": "#f59e0b",
-    "description": "References to a specific building or structure"
-  },
-  {
-    "id": "road",
-    "name": "Road / Infrastructure",
-    "color": "#8b5cf6",
-    "description": "References to roads, paths, or infrastructure elements"
-  },
-  {
-    "id": "regulation",
-    "name": "Regulation",
-    "color": "#ef4444",
-    "description": "Legal or planning regulation references"
-  },
-  {
-    "id": "landmark",
-    "name": "Landmark",
-    "color": "#ec4899",
-    "description": "Named landmarks, monuments, or points of interest"
-  },
-  {
-    "id": "note",
-    "name": "Note",
-    "color": "#6b7280",
-    "description": "General annotations or reviewer notes"
-  }
-]
+{
+  "teman": [
+    {
+      "id": "detaljplanens-syfte",
+      "name": "Detaljplanens syfte",
+      "color": "#3b82f6",
+      "grupper": [
+        {
+          "id": "syfte",
+          "name": "Syfte",
+          "undergrupper": []
+        }
+      ]
+    },
+    {
+      "id": "beskrivning-av-detaljplanen",
+      "name": "Beskrivning av detaljplanen",
+      "color": "#10b981",
+      "grupper": [
+        {
+          "id": "hela-detaljplan",
+          "name": "Hela detaljplan",
+          "undergrupper": []
+        },
+        {
+          "id": "genomforandetid",
+          "name": "Genomförandetid",
+          "undergrupper": []
+        },
+        {
+          "id": "allman-plats",
+          "name": "Allmän plats",
+          "undergrupper": [
+            { "id": "huvudmannaskap", "name": "Huvudmannaskap" }
+          ]
+        },
+        {
+          "id": "kvartersmark",
+          "name": "Kvartersmark",
+          "undergrupper": []
+        },
+        {
+          "id": "vattenomrade",
+          "name": "Vattenområde",
+          "undergrupper": []
+        },
+        {
+          "id": "befintligt",
+          "name": "Befintligt",
+          "undergrupper": []
+        },
+        {
+          "id": "varfor-andring-av-detaljplan-valts",
+          "name": "Varför ändring av detaljplan valts",
+          "undergrupper": []
+        },
+        {
+          "id": "arendeinformation",
+          "name": "Ärendeinformation",
+          "undergrupper": []
+        },
+        {
+          "id": "annat-beskrivning",
+          "name": "Annat",
+          "undergrupper": []
+        }
+      ]
+    },
+    {
+      "id": "motiv-till-detaljplanens-regleringar",
+      "name": "Motiv till detaljplanens regleringar",
+      "color": "#f59e0b",
+      "grupper": [
+        {
+          "id": "motiv-till-reglering",
+          "name": "Motiv till reglering",
+          "undergrupper": []
+        }
+      ]
+    },
+    {
+      "id": "genomforandefragor",
+      "name": "Genomförandefrågor",
+      "color": "#8b5cf6",
+      "grupper": [
+        {
+          "id": "mark-och-utrymmesforvarv",
+          "name": "Mark- och utrymmesförvärv",
+          "undergrupper": [
+            { "id": "skyldighet-inlosen-huvudman", "name": "Skyldighet inlösen, huvudman" },
+            { "id": "skyldighet-inlosen-stat", "name": "Skyldighet inlösen, stat" },
+            { "id": "ratt-till-inlosen-huvudman", "name": "Rätt till inlösen, huvudman" },
+            { "id": "ratt-till-inlosen-av-rattighet-kommun", "name": "Rätt till inlösen av rättighet, kommun" }
+          ]
+        },
+        {
+          "id": "fastighetsrattsliga-fragor",
+          "name": "Fastighetsrättsliga frågor",
+          "undergrupper": [
+            { "id": "fastighetsindelnings-bestammelser", "name": "Fastighetsindelnings-bestämmelser" },
+            { "id": "forandrad-fastighetsindelning", "name": "Förändrad fastighetsindelning" },
+            { "id": "rattigheter", "name": "Rättigheter" }
+          ]
+        },
+        {
+          "id": "tekniska-fragor",
+          "name": "Tekniska frågor",
+          "undergrupper": [
+            { "id": "tekniska-atgarder", "name": "Tekniska åtgärder" },
+            { "id": "utbyggnad-allman-plats", "name": "Utbyggnad allmän plats" },
+            { "id": "utbyggnad-vatten-och-avlopp", "name": "Utbyggnad vatten och avlopp" }
+          ]
+        },
+        {
+          "id": "ekonomiska-fragor",
+          "name": "Ekonomiska frågor",
+          "undergrupper": [
+            { "id": "planekonomisk-bedomning", "name": "Planekonomisk bedömning" },
+            { "id": "planavgift", "name": "Planavgift" },
+            { "id": "ersattningsansprak", "name": "Ersättningsanspråk" },
+            { "id": "inlosen", "name": "Inlösen" },
+            { "id": "gemensamhets-anlaggningar", "name": "Gemensamhets-anläggningar" },
+            { "id": "drift-allman-plats", "name": "Drift allmän plats" },
+            { "id": "drift-vatten-och-avlopp", "name": "Drift vatten och avlopp" },
+            { "id": "gatukostnader", "name": "Gatukostnader" }
+          ]
+        },
+        {
+          "id": "organisatoriska-fragor",
+          "name": "Organisatoriska frågor",
+          "undergrupper": [
+            { "id": "exploateringsavtal", "name": "Exploateringsavtal" },
+            { "id": "markanvisning", "name": "Markanvisning" },
+            { "id": "tidplan", "name": "Tidplan" }
+          ]
+        },
+        {
+          "id": "kulturvarden",
+          "name": "Kulturvärden",
+          "undergrupper": [
+            { "id": "rivningsforbud", "name": "Rivningsförbud" },
+            { "id": "bevarandekrav", "name": "Bevarandekrav" }
+          ]
+        },
+        {
+          "id": "provning-enligt-annan-lagstiftning",
+          "name": "Prövning enligt annan lagstiftning",
+          "undergrupper": []
+        },
+        {
+          "id": "upplysningar",
+          "name": "Upplysningar",
+          "undergrupper": []
+        },
+        {
+          "id": "annat-genomforandefragor",
+          "name": "Annat",
+          "undergrupper": []
+        }
+      ]
+    },
+    {
+      "id": "planeringsunderlag",
+      "name": "Planeringsunderlag",
+      "color": "#ef4444",
+      "grupper": [
+        {
+          "id": "kommunala-underlag",
+          "name": "Kommunala",
+          "undergrupper": [
+            { "id": "detaljplan-underlag", "name": "Detaljplan" },
+            { "id": "planprogram-underlag", "name": "Planprogram" },
+            { "id": "grundkarta", "name": "Grundkarta" },
+            { "id": "oversiktsplan-underlag", "name": "Översiktsplan" },
+            { "id": "undersokning-6-kap-6", "name": "Undersökning enligt 6 kap. 6 § plan- och bygglagen (2010:900)" },
+            { "id": "miljokonsekvensbeskrivning-underlag", "name": "Miljökonsekvens-beskrivning" },
+            { "id": "sarskilt-beslut-om-betydande-miljopåverkan", "name": "Särskilt beslut om betydande miljöpåverkan" }
+          ]
+        },
+        {
+          "id": "utredningar",
+          "name": "Utredningar",
+          "undergrupper": [
+            { "id": "dagsljus-och-skugga", "name": "Dagsljus och skugga" },
+            { "id": "dagvattenutredning", "name": "Dagvattenutredning" },
+            { "id": "handelsutredning", "name": "Handelsutredning" },
+            { "id": "naturinventering", "name": "Naturinventering" },
+            { "id": "geoteknisk-utredning", "name": "Geoteknisk utredning" },
+            { "id": "markmiljoutredning", "name": "Markmiljöutredning" },
+            { "id": "bullerutredning", "name": "Bullerutredning" },
+            { "id": "forprojektering", "name": "Förprojektering" },
+            { "id": "riskutredning", "name": "Riskutredning" },
+            { "id": "trafikutredning", "name": "Trafikutredning" },
+            { "id": "barnkonsekvensanalys", "name": "Barnkonsekvensanalys" },
+            { "id": "kulturmiljoutredning", "name": "Kulturmiljöutredning" }
+          ]
+        },
+        {
+          "id": "regionala-underlag",
+          "name": "Regionala",
+          "undergrupper": [
+            { "id": "regionplan-underlag", "name": "Regionplan" }
+          ]
+        },
+        {
+          "id": "annat-planeringsunderlag",
+          "name": "Annat",
+          "undergrupper": []
+        }
+      ]
+    },
+    {
+      "id": "planeringsforutsattningar",
+      "name": "Planerings-förutsättningar",
+      "color": "#ec4899",
+      "grupper": [
+        {
+          "id": "kommunala-forutsattningar",
+          "name": "Kommunala",
+          "undergrupper": [
+            { "id": "detaljplan-forutsattningar", "name": "Detaljplan" },
+            { "id": "omradesbestammelser", "name": "Områdesbestämmelser" },
+            { "id": "forhandsbesked", "name": "Förhandsbesked" },
+            { "id": "planeringsbesked", "name": "Planeringsbesked" },
+            { "id": "planbesked", "name": "Planbesked" },
+            { "id": "planprogram-forutsattningar", "name": "Planprogram" },
+            { "id": "oversiktsplan-forutsattningar", "name": "Översiktsplan" }
+          ]
+        },
+        {
+          "id": "regionala-forutsattningar",
+          "name": "Regionala",
+          "undergrupper": [
+            { "id": "regionplan-forutsattningar", "name": "Regionplan" }
+          ]
+        },
+        {
+          "id": "riksintressen",
+          "name": "Riksintressen",
+          "undergrupper": [
+            { "id": "riksintresse-renaring", "name": "Rennäring" },
+            { "id": "riksintresse-yrkesfiske", "name": "Yrkesfiske" },
+            { "id": "riksintresse-naturvard", "name": "Naturvård" },
+            { "id": "riksintresse-friluftsliv", "name": "Friluftsliv" },
+            { "id": "riksintresse-kulturmiljovard", "name": "Kulturmiljövård" },
+            { "id": "riksintresse-fyndigheter", "name": "Fyndigheter av ämnen och material" },
+            { "id": "riksintresse-industriell-produktion", "name": "Industriell produktion" },
+            { "id": "riksintresse-energiproduktion", "name": "Energiproduktion och energidistribution" },
+            { "id": "riksintresse-slutfovaring-karnbransle", "name": "Slutförvaring av kärnbränsle och kärnavfall" },
+            { "id": "riksintresse-elektronisk-kommunikation", "name": "Elektronisk kommunikation" },
+            { "id": "riksintresse-trafikkommunikation", "name": "Trafikkommunikation" },
+            { "id": "riksintresse-avfallshantering", "name": "Avfallshantering" },
+            { "id": "riksintresse-vattenforsorjning", "name": "Vattenförsörjning" },
+            { "id": "riksintresse-totalforsvar", "name": "Totalförsvar" },
+            { "id": "riksintresse-rorligt-friluftsliv", "name": "Rörligt friluftsliv" },
+            { "id": "riksintresse-obruten-kust", "name": "Obruten kust" },
+            { "id": "riksintresse-hogexploaterad-kust", "name": "Högexploaterad kust" },
+            { "id": "riksintresse-obrutet-fjall", "name": "Obrutet fjäll" },
+            { "id": "riksintresse-skyddade-vattendrag", "name": "Skyddade vattendrag" },
+            { "id": "riksintresse-nationalstadspark", "name": "Nationalstadspark" },
+            { "id": "riksintresse-natura-2000", "name": "Natura 2000" },
+            { "id": "riksintresse-geologisk-lagring-koldioxid", "name": "Områden för geologisk lagring av koldioxid" }
+          ]
+        },
+        {
+          "id": "hushallningsbestammelser-3-kap",
+          "name": "Hushållningsbestämmelser enligt 3 kap. miljöbalken",
+          "undergrupper": [
+            { "id": "jordbruksmark-forutsattningar", "name": "Jordbruksmark" },
+            { "id": "skogsbruk-forutsattningar", "name": "Skogsbruk" },
+            { "id": "oexploaterade-omraden-forutsattningar", "name": "Oexploaterade områden" },
+            { "id": "ekologiskt-kansliga-omraden-forutsattningar", "name": "Ekologiskt särskilt känsliga områden" }
+          ]
+        },
+        {
+          "id": "miljokvalitetsnormer-forutsattningar",
+          "name": "Miljökvalitetsnormer",
+          "undergrupper": [
+            { "id": "luft-forutsattningar", "name": "Luft" },
+            { "id": "vatten-forutsattningar", "name": "Vatten" },
+            { "id": "buller-forutsattningar", "name": "Buller" }
+          ]
+        },
+        {
+          "id": "mellankommunala-intressen",
+          "name": "Mellankommunala intressen",
+          "undergrupper": []
+        },
+        {
+          "id": "miljo-forutsattningar",
+          "name": "Miljö",
+          "undergrupper": [
+            { "id": "strandskydd-forutsattningar", "name": "Strandskydd" },
+            { "id": "dagvatten-forutsattningar", "name": "Dagvatten" }
+          ]
+        },
+        {
+          "id": "halsa-och-sakerhet-forutsattningar",
+          "name": "Hälsa och säkerhet",
+          "undergrupper": [
+            { "id": "omgivningsbuller-forutsattningar", "name": "Omgivningsbuller" },
+            { "id": "risk-olyckor-forutsattningar", "name": "Risk för olyckor" },
+            { "id": "risk-oversvamning-forutsattningar", "name": "Risk för översvämning" },
+            { "id": "risk-erosion-forutsattningar", "name": "Risk för erosion" },
+            { "id": "risk-skred-forutsattningar", "name": "Risk för skred" },
+            { "id": "risk-ras-forutsattningar", "name": "Risk för ras" }
+          ]
+        },
+        {
+          "id": "geotekniska-forhallanden",
+          "name": "Geotekniska förhållanden",
+          "undergrupper": []
+        },
+        {
+          "id": "hydrologiska-forhallanden",
+          "name": "Hydrologiska förhållanden",
+          "undergrupper": []
+        },
+        {
+          "id": "kulturmiljo-forutsattningar",
+          "name": "Kulturmiljö",
+          "undergrupper": [
+            { "id": "fornlamningar", "name": "Fornlämningar" },
+            { "id": "byggnadsminnen", "name": "Byggnadsminnen" },
+            { "id": "kyrkligt-kulturarv", "name": "Kyrkligt kulturarv" }
+          ]
+        },
+        {
+          "id": "fysisk-miljo",
+          "name": "Fysisk miljö",
+          "undergrupper": []
+        },
+        {
+          "id": "sociala-forutsattningar",
+          "name": "Sociala",
+          "undergrupper": []
+        },
+        {
+          "id": "teknik-forutsattningar",
+          "name": "Teknik",
+          "undergrupper": []
+        },
+        {
+          "id": "service-forutsattningar",
+          "name": "Service",
+          "undergrupper": []
+        },
+        {
+          "id": "trafik-forutsattningar",
+          "name": "Trafik",
+          "undergrupper": []
+        },
+        {
+          "id": "annat-planeringsforutsattningar",
+          "name": "Annat",
+          "undergrupper": []
+        }
+      ]
+    },
+    {
+      "id": "konsekvenser",
+      "name": "Konsekvenser",
+      "color": "#06b6d4",
+      "grupper": [
+        {
+          "id": "fastigheter-och-rattigheter",
+          "name": "Fastigheter och rättigheter",
+          "undergrupper": []
+        },
+        {
+          "id": "natur",
+          "name": "Natur",
+          "undergrupper": [
+            { "id": "gronområde", "name": "Grönområde" },
+            { "id": "landskapsbild", "name": "Landskapsbild" },
+            { "id": "naturreservat", "name": "Naturreservat" }
+          ]
+        },
+        {
+          "id": "miljo-konsekvenser",
+          "name": "Miljö",
+          "undergrupper": [
+            { "id": "miljokonsekvensbeskrivning-konsekvenser", "name": "Miljökonsekvens-beskrivning" },
+            { "id": "miljobedomning", "name": "Miljöbedömning" },
+            { "id": "stallningstagande-4-kap-33b", "name": "Ställningstagande 4 kap. 33 b § plan- och bygglagen (2010:900)" },
+            { "id": "strandskydd-konsekvenser", "name": "Strandskydd" },
+            { "id": "dagvatten-konsekvenser", "name": "Dagvatten" }
+          ]
+        },
+        {
+          "id": "miljokvalitetsnormer-konsekvenser",
+          "name": "Miljökvalitetsnormer",
+          "undergrupper": [
+            { "id": "luft-konsekvenser", "name": "Luft" },
+            { "id": "vatten-konsekvenser", "name": "Vatten" },
+            { "id": "buller-konsekvenser", "name": "Buller" }
+          ]
+        },
+        {
+          "id": "halsa-och-sakerhet-konsekvenser",
+          "name": "Hälsa och säkerhet",
+          "undergrupper": [
+            { "id": "berakning-av-omgivningsbuller", "name": "Beräkning av omgivningsbuller" },
+            { "id": "oversvamning-konsekvenser", "name": "Översvämning" },
+            { "id": "olyckor-konsekvenser", "name": "Olyckor" },
+            { "id": "erosion-konsekvenser", "name": "Erosion" },
+            { "id": "skred-konsekvenser", "name": "Skred" },
+            { "id": "ras-konsekvenser", "name": "Ras" }
+          ]
+        },
+        {
+          "id": "sociala-konsekvenser",
+          "name": "Sociala",
+          "undergrupper": [
+            { "id": "barn-konsekvenser", "name": "Barn" },
+            { "id": "jamlikhet-konsekvenser", "name": "Jämlikhet" }
+          ]
+        },
+        {
+          "id": "riksintresse-konsekvenser",
+          "name": "Riksintresse",
+          "undergrupper": [
+            { "id": "riksintresse-k-renaring", "name": "Rennäring" },
+            { "id": "riksintresse-k-yrkesfiske", "name": "Yrkesfiske" },
+            { "id": "riksintresse-k-naturvard", "name": "Naturvård" },
+            { "id": "riksintresse-k-friluftsliv", "name": "Friluftsliv" },
+            { "id": "riksintresse-k-kulturmiljovard", "name": "Kulturmiljövård" },
+            { "id": "riksintresse-k-fyndigheter", "name": "Fyndigheter av ämnen och material" },
+            { "id": "riksintresse-k-industriell-produktion", "name": "Industriell produktion" },
+            { "id": "riksintresse-k-energiproduktion", "name": "Energiproduktion och energidistribution" },
+            { "id": "riksintresse-k-slutfovaring-karnbransle", "name": "Slutförvaring av kärnbränsle och kärnavfall" },
+            { "id": "riksintresse-k-elektronisk-kommunikation", "name": "Elektronisk kommunikation" },
+            { "id": "riksintresse-k-trafikkommunikation", "name": "Trafikkommunikation" },
+            { "id": "riksintresse-k-avfallshantering", "name": "Avfallshantering" },
+            { "id": "riksintresse-k-vattenforsorjning", "name": "Vattenförsörjning" },
+            { "id": "riksintresse-k-totalforsvar", "name": "Totalförsvar" },
+            { "id": "riksintresse-k-rorligt-friluftsliv", "name": "Rörligt friluftsliv" },
+            { "id": "riksintresse-k-obruten-kust", "name": "Obruten kust" },
+            { "id": "riksintresse-k-hogexploaterad-kust", "name": "Högexploaterad kust" },
+            { "id": "riksintresse-k-obrutet-fjall", "name": "Obrutet fjäll" },
+            { "id": "riksintresse-k-skyddade-vattendrag", "name": "Skyddade vattendrag" },
+            { "id": "riksintresse-k-nationalstadspark", "name": "Nationalstadspark" },
+            { "id": "riksintresse-k-natura-2000", "name": "Natura 2000" },
+            { "id": "riksintresse-k-geologisk-lagring-koldioxid", "name": "Områden för geologisk lagring av koldioxid" }
+          ]
+        },
+        {
+          "id": "hushallningsbestammelser-konsekvenser",
+          "name": "Hushållningsbestämmelser enligt 3 kap. miljöbalken",
+          "undergrupper": [
+            { "id": "jordbruksmark-konsekvenser", "name": "Jordbruksmark" },
+            { "id": "skogsbruk-konsekvenser", "name": "Skogsbruk" },
+            { "id": "oexploaterade-omraden-konsekvenser", "name": "Oexploaterade områden" },
+            { "id": "ekologiskt-kansliga-omraden-konsekvenser", "name": "Ekologiskt särskilt känsliga områden" }
+          ]
+        },
+        {
+          "id": "trafik-konsekvenser",
+          "name": "Trafik",
+          "undergrupper": [
+            { "id": "motortrafik", "name": "Motortrafik" },
+            { "id": "gang-och-cykeltrafik", "name": "Gång- och cykeltrafik" }
+          ]
+        },
+        {
+          "id": "mellankommunala-fragor",
+          "name": "Mellankommunala frågor",
+          "undergrupper": []
+        },
+        {
+          "id": "annat-konsekvenser",
+          "name": "Annat",
+          "undergrupper": []
+        }
+      ]
+    }
+  ]
+}

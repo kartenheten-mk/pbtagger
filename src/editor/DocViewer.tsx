@@ -21,7 +21,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { TagMark } from './extensions/TagMark';
 import { TagPopover } from './TagPopover';
 import { useDocumentStore } from '../store/useDocumentStore';
-import type { Category, DocModel, Tag } from '../types';
+import type { Category, DocModel, Tag, Tema } from '../types';
 
 // ─── DocModel → TipTap JSON ───────────────────────────────────────────────────
 
@@ -140,10 +140,11 @@ interface SelectionInfo {
 
 interface DocViewerProps {
   docModel: DocModel;
+  teman: Tema[];
   categories: Category[];
 }
 
-export const DocViewer: React.FC<DocViewerProps> = ({ docModel, categories }) => {
+export const DocViewer: React.FC<DocViewerProps> = ({ docModel, teman, categories }) => {
   const { tags, addTag, removeTag } = useDocumentStore();
   const [pendingSelection, setPendingSelection] = useState<SelectionInfo | null>(null);
   const editorContainerRef = useRef<HTMLDivElement>(null);
@@ -298,6 +299,7 @@ export const DocViewer: React.FC<DocViewerProps> = ({ docModel, categories }) =>
         <TagPopover
           position={pendingSelection.popoverPosition}
           selectedText={pendingSelection.text}
+          teman={teman}
           categories={categories}
           onApply={handleApplyTag}
           onCancel={handleCancelPopover}

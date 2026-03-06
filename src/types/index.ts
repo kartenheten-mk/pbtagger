@@ -1,10 +1,47 @@
-// ─── Category ────────────────────────────────────────────────────────────────
+// ─── Hierarchical category types ─────────────────────────────────────────────
 
-export interface Category {
+export interface Undergrupp {
   id: string;
   name: string;
-  color: string; // hex colour used for highlights & badges
-  description?: string;
+}
+
+export interface Grupp {
+  id: string;
+  name: string;
+  undergrupper: Undergrupp[];
+}
+
+export interface Tema {
+  id: string;
+  name: string;
+  color: string;
+  grupper: Grupp[];
+}
+
+// ─── Category (flattened leaf, derived from the hierarchy) ───────────────────
+//
+// Each leaf in the Tema → Grupp → Undergrupp tree becomes one Category.
+// If a Grupp has no Undergrupper, the Grupp itself is the leaf.
+// If a Grupp has Undergrupper, each Undergrupp is a leaf.
+// This keeps Tag.categoryId as a simple string reference.
+
+export interface Category {
+  /** Unique id for this leaf, used by Tag.categoryId */
+  id: string;
+  /** The most specific display name (undergrupp name, or grupp name) */
+  name: string;
+  /** Hex colour inherited from the parent Tema */
+  color: string;
+  /** Parent tema id */
+  temaId: string;
+  /** Parent tema display name */
+  temaName: string;
+  /** Parent grupp id */
+  gruppId: string;
+  /** Parent grupp display name */
+  gruppName: string;
+  /** Set when this leaf is an undergrupp */
+  undergruppName?: string;
 }
 
 // ─── Tag ─────────────────────────────────────────────────────────────────────

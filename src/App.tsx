@@ -23,12 +23,14 @@ import { DocViewer } from './editor/DocViewer';
 import { GeometryPanel } from './geometry/GeometryPanel';
 import { useDocumentStore } from './store/useDocumentStore';
 import { parseDocx } from './docx/DocxParser';
-import type { Category } from './types';
+import type { Category, Tema } from './types';
+import { flattenCategories } from './data/categoryUtils';
 
-// Import categories from JSON (mock data — replace with real file later)
+// Import hierarchical category data
 import categoriesData from './data/categories.json';
 
-const categories: Category[] = categoriesData as Category[];
+const teman: Tema[] = (categoriesData as { teman: Tema[] }).teman;
+const categories: Category[] = flattenCategories(teman);
 
 export default function App() {
   const { docModel, setDocument, clearDocument } = useDocumentStore();
@@ -87,11 +89,11 @@ export default function App() {
       {/* Three-panel body */}
       <div className="flex flex-1 overflow-hidden">
         {/* Left sidebar: tag list */}
-        <Sidebar categories={categories} />
+        <Sidebar teman={teman} categories={categories} />
 
         {/* Centre: document viewer */}
         <main className="flex-1 overflow-y-auto bg-white">
-          <DocViewer docModel={docModel} categories={categories} />
+          <DocViewer docModel={docModel} teman={teman} categories={categories} />
         </main>
 
         {/* Right: geometry panel */}

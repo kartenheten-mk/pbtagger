@@ -2,21 +2,23 @@
  * Sidebar.tsx
  *
  * Left sidebar showing:
- *  - Category legend
- *  - Category filter tabs
+ *  - Tema filter tabs (colour-coded)
  *  - List of applied tags with remove / link-to-geometry actions
+ *  - Tema legend at the bottom
  */
 
 import React, { useState } from 'react';
-import type { Category, Tag, Geometry } from '../types';
+import type { Category, Tag, Geometry, Tema } from '../types';
 import { TagBadge } from './TagBadge';
+import { getCategoryLabel } from '../data/categoryUtils';
 import { useDocumentStore } from '../store/useDocumentStore';
 
 interface SidebarProps {
+  teman: Tema[];
   categories: Category[];
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ categories }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ teman, categories }) => {
   const {
     tags,
     geometries,
@@ -27,12 +29,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ categories }) => {
     unlinkGeometry,
   } = useDocumentStore();
 
-  const [filterCategoryId, setFilterCategoryId] = useState<string>('all');
+  const [filterTemaId, setFilterTemaId] = useState<string>('all');
 
   const filteredTags =
-    filterCategoryId === 'all'
+    filterTemaId === 'all'
       ? tags
-      : tags.filter((t) => t.categoryId === filterCategoryId);
+      : tags.filter((t) => {
+          const cat = categories.find((c) => c.id === t.categoryId);
+          return cat?.temaId === filterTemaId;
+        });
 
   const getCategoryById = (id: string): Category | undefined =>
     categories.find((c) => c.id === id);
@@ -40,47 +45,53 @@ export const Sidebar: React.FC<SidebarProps> = ({ categories }) => {
   const getGeometryById = (id?: string): Geometry | undefined =>
     id ? geometries.find((g) => g.uuid === id) : undefined;
 
+  // Count tags per tema
+  const countForTema = (temaId: string) =>
+    tags.filter((t) => {
+      const cat = categories.find((c) => c.id === t.categoryId);
+      return cat?.temaId === temaId;
+    }).length;
+
   return (
     <aside className="w-72 bg-white border-r border-gray-200 flex flex-col h-full overflow-hidden">
       {/* Header */}
       <div className="px-4 py-3 border-b border-gray-100">
-        <h2 className="text-sm font-semibold text-gray-700">Tags</h2>
+        <h2 className="text-sm font-semibold text-gray-700">Taggar</h2>
         <p className="text-xs text-gray-400 mt-0.5">
-          {tags.length} total · {filteredTags.length} shown
+          {tags.length} totalt · {filteredTags.length} visas
         </p>
       </div>
 
-      {/* Category filter */}
+      {/* Tema filter */}
       <div className="px-3 py-2 border-b border-gray-100 flex gap-1 flex-wrap">
         <button
-          onClick={() => setFilterCategoryId('all')}
+          onClick={() => setFilterTemaId('all')}
           className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
-            filterCategoryId === 'all'
+            filterTemaId === 'all'
               ? 'bg-gray-800 text-white'
               : 'text-gray-500 hover:bg-gray-100'
           }`}
         >
-          All
+          Alla
         </button>
-        {categories.map((cat) => {
-          const count = tags.filter((t) => t.categoryId === cat.id).length;
+        {teman.map((tema) => {
+          const count = countForTema(tema.id);
           if (count === 0) return null;
           return (
             <button
-              key={cat.id}
-              onClick={() => setFilterCategoryId(cat.id)}
+              key={tema.id}
+              onClick={() => setFilterTemaId(tema.id)}
               className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
-                filterCategoryId === cat.id
-                  ? 'text-white'
-                  : 'text-gray-500 hover:bg-gray-100'
+                filterTemaId === tema.id ? 'text-white' : 'text-gray-500 hover:bg-gray-100'
               }`}
-              style={
-                filterCategoryId === cat.id
-                  ? { backgroundColor: cat.color }
-                  : {}
-              }
+              style={filterTemaId === tema.id ? { backgroundColor: tema.color } : {}}
+              title={tema.name}
             >
-              {cat.name} {count > 0 && <span className="opacity-75">({count})</span>}
+              {/* Show abbreviated tema name to save space */}
+              {tema.name.split(' ').slice(0, 2).join(' ')}
+              {count > 0 && (
+                <span className="opacity-75 ml-1">({count})</span>
+              )}
             </button>
           );
         })}
@@ -96,9 +107,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ categories }) => {
                   d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
               </svg>
             </div>
-            <p className="text-sm font-medium text-gray-500">No tags yet</p>
+            <p className="text-sm font-medium text-gray-500">Inga taggar ännu</p>
             <p className="text-xs text-gray-400 mt-1">
-              Select text in the document to apply a tag
+              Markera text i dokumentet för att applicera en tagg
             </p>
           </div>
         ) : (
@@ -120,19 +131,19 @@ export const Sidebar: React.FC<SidebarProps> = ({ categories }) => {
         )}
       </div>
 
-      {/* Category legend */}
+      {/* Tema legend */}
       <div className="px-4 py-3 border-t border-gray-100 bg-gray-50">
         <p className="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">
-          Categories
+          Teman
         </p>
         <div className="space-y-1">
-          {categories.map((cat) => (
-            <div key={cat.id} className="flex items-center gap-2">
+          {teman.map((tema) => (
+            <div key={tema.id} className="flex items-center gap-2">
               <span
                 className="w-2 h-2 rounded-full flex-shrink-0"
-                style={{ backgroundColor: cat.color }}
+                style={{ backgroundColor: tema.color }}
               />
-              <span className="text-xs text-gray-600">{cat.name}</span>
+              <span className="text-xs text-gray-600">{tema.name}</span>
             </div>
           ))}
         </div>
@@ -176,7 +187,7 @@ const TagListItem: React.FC<TagListItemProps> = ({
         {category ? (
           <TagBadge category={category} size="sm" />
         ) : (
-          <span className="text-xs text-gray-400">Unknown</span>
+          <span className="text-xs text-gray-400">Okänd</span>
         )}
         <button
           onClick={(e) => {
@@ -184,7 +195,7 @@ const TagListItem: React.FC<TagListItemProps> = ({
             onRemove();
           }}
           className="text-gray-300 hover:text-red-400 transition-colors flex-shrink-0 mt-0.5"
-          title="Remove tag"
+          title="Ta bort tagg"
         >
           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -192,6 +203,13 @@ const TagListItem: React.FC<TagListItemProps> = ({
           </svg>
         </button>
       </div>
+
+      {/* Breadcrumb path (tema › grupp › undergrupp) */}
+      {category && (
+        <p className="text-xs text-gray-400 mb-0.5 truncate" title={getCategoryLabel(category)}>
+          {getCategoryLabel(category)}
+        </p>
+      )}
 
       {/* Tag text */}
       <p className="text-xs text-gray-700 leading-relaxed line-clamp-2">
@@ -217,7 +235,7 @@ const TagListItem: React.FC<TagListItemProps> = ({
                 onUnlinkGeometry();
               }}
               className="text-gray-300 hover:text-gray-500 ml-auto flex-shrink-0"
-              title="Unlink geometry"
+              title="Avlänka geometri"
             >
               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -237,7 +255,7 @@ const TagListItem: React.FC<TagListItemProps> = ({
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                 d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
             </svg>
-            Link to geometry
+            Länka till geometri
           </button>
         )}
       </div>

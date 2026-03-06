@@ -219,24 +219,15 @@ function injectSdtIntoParagraph(
 
   // Build the <w:sdt> element
   const sdt = buildSdt(docDom, tag.uuid, [], STORE_ITEM_ID);
-  const sdtContent = docDom.getElementsByTagNameNS(NS.w, 'sdtContent');
+  // Find sdtContent as a direct child of the newly created sdt node.
+  // (Avoid using sdt.contains() — @xmldom/xmldom does not implement that method.)
   let sdtContentEl: Element | null = null;
-  for (let i = 0; i < sdtContent.length; i++) {
-    if (sdt.contains(sdtContent[i])) {
-      sdtContentEl = sdtContent[i] as Element;
+  const sdtChildren = sdt.childNodes;
+  for (let i = 0; i < sdtChildren.length; i++) {
+    const c = sdtChildren[i] as Element;
+    if (c.localName === 'sdtContent') {
+      sdtContentEl = c;
       break;
-    }
-  }
-
-  if (!sdtContentEl) {
-    // Fallback: find it as direct child
-    const children = sdt.childNodes;
-    for (let i = 0; i < children.length; i++) {
-      const c = children[i] as Element;
-      if (c.localName === 'sdtContent') {
-        sdtContentEl = c;
-        break;
-      }
     }
   }
 
