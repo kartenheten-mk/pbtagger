@@ -15,7 +15,7 @@
 
 import PizZip from 'pizzip';
 import { saveAs } from 'file-saver';
-import type { Tag, DocModel } from '../types';
+import type { Tag, DocModel, Tema } from '../types';
 import { parseXml, serializeXml, NS } from './XmlHelpers';
 import {
   buildCustomXmlItem,
@@ -24,6 +24,14 @@ import {
   CUSTOM_XML_CONTENT_TYPE,
   buildSdt,
 } from './ContentControlBuilder';
+import rawCategories from '../data/categories.json';
+import { flattenCategories, getCategoryLabel } from '../data/categoryUtils';
+
+// ─── Category lookup (built once at module load) ──────────────────────────────
+const _allCategories = flattenCategories(
+  (rawCategories as unknown as { teman: Tema[] }).teman
+);
+const CATEGORY_MAP = new Map(_allCategories.map((c) => [c.id, c]));
 
 // Fixed store item ID for our custom XML part (GUID without braces used in file)
 const STORE_ITEM_ID = 'A1B2C3D4-E5F6-7890-ABCD-EF1234567890';
@@ -96,7 +104,7 @@ export async function exportDocx(
 // ─── Content Control injection ────────────────────────────────────────────────
 
 /**
- * Walk the document DOM and inject <w:sdt> wrappers for each tag.
+ * Walk the document DOM and inject <w:sdt> wrappers + bookmarks for each tag.
  *
  * Strategy:
  *   - Collect all <w:p> elements in document order (matching the index from
@@ -104,6 +112,7 @@ export async function exportDocx(
  *   - For each tag, find the target paragraph by index
  *   - Within that paragraph, find the <w:r> runs that cover the offset range
  *   - Split runs at the boundaries, then wrap the affected runs in a <w:sdt>
+ *   - Also inject <w:bookmarkStart> / <w:bookmarkEnd> around the <w:sdt>
  */
 function injectContentControls(
   docDom: Document,
@@ -112,6 +121,9 @@ function injectContentControls(
 ): void {
   // Collect all paragraphs in document order
   const allParas = collectParagraphsInOrder(docDom);
+
+  // Find the highest existing bookmark ID so we don't collide
+  const bookmarkCounter = { value: findMaxBookmarkId(docDom) + 1 };
 
   // Sort tags by paragraph then by start offset (process in reverse within
   // each paragraph to avoid offset drift from earlier injections)
@@ -129,8 +141,71 @@ function injectContentControls(
     const docPara = docModel.paragraphs[tag.paragraphIndex];
     if (!docPara) continue;
 
-    injectSdtIntoParagraph(docDom, paraEl, docPara, tag);
+    injectSdtIntoParagraph(docDom, paraEl, docPara, tag, bookmarkCounter);
   }
+}
+
+// ─── Bookmark helpers ─────────────────────────────────────────────────────────
+
+/**
+ * Scan the document for the highest existing <w:bookmarkStart w:id="..."/>
+ * so our new bookmarks start above it and never collide.
+ */
+function findMaxBookmarkId(docDom: Document): number {
+  let maxId = 0;
+  const starts = docDom.getElementsByTagNameNS(NS.w, 'bookmarkStart');
+  for (let i = 0; i < starts.length; i++) {
+    const el = starts[i] as Element;
+    const raw =
+      el.getAttributeNS(NS.w, 'id') ?? el.getAttribute('w:id') ?? '';
+    const id = parseInt(raw, 10);
+    if (!isNaN(id) && id > maxId) maxId = id;
+  }
+  return maxId;
+}
+
+/**
+ * Generate a valid Word bookmark name for a tag.
+ *
+ * Word bookmark name rules:
+ *   - Must start with a letter
+ *   - May contain letters, digits and underscores only
+ *   - Maximum 40 characters
+ *
+ * We derive a human-readable base from the category label and append
+ * the first 8 hex chars of the UUID to guarantee uniqueness.
+ */
+function generateBookmarkName(tag: Tag): string {
+  const cat = CATEGORY_MAP.get(tag.categoryId);
+  let base = cat ? getCategoryLabel(cat) : tag.categoryId;
+
+  // Transliterate common Swedish / accented characters
+  base = base
+    .replace(/[åÅ]/g, 'a')
+    .replace(/[äÄæÆ]/g, 'a')
+    .replace(/[öÖøØ]/g, 'o')
+    .replace(/[éèêëÉÈÊË]/g, 'e')
+    .replace(/[úùûüÚÙÛÜ]/g, 'u')
+    .replace(/[íìîïÍÌÎÏ]/g, 'i')
+    .replace(/[›»]/g, '_') // breadcrumb separators → underscore
+    .replace(/[^a-zA-Z0-9\s_]/g, '') // strip anything else
+    .replace(/\s+/g, '_') // spaces → underscores
+    .replace(/_{2,}/g, '_') // collapse repeated underscores
+    .replace(/^_+|_+$/g, ''); // trim leading/trailing underscores
+
+  // Ensure it starts with a letter
+  if (!base || !/^[a-zA-Z]/.test(base)) {
+    base = 'Tag_' + base;
+  }
+
+  // Short suffix from UUID (first 8 hex chars, no dashes)
+  const shortId = tag.uuid.replace(/-/g, '').slice(0, 8);
+
+  // Truncate base so total length ≤ 40 (base + '_' + 8-char suffix)
+  const maxBase = 40 - 1 - shortId.length;
+  base = base.slice(0, maxBase);
+
+  return `${base}_${shortId}`;
 }
 
 /**
@@ -162,13 +237,20 @@ function collectParagraphsInOrder(docDom: Document): Element[] {
 }
 
 /**
- * Inject a single <w:sdt> content control into a paragraph element.
+ * Inject a single <w:sdt> content control + surrounding bookmarks into a
+ * paragraph element.
+ *
+ * The resulting XML structure is:
+ *   <w:bookmarkStart w:id="N" w:name="Category_uuid8"/>
+ *   <w:sdt>…</w:sdt>
+ *   <w:bookmarkEnd w:id="N"/>
  */
 function injectSdtIntoParagraph(
   docDom: Document,
   paraEl: Element,
   docPara: import('../types').DocParagraph,
-  tag: Tag
+  tag: Tag,
+  bookmarkCounter: { value: number }
 ): void {
   // Collect the <w:r> run elements that are direct or near-direct children
   const runElements = collectRunElements(paraEl);
@@ -237,7 +319,23 @@ function injectSdtIntoParagraph(
   const parent = runsToWrap[0].parentNode;
   if (!parent) return;
 
+  // ── Bookmark ─────────────────────────────────────────────────────────────
+  const bmId = bookmarkCounter.value++;
+  const bmName = generateBookmarkName(tag);
+
+  // <w:bookmarkStart w:id="N" w:name="..."/>
+  const bookmarkStart = docDom.createElementNS(NS.w, 'w:bookmarkStart');
+  bookmarkStart.setAttributeNS(NS.w, 'w:id', String(bmId));
+  bookmarkStart.setAttributeNS(NS.w, 'w:name', bmName);
+
+  // <w:bookmarkEnd w:id="N"/>
+  const bookmarkEnd = docDom.createElementNS(NS.w, 'w:bookmarkEnd');
+  bookmarkEnd.setAttributeNS(NS.w, 'w:id', String(bmId));
+
+  // Insert order: bookmarkStart → sdt → bookmarkEnd
+  parent.insertBefore(bookmarkStart, runsToWrap[0]);
   parent.insertBefore(sdt, runsToWrap[0]);
+  parent.insertBefore(bookmarkEnd, runsToWrap[0]);
 
   // Move the target runs inside sdtContent
   for (const run of runsToWrap) {
