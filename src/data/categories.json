@@ -1,0 +1,44 @@
+[
+  {
+    "id": "requirement",
+    "name": "Requirement",
+    "color": "#3b82f6",
+    "description": "Functional or non-functional requirements stated in the document"
+  },
+  {
+    "id": "area",
+    "name": "Area",
+    "color": "#10b981",
+    "description": "References to a spatial area, zone, or district"
+  },
+  {
+    "id": "building",
+    "name": "Building",
+    "color": "#f59e0b",
+    "description": "References to a specific building or structure"
+  },
+  {
+    "id": "road",
+    "name": "Road / Infrastructure",
+    "color": "#8b5cf6",
+    "description": "References to roads, paths, or infrastructure elements"
+  },
+  {
+    "id": "regulation",
+    "name": "Regulation",
+    "color": "#ef4444",
+    "description": "Legal or planning regulation references"
+  },
+  {
+    "id": "landmark",
+    "name": "Landmark",
+    "color": "#ec4899",
+    "description": "Named landmarks, monuments, or points of interest"
+  },
+  {
+    "id": "note",
+    "name": "Note",
+    "color": "#6b7280",
+    "description": "General annotations or reviewer notes"
+  }
+]
