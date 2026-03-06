@@ -22,7 +22,7 @@ import StarterKit from '@tiptap/starter-kit';
 
 import { TagMark } from './extensions/TagMark';
 import { useDocumentStore } from '../store/useDocumentStore';
-import type { Category, DocModel, Tag, Tema } from '../types';
+import type { Category, DocModel, Tag, Tema, PendingSelection } from '../types';
 
 // ─── DocModel → TipTap JSON ───────────────────────────────────────────────────
 
@@ -172,7 +172,7 @@ export const DocViewer: React.FC<DocViewerProps> = ({ docModel, teman: _teman, c
     editor.commands.setContent(newContent, { emitUpdate: false });
   }, [editor, tags, docModel, categories]);
 
-  // ── Handle text selection → store in Zustand (sidebar will pick up) ───────
+  // ─── Handle text selection → store in Zustand (sidebar will pick up) ───────
   const handleMouseUp = useCallback(() => {
     if (!editor) return;
 
@@ -188,11 +188,9 @@ export const DocViewer: React.FC<DocViewerProps> = ({ docModel, teman: _teman, c
     const rect = range.getBoundingClientRect();
     if (!rect.width) return;
 
-    const anchorNode = selection.anchorNode;
-    if (!anchorNode) return;
-
-    const paraEl = findParagraphElement(anchorNode);
-    if (!paraEl || !editorContainerRef.current) return;
+    const startParaEl = findParagraphElement(range.startContainer);
+    const endParaEl = findParagraphElement(range.endContainer);
+    if (!startParaEl || !endParaEl || !editorContainerRef.current) return;
 
     // Scope to the ProseMirror root only — the hint banner above the editor
     // also contains a <p> which would otherwise shift all paragraph indices by 1.
@@ -202,27 +200,51 @@ export const DocViewer: React.FC<DocViewerProps> = ({ docModel, teman: _teman, c
     const allParaEls = Array.from(
       proseMirrorEl.querySelectorAll('p, h1, h2, h3, h4, h5, h6')
     );
-    const paraIndex = allParaEls.indexOf(paraEl);
-    if (paraIndex === -1) return;
+    const startIndex = allParaEls.indexOf(startParaEl);
+    const endIndex = allParaEls.indexOf(endParaEl);
+    if (startIndex === -1 || endIndex === -1) return;
 
-    // Use badge-aware helpers so widget text ("KONSEKVENSER: ANNAT ×") is
-    // not counted as part of the document text.
-    const paraText = getCleanTextContent(paraEl);
-    const anchorOffset = getTextOffsetInParagraph(paraEl, selection.anchorNode!, selection.anchorOffset);
-    const focusOffset = getTextOffsetInParagraph(paraEl, selection.focusNode!, selection.focusOffset);
+    const pendingSelections: PendingSelection[] = [];
 
-    const startOffset = Math.min(anchorOffset, focusOffset);
-    const endOffset = Math.max(anchorOffset, focusOffset);
+    for (let i = Math.min(startIndex, endIndex); i <= Math.max(startIndex, endIndex); i++) {
+      const paraEl = allParaEls[i];
+      const paraText = getCleanTextContent(paraEl);
 
-    if (startOffset === endOffset) return;
+      let startOffset = 0;
+      let endOffset = paraText.length;
+
+      // The DOM sequence follows visual document order, range.startContainer is always before range.endContainer.
+      if (i === startIndex) {
+        startOffset = getTextOffsetInParagraph(paraEl, range.startContainer, range.startOffset);
+      }
+      if (i === endIndex) {
+        endOffset = getTextOffsetInParagraph(paraEl, range.endContainer, range.endOffset);
+      }
+
+      if (startIndex === endIndex) {
+        const min = Math.min(startOffset, endOffset);
+        const max = Math.max(startOffset, endOffset);
+        startOffset = min;
+        endOffset = max;
+      }
+
+      if (startOffset < endOffset) {
+        const textSlice = paraText.slice(startOffset, endOffset);
+        if (textSlice.trim()) {
+          pendingSelections.push({
+            text: textSlice,
+            paragraphIndex: i,
+            startOffset,
+            endOffset,
+          });
+        }
+      }
+    }
+
+    if (pendingSelections.length === 0) return;
 
     // Store pending selection in Zustand — Sidebar will switch to "Assign" mode
-    setPendingSelection({
-      text: paraText.slice(startOffset, endOffset),
-      paragraphIndex: paraIndex,
-      startOffset,
-      endOffset,
-    });
+    setPendingSelection(pendingSelections);
   }, [editor, setPendingSelection]);
 
   if (!editor) return null;

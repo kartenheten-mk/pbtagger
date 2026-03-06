@@ -12,6 +12,7 @@ interface DocumentActions {
 
   // ─── Tag management ─────────────────────────────────────────────────────
   addTag: (tag: Tag) => void;
+  addTags: (tags: Tag[]) => void;
   updateTag: (uuid: string, changes: Partial<Tag>) => void;
   removeTag: (uuid: string) => void;
   selectTag: (uuid: string | null) => void;
@@ -28,7 +29,7 @@ interface DocumentActions {
   unlinkGeometry: (tagUuid: string) => void;
 
   // ─── Pending selection (text selected in editor, awaiting tag) ──────────
-  setPendingSelection: (selection: PendingSelection | null) => void;
+  setPendingSelection: (selection: PendingSelection[] | null) => void;
 }
 
 const initialState: AppState = {
@@ -54,6 +55,9 @@ export const useDocumentStore = create<AppState & DocumentActions>((set) => ({
   // ─── Tag management ───────────────────────────────────────────────────────
   addTag: (tag) =>
     set((state) => ({ tags: [...state.tags, tag] })),
+
+  addTags: (newTags) =>
+    set((state) => ({ tags: [...state.tags, ...newTags] })),
 
   updateTag: (uuid, changes) =>
     set((state) => ({

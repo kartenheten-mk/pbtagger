@@ -135,5 +135,5 @@ export interface AppState {
   /** UUID of the tag being edited (for geometry linking) */
   linkingTagUuid: string | null;
   /** Text selection waiting to be tagged via the sidebar */
-  pendingSelection: PendingSelection | null;
+  pendingSelection: PendingSelection[] | null;
 }
