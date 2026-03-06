@@ -111,8 +111,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ teman, categories }) => {
         <button
           onClick={() => setMode('assign')}
           className={`flex-1 py-2.5 text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 ${mode === 'assign'
-              ? 'bg-white text-blue-600 border-b-2 border-blue-500'
-              : 'text-gray-500 hover:text-gray-700'
+            ? 'bg-white text-blue-600 border-b-2 border-blue-500'
+            : 'text-gray-500 hover:text-gray-700'
             }`}
         >
           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -127,8 +127,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ teman, categories }) => {
         <button
           onClick={() => setMode('view')}
           className={`flex-1 py-2.5 text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 ${mode === 'view'
-              ? 'bg-white text-blue-600 border-b-2 border-blue-500'
-              : 'text-gray-500 hover:text-gray-700'
+            ? 'bg-white text-blue-600 border-b-2 border-blue-500'
+            : 'text-gray-500 hover:text-gray-700'
             }`}
         >
           <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -192,6 +192,7 @@ const AssignTagPanel: React.FC<AssignTagPanelProps> = ({
   const [selectedGruppId, setSelectedGruppId] = useState('');
   const [selectedLeafId, setSelectedLeafId] = useState('');
   const [note, setNote] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Reset picker when a new selection arrives
   useEffect(() => {
@@ -199,12 +200,21 @@ const AssignTagPanel: React.FC<AssignTagPanelProps> = ({
     setSelectedGruppId('');
     setSelectedLeafId('');
     setNote('');
+    setSearchQuery('');
   }, [pendingText]);
 
   const selectedTema = teman.find((t) => t.id === selectedTemaId);
   const selectedGrupp = selectedTema?.grupper.find((g) => g.id === selectedGruppId);
   const hasUndergrupper = (selectedGrupp?.undergrupper.length ?? 0) > 0;
   const resolvedCategory = categories.find((c) => c.id === selectedLeafId);
+
+  const searchResults = searchQuery
+    ? categories.filter((c) =>
+      c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      c.temaName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      c.gruppName.toLowerCase().includes(searchQuery.toLowerCase())
+    )
+    : [];
 
   const handleTemaChange = (temaId: string) => {
     setSelectedTemaId(temaId);
@@ -226,9 +236,13 @@ const AssignTagPanel: React.FC<AssignTagPanelProps> = ({
     setSelectedLeafId(`${selectedTemaId}--${selectedGruppId}--${undergruppId}`);
   };
 
+  const handleSearchResultClick = (categoryId: string) => {
+    setSelectedLeafId(categoryId);
+  };
+
   const canApply =
     !!selectedLeafId &&
-    (!hasUndergrupper || selectedLeafId.split('--').length === 3) &&
+    (searchQuery !== '' || !hasUndergrupper || selectedLeafId.split('--').length === 3) &&
     !!pendingText;
 
   return (
@@ -250,116 +264,196 @@ const AssignTagPanel: React.FC<AssignTagPanelProps> = ({
 
       {/* Scrollable picker area */}
       <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
-        {/* Step 1: Tema */}
-        <div>
-          <p className="text-xs text-gray-500 mb-2 font-semibold flex items-center gap-1.5">
-            <span className="w-4 h-4 bg-gray-200 rounded-full inline-flex items-center justify-center text-gray-600 text-xs font-bold flex-shrink-0">
-              1
-            </span>
-            Tema
-          </p>
-          <div className="space-y-1">
-            {teman.map((tema) => (
-              <button
-                key={tema.id}
-                onClick={() => handleTemaChange(tema.id)}
-                className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs transition-colors text-left ${selectedTemaId === tema.id
-                    ? 'text-white font-semibold'
-                    : 'text-gray-600 hover:bg-gray-50 border border-gray-100'
-                  }`}
-                style={selectedTemaId === tema.id ? { backgroundColor: tema.color } : {}}
-              >
-                <span
-                  className="w-2 h-2 rounded-full flex-shrink-0"
-                  style={{
-                    backgroundColor:
-                      selectedTemaId === tema.id ? 'rgba(255,255,255,0.7)' : tema.color,
-                  }}
-                />
-                {tema.name}
-              </button>
-            ))}
-          </div>
+        {/* Search Input */}
+        <div className="relative">
+          <input
+            type="text"
+            placeholder="Sök tagg..."
+            value={searchQuery}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              if (e.target.value === '') {
+                // If cleared, we can keep the previous leaf selection or clear it.
+                // Keeping leaf selection to not disrupt the user.
+              } else {
+                // When we start a search, we don't necessarily clear leaf ID immediately,
+                // but the hierarchy is hidden, so only search results show.
+              }
+            }}
+            className="w-full text-xs border border-gray-200 rounded-lg pl-8 pr-8 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400 text-gray-700 placeholder-gray-300"
+          />
+          <svg className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none"
+            >
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
         </div>
 
-        {/* Step 2: Grupp */}
-        {selectedTema && (
+        {searchQuery ? (
           <div>
             <p className="text-xs text-gray-500 mb-2 font-semibold flex items-center gap-1.5">
-              <span className="w-4 h-4 bg-gray-200 rounded-full inline-flex items-center justify-center text-gray-600 text-xs font-bold flex-shrink-0">
-                2
-              </span>
-              Grupp
+              Sökresultat ({searchResults.length})
             </p>
             <div className="space-y-1">
-              {selectedTema.grupper.map((grupp) => (
-                <button
-                  key={grupp.id}
-                  onClick={() => handleGruppChange(grupp.id)}
-                  className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs transition-colors text-left ${selectedGruppId === grupp.id
-                      ? 'font-semibold ring-1'
-                      : 'text-gray-600 hover:bg-gray-50 border border-gray-100'
-                    }`}
-                  style={
-                    selectedGruppId === grupp.id
-                      ? {
-                        backgroundColor: hexToRgba(selectedTema.color, 0.1),
-                        color: selectedTema.color,
-                        borderColor: selectedTema.color,
-                        outlineColor: selectedTema.color,
-                      }
-                      : {}
-                  }
-                >
-                  {grupp.name}
-                  {grupp.undergrupper.length > 0 && (
-                    <span className="ml-auto text-gray-400 text-xs">
-                      {grupp.undergrupper.length} val
-                    </span>
-                  )}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Step 3: Undergrupp */}
-        {selectedGrupp && hasUndergrupper && (
-          <div>
-            <p className="text-xs text-gray-500 mb-2 font-semibold flex items-center gap-1.5">
-              <span className="w-4 h-4 bg-gray-200 rounded-full inline-flex items-center justify-center text-gray-600 text-xs font-bold flex-shrink-0">
-                3
-              </span>
-              Undergrupp
-            </p>
-            <div className="space-y-1">
-              {selectedGrupp.undergrupper.map((ug) => {
-                const ugLeafId = `${selectedTemaId}--${selectedGruppId}--${ug.id}`;
-                return (
+              {searchResults.length === 0 ? (
+                <p className="text-xs text-gray-400 py-2 text-center">Inga taggar matchade sökningen.</p>
+              ) : (
+                searchResults.map((cat) => (
                   <button
-                    key={ug.id}
-                    onClick={() => handleUndergruppChange(ug.id)}
-                    className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs transition-colors text-left ${selectedLeafId === ugLeafId
+                    key={cat.id}
+                    onClick={() => handleSearchResultClick(cat.id)}
+                    className={`w-full flex flex-col items-start gap-0.5 px-3 py-2 rounded-lg transition-colors text-left border ${selectedLeafId === cat.id
                         ? 'font-semibold ring-1'
-                        : 'text-gray-600 hover:bg-gray-50 border border-gray-100'
+                        : 'text-gray-700 hover:opacity-80'
                       }`}
                     style={
-                      selectedLeafId === ugLeafId && selectedTema
+                      selectedLeafId === cat.id
                         ? {
-                          backgroundColor: hexToRgba(selectedTema.color, 0.1),
-                          color: selectedTema.color,
-                          borderColor: selectedTema.color,
-                          outlineColor: selectedTema.color,
+                          backgroundColor: hexToRgba(cat.color, 0.15),
+                          color: cat.color,
+                          borderColor: cat.color,
+                          outlineColor: cat.color,
                         }
-                        : {}
+                        : {
+                          backgroundColor: hexToRgba(cat.color, 0.08),
+                          borderColor: hexToRgba(cat.color, 0.2),
+                        }
                     }
                   >
-                    {ug.name}
+                    <span className="text-xs">{cat.name}</span>
+                    <span
+                      className="text-[10px] opacity-80 truncate uppercase tracking-widest font-medium"
+                      style={{ color: selectedLeafId === cat.id ? cat.color : hexToRgba(cat.color, 0.8) }}
+                    >
+                      {cat.temaName} › {cat.gruppName}
+                    </span>
                   </button>
-                );
-              })}
+                ))
+              )}
             </div>
           </div>
+        ) : (
+          <>
+            {/* Step 1: Tema */}
+            <div>
+              <p className="text-xs text-gray-500 mb-2 font-semibold flex items-center gap-1.5">
+                <span className="w-4 h-4 bg-gray-200 rounded-full inline-flex items-center justify-center text-gray-600 text-xs font-bold flex-shrink-0">
+                  1
+                </span>
+                Tema
+              </p>
+              <div className="space-y-1">
+                {teman.map((tema) => (
+                  <button
+                    key={tema.id}
+                    onClick={() => handleTemaChange(tema.id)}
+                    className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs transition-colors text-left ${selectedTemaId === tema.id
+                      ? 'text-white font-semibold'
+                      : 'text-gray-600 hover:bg-gray-50 border border-gray-100'
+                      }`}
+                    style={selectedTemaId === tema.id ? { backgroundColor: tema.color } : {}}
+                  >
+                    <span
+                      className="w-2 h-2 rounded-full flex-shrink-0"
+                      style={{
+                        backgroundColor:
+                          selectedTemaId === tema.id ? 'rgba(255,255,255,0.7)' : tema.color,
+                      }}
+                    />
+                    {tema.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Step 2: Grupp */}
+            {selectedTema && (
+              <div>
+                <p className="text-xs text-gray-500 mb-2 font-semibold flex items-center gap-1.5">
+                  <span className="w-4 h-4 bg-gray-200 rounded-full inline-flex items-center justify-center text-gray-600 text-xs font-bold flex-shrink-0">
+                    2
+                  </span>
+                  Grupp
+                </p>
+                <div className="space-y-1">
+                  {selectedTema.grupper.map((grupp) => (
+                    <button
+                      key={grupp.id}
+                      onClick={() => handleGruppChange(grupp.id)}
+                      className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs transition-colors text-left ${selectedGruppId === grupp.id
+                        ? 'font-semibold ring-1'
+                        : 'text-gray-600 hover:bg-gray-50 border border-gray-100'
+                        }`}
+                      style={
+                        selectedGruppId === grupp.id
+                          ? {
+                            backgroundColor: hexToRgba(selectedTema.color, 0.1),
+                            color: selectedTema.color,
+                            borderColor: selectedTema.color,
+                            outlineColor: selectedTema.color,
+                          }
+                          : {}
+                      }
+                    >
+                      {grupp.name}
+                      {grupp.undergrupper.length > 0 && (
+                        <span className="ml-auto text-gray-400 text-xs">
+                          {grupp.undergrupper.length} val
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Step 3: Undergrupp */}
+            {selectedGrupp && hasUndergrupper && (
+              <div>
+                <p className="text-xs text-gray-500 mb-2 font-semibold flex items-center gap-1.5">
+                  <span className="w-4 h-4 bg-gray-200 rounded-full inline-flex items-center justify-center text-gray-600 text-xs font-bold flex-shrink-0">
+                    3
+                  </span>
+                  Undergrupp
+                </p>
+                <div className="space-y-1">
+                  {selectedGrupp.undergrupper.map((ug) => {
+                    const ugLeafId = `${selectedTemaId}--${selectedGruppId}--${ug.id}`;
+                    return (
+                      <button
+                        key={ug.id}
+                        onClick={() => handleUndergruppChange(ug.id)}
+                        className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs transition-colors text-left ${selectedLeafId === ugLeafId
+                          ? 'font-semibold ring-1'
+                          : 'text-gray-600 hover:bg-gray-50 border border-gray-100'
+                          }`}
+                        style={
+                          selectedLeafId === ugLeafId && selectedTema
+                            ? {
+                              backgroundColor: hexToRgba(selectedTema.color, 0.1),
+                              color: selectedTema.color,
+                              borderColor: selectedTema.color,
+                              outlineColor: selectedTema.color,
+                            }
+                            : {}
+                        }
+                      >
+                        {ug.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </>
         )}
 
         {/* Note */}
@@ -460,8 +554,8 @@ const ViewTagsPanel: React.FC<ViewTagsPanelProps> = ({
         <button
           onClick={() => setFilterTemaId('all')}
           className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${filterTemaId === 'all'
-              ? 'bg-gray-800 text-white'
-              : 'text-gray-500 hover:bg-gray-100'
+            ? 'bg-gray-800 text-white'
+            : 'text-gray-500 hover:bg-gray-100'
             }`}
         >
           Alla
@@ -474,8 +568,8 @@ const ViewTagsPanel: React.FC<ViewTagsPanelProps> = ({
               key={tema.id}
               onClick={() => setFilterTemaId(tema.id)}
               className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${filterTemaId === tema.id
-                  ? 'text-white'
-                  : 'text-gray-500 hover:bg-gray-100'
+                ? 'text-white'
+                : 'text-gray-500 hover:bg-gray-100'
                 }`}
               style={filterTemaId === tema.id ? { backgroundColor: tema.color } : {}}
               title={tema.name}
