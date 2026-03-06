@@ -1,20 +1,28 @@
 /**
  * TagMark.ts
  *
- * A TipTap Mark extension that renders tagged text as a coloured highlight.
- * Each mark stores the tag's UUID and category colour so highlights are
- * visually distinct per category.
+ * A TipTap Mark extension that renders tagged text as a coloured highlight
+ * and injects an inline badge widget at the start of each tagged region.
  *
- * The mark is applied programmatically (not via keyboard shortcuts) and
- * rendered as a <mark> element with inline styles.
+ * The badge shows the category label (e.g. "TEMA: KATEGORI") in the
+ * theme colour together with an × button to remove the tag directly
+ * from the editor.
+ *
+ * The mark itself keeps a subtle background tint so the extent of the
+ * tagged text is still visible after the badge.
  */
 
 import { Mark, mergeAttributes } from '@tiptap/core';
+import { Plugin, PluginKey } from '@tiptap/pm/state';
+import { Decoration, DecorationSet } from '@tiptap/pm/view';
+import { useDocumentStore } from '../../store/useDocumentStore';
 
 export interface TagMarkAttributes {
   tagUuid: string;
   categoryId: string;
   color: string;
+  /** Human-readable label shown in the badge, e.g. "TEMA: KATEGORI" */
+  label: string;
 }
 
 declare module '@tiptap/core' {
@@ -35,10 +43,7 @@ declare module '@tiptap/core' {
 export const TagMark = Mark.create<Record<string, never>>({
   name: 'tagMark',
 
-  // Allow marks to span across multiple nodes
   spanning: false,
-
-  // Keep the mark even when content changes (we prevent editing anyway)
   keepOnSplit: false,
 
   addAttributes() {
@@ -58,6 +63,11 @@ export const TagMark = Mark.create<Record<string, never>>({
         parseHTML: (el) => el.getAttribute('data-color'),
         renderHTML: (attrs) => ({ 'data-color': attrs.color }),
       },
+      label: {
+        default: '',
+        parseHTML: (el) => el.getAttribute('data-label') ?? '',
+        renderHTML: (attrs) => ({ 'data-label': attrs.label }),
+      },
     };
   },
 
@@ -71,9 +81,9 @@ export const TagMark = Mark.create<Record<string, never>>({
 
   renderHTML({ HTMLAttributes }) {
     const color: string = HTMLAttributes['data-color'] ?? '#3b82f6';
-    // Convert hex to rgba for a translucent highlight
-    const bg = hexToRgba(color, 0.25);
-    const border = hexToRgba(color, 0.7);
+    // Keep a very subtle background tint so the text range is visible
+    const bg = hexToRgba(color, 0.12);
+    const border = hexToRgba(color, 0.5);
 
     return [
       'mark',
@@ -117,6 +127,93 @@ export const TagMark = Mark.create<Record<string, never>>({
           return found;
         },
     };
+  },
+
+  // ── Inline badge decoration plugin ────────────────────────────────────────
+  addProseMirrorPlugins() {
+    // Capture editor reference for use inside the plugin closure
+    const editor = this.editor;
+
+    return [
+      new Plugin({
+        key: new PluginKey('tagMarkBadges'),
+        props: {
+          decorations(state) {
+            const decorations: Decoration[] = [];
+            const { doc } = state;
+            // Track UUIDs we've already placed a badge for (one badge per tag,
+            // even if the mark spans multiple text nodes)
+            const seen = new Set<string>();
+
+            doc.descendants((node, pos) => {
+              if (!node.isText) return;
+
+              for (const mark of node.marks) {
+                if (mark.type.name !== 'tagMark') continue;
+
+                const uuid = mark.attrs.tagUuid as string;
+                if (!uuid || seen.has(uuid)) continue;
+                seen.add(uuid);
+
+                const color: string = mark.attrs.color ?? '#3b82f6';
+                const label: string = mark.attrs.label ?? '';
+
+                // ── Build badge DOM element ─────────────────────────────
+                const badge = document.createElement('span');
+                badge.className = 'tag-badge-widget';
+                badge.setAttribute('data-tag-uuid', uuid);
+                badge.style.setProperty('--tag-color', color);
+                badge.style.setProperty('--tag-bg', hexToRgba(color, 0.1));
+                badge.style.setProperty('--tag-border', hexToRgba(color, 0.4));
+
+                const labelSpan = document.createElement('span');
+                labelSpan.className = 'tag-badge-label';
+                labelSpan.textContent = label.toUpperCase();
+
+                const closeBtn = document.createElement('button');
+                closeBtn.className = 'tag-badge-close';
+                closeBtn.setAttribute('type', 'button');
+                closeBtn.setAttribute('aria-label', 'Ta bort tagg');
+                closeBtn.textContent = '×';
+
+                // Use mousedown so we act before ProseMirror's own
+                // mousedown selection logic fires
+                closeBtn.addEventListener('mousedown', (e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  // Remove mark from editor
+                  editor.commands.unsetTagMarkByUuid(uuid);
+                  // Remove tag from store
+                  useDocumentStore.getState().removeTag(uuid);
+                });
+
+                badge.appendChild(labelSpan);
+                badge.appendChild(closeBtn);
+
+                decorations.push(
+                  Decoration.widget(pos, badge, {
+                    // side: -1 places the widget before the character at pos
+                    side: -1,
+                    key: `tag-badge-${uuid}`,
+                    // Prevent ProseMirror from treating clicks on the badge
+                    // as document clicks (cursor placement, etc.)
+                    stopEvent: (event) => {
+                      const target = event.target as HTMLElement;
+                      return (
+                        target === closeBtn ||
+                        target.closest('.tag-badge-close') !== null
+                      );
+                    },
+                  })
+                );
+              }
+            });
+
+            return DecorationSet.create(doc, decorations);
+          },
+        },
+      }),
+    ];
   },
 });
 

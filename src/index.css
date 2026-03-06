@@ -46,16 +46,67 @@
   font-weight: 600;
 }
 
-/* Tag highlight mark */
+/* Tag highlight mark — subtle tint on the tagged text range */
 .tag-mark {
   border-radius: 2px;
-  padding: 1px 2px;
+  padding: 1px 0;
   cursor: pointer;
   transition: opacity 0.15s;
 }
 
 .tag-mark:hover {
   opacity: 0.8;
+}
+
+/* ── Inline tag badge widget ─────────────────────────────────────────────── */
+
+/* The badge is injected as a ProseMirror widget decoration before the
+   start of the tagged text. It uses CSS custom properties set inline
+   on each badge element so colours come from the category theme. */
+.tag-badge-widget {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  border-radius: 3px;
+  padding: 1px 3px 1px 6px;
+  margin-right: 5px;
+  line-height: 1.5;
+  vertical-align: middle;
+  background-color: var(--tag-bg);
+  border: 1px solid var(--tag-border);
+  color: var(--tag-color);
+  /* Prevent the badge from being included in text selections */
+  user-select: none;
+}
+
+.tag-badge-label {
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.tag-badge-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  padding: 0 1px;
+  margin: 0;
+  cursor: pointer;
+  font-size: 0.85rem;
+  line-height: 1;
+  color: inherit;
+  opacity: 0.6;
+  transition: opacity 0.1s;
+  /* Avoid the button itself being selected / dragged */
+  user-select: none;
+}
+
+.tag-badge-close:hover {
+  opacity: 1;
 }
 
 /* Scrollbar styling */

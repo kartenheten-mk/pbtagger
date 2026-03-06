@@ -70,6 +70,10 @@ function docModelToTipTap(model: DocModel, tags: Tag[], categories: Category[]):
     for (const tag of paraTags) {
       const cat = categories.find((c) => c.id === tag.categoryId);
       const color = cat?.color ?? '#3b82f6';
+      // Build human-readable label: "TEMA: Kategori"
+      const label = cat
+        ? `${cat.temaName}: ${cat.name}`
+        : tag.categoryId;
 
       // Text before this tag
       if (tag.startOffset > cursor) {
@@ -90,6 +94,7 @@ function docModelToTipTap(model: DocModel, tags: Tag[], categories: Category[]):
                 tagUuid: tag.uuid,
                 categoryId: tag.categoryId,
                 color,
+                label,
               },
             },
           ],
@@ -189,13 +194,20 @@ export const DocViewer: React.FC<DocViewerProps> = ({ docModel, teman: _teman, c
     const paraEl = findParagraphElement(anchorNode);
     if (!paraEl || !editorContainerRef.current) return;
 
+    // Scope to the ProseMirror root only — the hint banner above the editor
+    // also contains a <p> which would otherwise shift all paragraph indices by 1.
+    const proseMirrorEl = editorContainerRef.current.querySelector('.ProseMirror');
+    if (!proseMirrorEl) return;
+
     const allParaEls = Array.from(
-      editorContainerRef.current.querySelectorAll('p, h1, h2, h3, h4, h5, h6')
+      proseMirrorEl.querySelectorAll('p, h1, h2, h3, h4, h5, h6')
     );
     const paraIndex = allParaEls.indexOf(paraEl);
     if (paraIndex === -1) return;
 
-    const paraText = paraEl.textContent ?? '';
+    // Use badge-aware helpers so widget text ("KONSEKVENSER: ANNAT ×") is
+    // not counted as part of the document text.
+    const paraText = getCleanTextContent(paraEl);
     const anchorOffset = getTextOffsetInParagraph(paraEl, selection.anchorNode!, selection.anchorOffset);
     const focusOffset = getTextOffsetInParagraph(paraEl, selection.focusNode!, selection.focusOffset);
 
@@ -240,6 +252,35 @@ export const DocViewer: React.FC<DocViewerProps> = ({ docModel, teman: _teman, c
 
 // ─── DOM helpers ──────────────────────────────────────────────────────────────
 
+/**
+ * TreeWalker NodeFilter that rejects text nodes living inside a badge widget.
+ * Badge widgets are injected as ProseMirror decoration elements and must not
+ * be counted as document content when computing character offsets.
+ */
+const noBadgeFilter: NodeFilter = {
+  acceptNode(node: Node) {
+    if ((node as Node).parentElement?.closest('.tag-badge-widget')) {
+      return NodeFilter.FILTER_REJECT;
+    }
+    return NodeFilter.FILTER_ACCEPT;
+  },
+};
+
+/**
+ * Return the plain text of a paragraph element, excluding any text that
+ * belongs to inline badge widget decorations.
+ */
+function getCleanTextContent(container: Element): string {
+  let text = '';
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, noBadgeFilter);
+  let node = walker.nextNode();
+  while (node) {
+    text += node.textContent ?? '';
+    node = walker.nextNode();
+  }
+  return text;
+}
+
 /** Walk up the DOM to find the nearest paragraph / heading element */
 function findParagraphElement(node: Node): Element | null {
   let current: Node | null = node;
@@ -258,7 +299,7 @@ function findParagraphElement(node: Node): Element | null {
 
 /**
  * Compute the character offset of `node:offset` within the text content
- * of `container` (a paragraph element).
+ * of `container` (a paragraph element), skipping badge widget text nodes.
  */
 function getTextOffsetInParagraph(
   container: Element,
@@ -266,7 +307,7 @@ function getTextOffsetInParagraph(
   offset: number
 ): number {
   let total = 0;
-  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, noBadgeFilter);
   let current = walker.nextNode();
   while (current) {
     if (current === node) {
