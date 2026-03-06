@@ -108,6 +108,15 @@ export interface DocModel {
   paragraphs: DocParagraph[];
 }
 
+// ─── Pending Selection (text selected in editor, awaiting tag assignment) ────
+
+export interface PendingSelection {
+  text: string;
+  paragraphIndex: number;
+  startOffset: number;
+  endOffset: number;
+}
+
 // ─── App State ───────────────────────────────────────────────────────────────
 
 export interface AppState {
@@ -125,4 +134,6 @@ export interface AppState {
   selectedTagUuid: string | null;
   /** UUID of the tag being edited (for geometry linking) */
   linkingTagUuid: string | null;
+  /** Text selection waiting to be tagged via the sidebar */
+  pendingSelection: PendingSelection | null;
 }

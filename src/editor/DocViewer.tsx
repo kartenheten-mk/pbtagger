@@ -5,21 +5,22 @@
  *
  * Key responsibilities:
  *  - Convert DocModel → TipTap JSON content
- *  - Intercept text selection events and show the TagPopover
+ *  - Intercept text selection events and store them for the Sidebar to consume
  *  - Apply TagMark decorations for existing tags
- *  - Compute paragraph/offset coordinates and pass them back to the store
  *
  * The editor is set to editable=false. Only selection for tagging is
  * possible — the user cannot type or delete.
+ *
+ * When text is selected, the selection info is written to the Zustand store
+ * (pendingSelection). The Sidebar picks this up and switches to "Assign Tags"
+ * mode automatically.
  */
 
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useCallback } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
-import { v4 as uuidv4 } from 'uuid';
 
 import { TagMark } from './extensions/TagMark';
-import { TagPopover } from './TagPopover';
 import { useDocumentStore } from '../store/useDocumentStore';
 import type { Category, DocModel, Tag, Tema } from '../types';
 
@@ -103,11 +104,6 @@ function docModelToTipTap(model: DocModel, tags: Tag[], categories: Category[]):
       if (slice) textNodes.push({ type: 'text', text: slice });
     }
 
-    // Empty paragraph guard
-    if (textNodes.length === 0 && paraText === '') {
-      // TipTap needs at least an empty text node or nothing for empty paras
-    }
-
     if (para.headingLevel > 0 && para.headingLevel <= 6) {
       return {
         type: 'heading',
@@ -122,18 +118,7 @@ function docModelToTipTap(model: DocModel, tags: Tag[], categories: Category[]):
     };
   });
 
-  // Filter out empty trailing paragraphs for cleanliness
   return { type: 'doc', content };
-}
-
-// ─── Selection state ──────────────────────────────────────────────────────────
-
-interface SelectionInfo {
-  text: string;
-  paragraphIndex: number;
-  startOffset: number;
-  endOffset: number;
-  popoverPosition: { top: number; left: number };
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -144,9 +129,8 @@ interface DocViewerProps {
   categories: Category[];
 }
 
-export const DocViewer: React.FC<DocViewerProps> = ({ docModel, teman, categories }) => {
-  const { tags, addTag, removeTag } = useDocumentStore();
-  const [pendingSelection, setPendingSelection] = useState<SelectionInfo | null>(null);
+export const DocViewer: React.FC<DocViewerProps> = ({ docModel, teman: _teman, categories }) => {
+  const { tags, setPendingSelection } = useDocumentStore();
   const editorContainerRef = useRef<HTMLDivElement>(null);
 
   // ── Build TipTap initial content ─────────────────────────────────────────
@@ -155,7 +139,6 @@ export const DocViewer: React.FC<DocViewerProps> = ({ docModel, teman, categorie
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
-        // Disable all editing-related input rules
         bold: false,
         italic: false,
         strike: false,
@@ -171,7 +154,6 @@ export const DocViewer: React.FC<DocViewerProps> = ({ docModel, teman, categorie
     ],
     content: initialContent,
     editable: false,
-    // Prevent any drag or paste
     editorProps: {
       handleDrop: () => true,
       handlePaste: () => true,
@@ -182,11 +164,10 @@ export const DocViewer: React.FC<DocViewerProps> = ({ docModel, teman, categorie
   useEffect(() => {
     if (!editor) return;
     const newContent = docModelToTipTap(docModel, tags, categories);
-    // Replace content without adding to undo history
     editor.commands.setContent(newContent, { emitUpdate: false });
   }, [editor, tags, docModel, categories]);
 
-  // ── Handle text selection → show popover ─────────────────────────────────
+  // ── Handle text selection → store in Zustand (sidebar will pick up) ───────
   const handleMouseUp = useCallback(() => {
     if (!editor) return;
 
@@ -198,26 +179,22 @@ export const DocViewer: React.FC<DocViewerProps> = ({ docModel, teman, categorie
     const selectedText = selection.toString().trim();
     if (!selectedText) return;
 
-    // Get bounding rect for popover positioning
     const range = selection.getRangeAt(0);
     const rect = range.getBoundingClientRect();
     if (!rect.width) return;
 
-    // Walk up from the anchor node to find the paragraph element
     const anchorNode = selection.anchorNode;
     if (!anchorNode) return;
 
     const paraEl = findParagraphElement(anchorNode);
     if (!paraEl || !editorContainerRef.current) return;
 
-    // Find paragraph index by counting paragraphs in the editor DOM
     const allParaEls = Array.from(
       editorContainerRef.current.querySelectorAll('p, h1, h2, h3, h4, h5, h6')
     );
     const paraIndex = allParaEls.indexOf(paraEl);
     if (paraIndex === -1) return;
 
-    // Compute offsets within the paragraph text
     const paraText = paraEl.textContent ?? '';
     const anchorOffset = getTextOffsetInParagraph(paraEl, selection.anchorNode!, selection.anchorOffset);
     const focusOffset = getTextOffsetInParagraph(paraEl, selection.focusNode!, selection.focusOffset);
@@ -227,50 +204,14 @@ export const DocViewer: React.FC<DocViewerProps> = ({ docModel, teman, categorie
 
     if (startOffset === endOffset) return;
 
+    // Store pending selection in Zustand — Sidebar will switch to "Assign" mode
     setPendingSelection({
       text: paraText.slice(startOffset, endOffset),
       paragraphIndex: paraIndex,
       startOffset,
       endOffset,
-      popoverPosition: {
-        top: rect.bottom + window.scrollY + 8,
-        left: rect.left + window.scrollX,
-      },
     });
-  }, [editor]);
-
-  // ── Apply tag when user confirms in popover ───────────────────────────────
-  const handleApplyTag = useCallback(
-    (categoryId: string, note: string) => {
-      if (!pendingSelection || !editor) return;
-
-      const cat = categories.find((c) => c.id === categoryId);
-      if (!cat) return;
-
-      const newTag: Tag = {
-        uuid: uuidv4(),
-        categoryId,
-        text: pendingSelection.text,
-        paragraphIndex: pendingSelection.paragraphIndex,
-        startOffset: pendingSelection.startOffset,
-        endOffset: pendingSelection.endOffset,
-        note: note || undefined,
-        createdAt: new Date().toISOString(),
-      };
-
-      addTag(newTag);
-      setPendingSelection(null);
-
-      // Clear browser selection
-      window.getSelection()?.removeAllRanges();
-    },
-    [pendingSelection, editor, categories, addTag]
-  );
-
-  const handleCancelPopover = useCallback(() => {
-    setPendingSelection(null);
-    window.getSelection()?.removeAllRanges();
-  }, []);
+  }, [editor, setPendingSelection]);
 
   if (!editor) return null;
 
@@ -282,7 +223,7 @@ export const DocViewer: React.FC<DocViewerProps> = ({ docModel, teman, categorie
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
         <p className="text-xs text-blue-600">
-          Select any text in the document to apply a tag. The document is read-only.
+          Markera text i dokumentet för att applicera en tagg via sidopanelen.
         </p>
       </div>
 
@@ -293,18 +234,6 @@ export const DocViewer: React.FC<DocViewerProps> = ({ docModel, teman, categorie
       >
         <EditorContent editor={editor} />
       </div>
-
-      {/* Tag Popover */}
-      {pendingSelection && (
-        <TagPopover
-          position={pendingSelection.popoverPosition}
-          selectedText={pendingSelection.text}
-          teman={teman}
-          categories={categories}
-          onApply={handleApplyTag}
-          onCancel={handleCancelPopover}
-        />
-      )}
     </div>
   );
 };

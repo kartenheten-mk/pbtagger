@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Tag, Geometry, DocModel, AppState } from '../types';
+import type { Tag, Geometry, DocModel, AppState, PendingSelection } from '../types';
 
 interface DocumentActions {
   // ─── Document lifecycle ─────────────────────────────────────────────────
@@ -26,6 +26,9 @@ interface DocumentActions {
   finishLinking: (tagUuid: string, geometryUuid: string) => void;
   cancelLinking: () => void;
   unlinkGeometry: (tagUuid: string) => void;
+
+  // ─── Pending selection (text selected in editor, awaiting tag) ──────────
+  setPendingSelection: (selection: PendingSelection | null) => void;
 }
 
 const initialState: AppState = {
@@ -36,6 +39,7 @@ const initialState: AppState = {
   geometries: [],
   selectedTagUuid: null,
   linkingTagUuid: null,
+  pendingSelection: null,
 };
 
 export const useDocumentStore = create<AppState & DocumentActions>((set) => ({
@@ -43,7 +47,7 @@ export const useDocumentStore = create<AppState & DocumentActions>((set) => ({
 
   // ─── Document lifecycle ───────────────────────────────────────────────────
   setDocument: (zipBuffer, docModel, fileName) =>
-    set({ zipBuffer, docModel, fileName, tags: [], geometries: [] }),
+    set({ zipBuffer, docModel, fileName, tags: [], geometries: [], pendingSelection: null }),
 
   clearDocument: () => set(initialState),
 
@@ -106,4 +110,7 @@ export const useDocumentStore = create<AppState & DocumentActions>((set) => ({
         t.uuid === tagUuid ? { ...t, geometryId: undefined } : t
       ),
     })),
+
+  // ─── Pending selection ────────────────────────────────────────────────────
+  setPendingSelection: (selection) => set({ pendingSelection: selection }),
 }));
