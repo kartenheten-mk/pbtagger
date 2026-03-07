@@ -65,6 +65,14 @@
   opacity: 1;
 }
 
+/* Persistent highlight for pending text selection (CSS Custom Highlight API).
+   This keeps the selected text visually highlighted even when focus moves
+   to the sidebar search input. */
+::highlight(pending-selection) {
+  background-color: rgba(59, 130, 246, 0.25);
+  color: inherit;
+}
+
 /* ── Inline tag badge widget ─────────────────────────────────────────────── */
 
 /* The badge is injected as a ProseMirror widget decoration before the

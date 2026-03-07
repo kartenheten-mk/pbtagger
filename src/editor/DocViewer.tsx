@@ -152,7 +152,7 @@ interface DocViewerProps {
 }
 
 export const DocViewer: React.FC<DocViewerProps> = ({ docModel, teman: _teman, categories }) => {
-  const { tags, setPendingSelection, showTags, selectedTagUuid } = useDocumentStore();
+  const { tags, pendingSelection, setPendingSelection, showTags, selectedTagUuid } = useDocumentStore();
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const lastUpdateRef = useRef({ tags, docModel, showTags, selectedTagUuid });
 
@@ -233,6 +233,62 @@ export const DocViewer: React.FC<DocViewerProps> = ({ docModel, teman: _teman, c
       elements[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
   }, [selectedTagUuid, tags, showTags, docModel]);
+
+  // ── Persistent highlight for pending selection (survives focus changes) ─────
+  useEffect(() => {
+    // Use the CSS Custom Highlight API to keep the selected text visually
+    // highlighted even after focus moves to the sidebar search input.
+    // @ts-ignore – CSS.highlights is not yet in all TS lib typings
+    if (typeof CSS === 'undefined' || !CSS.highlights) return;
+
+    if (!pendingSelection || pendingSelection.length === 0 || !editorContainerRef.current) {
+      // @ts-ignore
+      CSS.highlights.delete('pending-selection');
+      return;
+    }
+
+    const proseMirrorEl = editorContainerRef.current.querySelector('.ProseMirror');
+    if (!proseMirrorEl) return;
+
+    const allParaEls = Array.from(
+      proseMirrorEl.querySelectorAll('p, h1, h2, h3, h4, h5, h6')
+    );
+
+    const ranges: Range[] = [];
+
+    for (const sel of pendingSelection) {
+      const paraEl = allParaEls[sel.paragraphIndex];
+      if (!paraEl) continue;
+
+      const startPos = findDomNodeForOffset(paraEl, sel.startOffset);
+      const endPos = findDomNodeForOffset(paraEl, sel.endOffset);
+      if (!startPos || !endPos) continue;
+
+      try {
+        const range = document.createRange();
+        range.setStart(startPos.node, startPos.offset);
+        range.setEnd(endPos.node, endPos.offset);
+        ranges.push(range);
+      } catch {
+        // Ignore invalid ranges (e.g. if DOM changed)
+      }
+    }
+
+    if (ranges.length > 0) {
+      // @ts-ignore
+      const highlight = new Highlight(...ranges);
+      // @ts-ignore
+      CSS.highlights.set('pending-selection', highlight);
+    } else {
+      // @ts-ignore
+      CSS.highlights.delete('pending-selection');
+    }
+
+    return () => {
+      // @ts-ignore
+      CSS.highlights.delete('pending-selection');
+    };
+  }, [pendingSelection]);
 
   // ─── Handle text selection → store in Zustand (sidebar will pick up) ───────
   const handleMouseUp = useCallback(() => {
@@ -401,4 +457,26 @@ function getTextOffsetInParagraph(
     current = walker.nextNode();
   }
   return total;
+}
+
+/**
+ * Given a paragraph element and a character offset (skipping badge widgets),
+ * return the DOM text node and the local offset within that text node.
+ */
+function findDomNodeForOffset(
+  container: Element,
+  targetOffset: number
+): { node: Node; offset: number } | null {
+  let accumulated = 0;
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, noBadgeFilter);
+  let current = walker.nextNode();
+  while (current) {
+    const len = (current.textContent ?? '').length;
+    if (accumulated + len >= targetOffset) {
+      return { node: current, offset: targetOffset - accumulated };
+    }
+    accumulated += len;
+    current = walker.nextNode();
+  }
+  return null;
 }
