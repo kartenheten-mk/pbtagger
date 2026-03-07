@@ -29,6 +29,7 @@ export const ViewTagsPanel: React.FC<ViewTagsPanelProps> = ({
   onUnlinkGeometry,
 }) => {
   const [filterTemaId, setFilterTemaId] = useState<string>('all');
+  const [isFilterExpanded, setIsFilterExpanded] = useState(true);
   const listContainerRef = useRef<HTMLDivElement>(null);
 
   // ── Auto-scroll to selected tag ──────────────────────────────────────────
@@ -76,14 +77,31 @@ export const ViewTagsPanel: React.FC<ViewTagsPanelProps> = ({
   return (
     <>
       {/* Header */}
-      <div className="px-4 py-2.5 border-b border-gray-100">
+      <div className="px-4 py-2.5 border-b border-gray-100 flex items-center justify-between">
         <p className="text-xs text-gray-400">
           {tags.length} totalt · {filteredTags.length} visas
         </p>
+        <button
+          onClick={() => setIsFilterExpanded(!isFilterExpanded)}
+          className="p-1 hover:bg-gray-100 rounded-md transition-colors text-gray-400 hover:text-gray-600"
+          title={isFilterExpanded ? "Dölj filter" : "Visa filter"}
+        >
+          <svg
+            className={`w-3.5 h-3.5 transition-transform duration-200 ${isFilterExpanded ? 'rotate-180' : ''}`}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
       </div>
 
       {/* Tema filter */}
-      <div className="px-3 py-2 border-b border-gray-100 flex gap-1.5 flex-wrap">
+      <div
+        className={`px-3 overflow-hidden transition-all duration-300 ease-in-out border-b border-gray-100 flex gap-1.5 flex-wrap ${isFilterExpanded ? 'py-2 opacity-100' : 'max-h-0 py-0 opacity-0 pointer-events-none border-b-0'
+          }`}
+      >
         <button
           onClick={() => setFilterTemaId('all')}
           className={`px-3 py-1 rounded-full text-xs font-semibold transition-all ${filterTemaId === 'all'
@@ -167,23 +185,6 @@ export const ViewTagsPanel: React.FC<ViewTagsPanelProps> = ({
         )}
       </div>
 
-      {/* Tema legend */}
-      <div className="px-4 py-3 border-t border-gray-100 bg-gray-50">
-        <p className="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">
-          Teman
-        </p>
-        <div className="space-y-1">
-          {teman.map((tema) => (
-            <div key={tema.id} className="flex items-center gap-2">
-              <span
-                className="w-2 h-2 rounded-full flex-shrink-0"
-                style={{ backgroundColor: tema.color }}
-              />
-              <span className="text-xs text-gray-600">{tema.name}</span>
-            </div>
-          ))}
-        </div>
-      </div>
     </>
   );
 };

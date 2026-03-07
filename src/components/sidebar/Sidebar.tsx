@@ -27,6 +27,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ teman, categories }) => {
   } = useDocumentStore();
 
   const [mode, setMode] = useState<SidebarMode>('view');
+  const [showLegend, setShowLegend] = useState(false);
 
   // ── Auto-switch to Assign mode when text is selected ─────────────────────
   useEffect(() => {
@@ -139,6 +140,60 @@ export const Sidebar: React.FC<SidebarProps> = ({ teman, categories }) => {
           onUnlinkGeometry={unlinkGeometry}
         />
       )}
+
+      {/* ── Footer / Legend Toggle ────────────────────────────────────────── */}
+      <footer className="p-3 border-t border-gray-100 bg-gray-50 flex items-center justify-between relative">
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">
+            Planbeskrivning
+          </span>
+        </div>
+
+        <button
+          onClick={() => setShowLegend(!showLegend)}
+          className={`w-7 h-7 rounded-full flex items-center justify-center transition-all ${showLegend
+              ? 'bg-blue-600 text-white shadow-md rotate-180'
+              : 'bg-white text-gray-400 hover:text-gray-600 border border-gray-200'
+            }`}
+          title="Visa teckenförklaring"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            {showLegend ? (
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+            ) : (
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            )}
+          </svg>
+        </button>
+
+        {/* Legend Popover */}
+        {showLegend && (
+          <div className="absolute bottom-full right-3 mb-2 w-64 bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-200 z-50">
+            <div className="px-4 py-3 border-b border-gray-50 bg-gray-50/50">
+              <h4 className="text-xs font-bold text-gray-700 uppercase tracking-wide">Teman</h4>
+            </div>
+            <div className="p-3 space-y-2 max-h-[300px] overflow-y-auto">
+              {teman.map((tema) => (
+                <div key={tema.id} className="flex items-center gap-3 group">
+                  <span
+                    className="w-3 h-3 rounded-full flex-shrink-0 shadow-sm border border-white"
+                    style={{ backgroundColor: tema.color }}
+                  />
+                  <div className="flex flex-col">
+                    <span className="text-xs font-medium text-gray-700">{tema.name}</span>
+                    <span className="text-[10px] text-gray-400 line-clamp-1">{tema.grupper.length} grupper</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="px-4 py-2 border-t border-gray-50 bg-gray-50/30">
+              <p className="text-[10px] text-gray-400 italic text-center">
+                Teckenförklaring för taggkategorier
+              </p>
+            </div>
+          </div>
+        )}
+      </footer>
     </aside>
   );
 };
