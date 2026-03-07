@@ -5,15 +5,8 @@
  *
  * Key responsibilities:
  *  - Convert DocModel → TipTap JSON content
- *  - Intercept text selection events and store them for the Sidebar to consume
- *  - Apply TagMark decorations for existing tags
- *
- * The editor is set to editable=false. Only selection for tagging is
- * possible — the user cannot type or delete.
- *
- * When text is selected, the selection info is written to the Zustand store
- * (pendingSelection). The Sidebar picks this up and switches to "Assign Tags"
- * mode automatically.
+ *  - Intercept text/object selection events and store them for the Sidebar
+ *  - Apply TagMark decorations for existing text tags
  */
 
 import React, { useEffect, useRef, useCallback } from 'react';
@@ -23,7 +16,10 @@ import Image from '@tiptap/extension-image';
 
 import { TagMark } from './extensions/TagMark';
 import { useDocumentStore } from '../store/useDocumentStore';
-import type { Category, DocModel, Tag, Tema, PendingSelection } from '../types';
+import type { Category, DocModel, Tag, PendingSelection } from '../types';
+
+const OBJECT_ALT_PREFIX = '__pb_obj__';
+const GRAPH_PLACEHOLDER_SRC = createGraphPlaceholderDataUri();
 
 // ─── DocModel → TipTap JSON ───────────────────────────────────────────────────
 
@@ -34,7 +30,7 @@ interface TipTapMark {
 
 type TipTapContentNode =
   | { type: 'text'; text: string; marks?: TipTapMark[] }
-  | { type: 'image'; attrs: { src: string; alt?: string; title?: string } };
+  | { type: 'image'; attrs: { src: string; alt?: string; title?: string; class?: string; style?: string; 'data-tag-uuid'?: string; 'data-tag-color'?: string } };
 
 interface TipTapParagraphNode {
   type: 'heading' | 'paragraph';
@@ -48,16 +44,26 @@ interface TipTapDoc {
 }
 
 function docModelToTipTap(model: DocModel, tags: Tag[], categories: Category[]): TipTapDoc {
-  // Build a quick lookup: paragraphIndex → tags sorted by startOffset
-  const tagsByPara = new Map<number, Tag[]>();
+  // Build quick lookups
+  const textTagsByPara = new Map<number, Tag[]>();
+  const objectTagByKey = new Map<string, Tag>();
+
   for (const tag of tags) {
-    const arr = tagsByPara.get(tag.paragraphIndex) ?? [];
-    arr.push(tag);
-    tagsByPara.set(tag.paragraphIndex, arr);
+    const targetType = tag.targetType ?? 'text';
+    if (targetType === 'text') {
+      const arr = textTagsByPara.get(tag.paragraphIndex) ?? [];
+      arr.push(tag);
+      textTagsByPara.set(tag.paragraphIndex, arr);
+      continue;
+    }
+
+    if ((targetType === 'image' || targetType === 'graph') && tag.runId) {
+      objectTagByKey.set(buildObjectKey(targetType, tag.paragraphIndex, tag.runId), tag);
+    }
   }
 
   const content: TipTapParagraphNode[] = model.paragraphs.map((para) => {
-    const paraTags = (tagsByPara.get(para.index) ?? []).sort(
+    const paraTags = (textTagsByPara.get(para.index) ?? []).sort(
       (a, b) => a.startOffset - b.startOffset
     );
 
@@ -66,18 +72,30 @@ function docModelToTipTap(model: DocModel, tags: Tag[], categories: Category[]):
 
     for (const run of para.runs) {
       if (run.isImage && run.imageUrl) {
-        paraNodes.push({ type: 'image', attrs: { src: run.imageUrl } });
+        const alt = encodeObjectAlt('image', para.index, run.id);
+        const tag = objectTagByKey.get(buildObjectKey('image', para.index, run.id));
+        const title = getObjectTitle(tag, categories, 'Bild');
+
+        paraNodes.push({ type: 'image', attrs: buildObjectImageAttrs(run.imageUrl, alt, title, tag, categories) });
+        continue;
+      }
+
+      if (run.isGraph) {
+        const alt = encodeObjectAlt('graph', para.index, run.id);
+        const tag = objectTagByKey.get(buildObjectKey('graph', para.index, run.id));
+        const title = getObjectTitle(tag, categories, 'Diagram');
+
+        paraNodes.push({ type: 'image', attrs: buildObjectImageAttrs(GRAPH_PLACEHOLDER_SRC, alt, title, tag, categories) });
         continue;
       }
 
       const runStart = globalCursor;
       const runEnd = globalCursor + run.text.length;
       const runText = run.text;
-
       let localCursor = 0;
 
       // Find tags that overlap with this run
-      const overlappingTags = paraTags.filter(t => t.startOffset < runEnd && t.endOffset > runStart);
+      const overlappingTags = paraTags.filter((t) => t.startOffset < runEnd && t.endOffset > runStart);
 
       for (const tag of overlappingTags) {
         const cat = categories.find((c) => c.id === tag.categoryId);
@@ -147,17 +165,25 @@ function docModelToTipTap(model: DocModel, tags: Tag[], categories: Category[]):
 
 interface DocViewerProps {
   docModel: DocModel;
-  teman: Tema[];
   categories: Category[];
 }
 
-export const DocViewer: React.FC<DocViewerProps> = ({ docModel, teman: _teman, categories }) => {
-  const { tags, pendingSelection, setPendingSelection, showTags, selectedTagUuid, selectTag } = useDocumentStore();
+export const DocViewer: React.FC<DocViewerProps> = ({ docModel, categories }) => {
+  const {
+    tags,
+    pendingSelection,
+    setPendingSelection,
+    showTags,
+    selectedTagUuid,
+    selectTag,
+    removeTag,
+  } = useDocumentStore();
+
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const lastUpdateRef = useRef({ tags, docModel, showTags, selectedTagUuid });
 
   // ── Build TipTap initial content ─────────────────────────────────────────
-  const visibleTags = showTags ? tags : tags.filter(t => t.uuid === selectedTagUuid);
+  const visibleTags = showTags ? tags : tags.filter((t) => t.uuid === selectedTagUuid);
   const initialContent = docModelToTipTap(docModel, visibleTags, categories);
 
   const editor = useEditor({
@@ -177,6 +203,9 @@ export const DocViewer: React.FC<DocViewerProps> = ({ docModel, teman: _teman, c
       Image.configure({
         inline: true,
         allowBase64: true,
+        HTMLAttributes: {
+          class: 'pb-object-node',
+        },
       }),
       TagMark,
     ],
@@ -207,42 +236,177 @@ export const DocViewer: React.FC<DocViewerProps> = ({ docModel, teman: _teman, c
       return;
     }
 
-    const visibleTags = showTags ? tags : tags.filter(t => t.uuid === selectedTagUuid);
+    const visibleTags = showTags ? tags : tags.filter((t) => t.uuid === selectedTagUuid);
     const newContent = docModelToTipTap(docModel, visibleTags, categories);
 
     // TipTap setContent replaces the DOM synchronously.
     editor.commands.setContent(newContent, { emitUpdate: false });
   }, [editor, tags, docModel, categories, showTags, selectedTagUuid]);
 
+  // ── Persistent object highlight + badges for tagged images/graphs ────────
+  useEffect(() => {
+    if (!editorContainerRef.current) return;
+
+    const container = editorContainerRef.current;
+    const images = Array.from(container.querySelectorAll('img.pb-object-node')) as HTMLImageElement[];
+
+    // Rebuild object badges from current tag state to avoid duplicates.
+    container.querySelectorAll('.pb-object-tag-badge').forEach((el) => el.remove());
+
+    const activeTags = showTags ? tags : tags.filter((t) => t.uuid === selectedTagUuid);
+    const objectTagByKey = new Map<string, Tag>();
+
+    for (const tag of activeTags) {
+      const targetType = tag.targetType ?? 'text';
+      if ((targetType === 'image' || targetType === 'graph') && tag.runId) {
+        objectTagByKey.set(buildObjectKey(targetType, tag.paragraphIndex, tag.runId), tag);
+      }
+    }
+
+    for (const img of images) {
+      img.classList.remove('pb-object-tagged');
+      img.style.removeProperty('--tag-color');
+      img.style.removeProperty('--tag-bg');
+      img.style.removeProperty('--tag-border');
+      img.removeAttribute('data-tag-uuid');
+      img.removeAttribute('data-tag-color');
+
+      const parsed = parseObjectAlt(img.getAttribute('alt'));
+      if (!parsed) continue;
+
+      const tag = objectTagByKey.get(buildObjectKey(parsed.type, parsed.paragraphIndex, parsed.runId));
+      if (!tag) continue;
+
+      const color = getObjectTagColor(tag, categories);
+      img.classList.add('pb-object-tagged');
+      img.style.setProperty('--tag-color', color);
+      img.style.setProperty('--tag-bg', hexToRgba(color, 0.18));
+      img.style.setProperty('--tag-border', hexToRgba(color, 0.45));
+      img.setAttribute('data-tag-uuid', tag.uuid);
+      img.setAttribute('data-tag-color', color);
+
+      const badge = document.createElement('span');
+      badge.className = 'tag-badge-widget pb-object-tag-badge';
+      badge.setAttribute('data-tag-uuid', tag.uuid);
+      badge.style.setProperty('--tag-color', color);
+      badge.style.setProperty('--tag-bg', hexToRgba(color, 0.12));
+      badge.style.setProperty('--tag-border', hexToRgba(color, 0.4));
+
+      const labelSpan = document.createElement('span');
+      labelSpan.className = 'tag-badge-label';
+      labelSpan.textContent = getObjectTagLabel(tag, categories).toUpperCase();
+
+      const closeBtn = document.createElement('button');
+      closeBtn.className = 'tag-badge-close';
+      closeBtn.setAttribute('type', 'button');
+      closeBtn.setAttribute('aria-label', 'Ta bort tagg');
+      closeBtn.textContent = '×';
+
+      closeBtn.addEventListener('mousedown', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        removeTag(tag.uuid);
+        if (selectedTagUuid === tag.uuid) {
+          selectTag(null);
+        }
+      });
+
+      closeBtn.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+      });
+
+      badge.appendChild(labelSpan);
+      badge.appendChild(closeBtn);
+
+      badge.addEventListener('mousedown', (event) => {
+        const target = event.target as HTMLElement;
+        if (target.closest('.tag-badge-close')) return;
+        event.preventDefault();
+        event.stopPropagation();
+        selectTag(tag.uuid);
+      });
+
+      const parent = img.parentElement;
+      if (parent) {
+        if (window.getComputedStyle(parent).position === 'static') {
+          parent.style.position = 'relative';
+        }
+
+        badge.style.left = `${img.offsetLeft + 8}px`;
+        badge.style.top = `${img.offsetTop + 8}px`;
+        parent.appendChild(badge);
+      }
+    }
+  }, [tags, showTags, selectedTagUuid, categories, docModel, selectTag, removeTag]);
+
   // ── Highlight and scroll to selected tag ───────────────────────────────────
   useEffect(() => {
     if (!editorContainerRef.current) return;
 
     // Clear previous highlights
-    const prevSelected = editorContainerRef.current.querySelectorAll('.is-selected');
-    prevSelected.forEach(el => el.classList.remove('is-selected'));
+    const container = editorContainerRef.current;
+    container.querySelectorAll('.is-selected').forEach((el) => el.classList.remove('is-selected'));
+    container.querySelectorAll('.is-selected-object').forEach((el) => el.classList.remove('is-selected-object'));
+    container.querySelectorAll('.is-selected-table').forEach((el) => el.classList.remove('is-selected-table'));
 
     if (!selectedTagUuid) return;
 
-    // Find all badge and mark elements for the selected tag
-    const elements = editorContainerRef.current.querySelectorAll(`[data-tag-uuid="${selectedTagUuid}"]`);
+    const selectedTag = tags.find((t) => t.uuid === selectedTagUuid);
+    if (!selectedTag) return;
 
-    if (elements.length > 0) {
-      elements.forEach(el => el.classList.add('is-selected'));
-      // Scroll to the first element smoothly
-      elements[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const targetType = selectedTag.targetType ?? 'text';
+
+    if (targetType === 'text') {
+      const elements = container.querySelectorAll(`[data-tag-uuid="${selectedTagUuid}"]`);
+      if (elements.length > 0) {
+        elements.forEach((el) => el.classList.add('is-selected'));
+        elements[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+      return;
     }
-  }, [selectedTagUuid, tags, showTags, docModel]);
 
-  // ── Persistent highlight for pending selection (survives focus changes) ─────
+    if ((targetType === 'image' || targetType === 'graph') && selectedTag.runId) {
+      const expectedAlt = encodeObjectAlt(targetType, selectedTag.paragraphIndex, selectedTag.runId);
+      const images = Array.from(container.querySelectorAll('img.pb-object-node')) as HTMLImageElement[];
+      const match = images.find((img) => img.getAttribute('alt') === expectedAlt);
+      if (match) {
+        match.classList.add('is-selected-object');
+        const badge = container.querySelector(`.pb-object-tag-badge[data-tag-uuid="${selectedTagUuid}"]`);
+        if (badge) badge.classList.add('is-selected');
+        match.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+      return;
+    }
+
+    if (targetType === 'table' && selectedTag.tableId) {
+      const proseMirrorEl = container.querySelector('.ProseMirror');
+      if (!proseMirrorEl) return;
+
+      const allParaEls = Array.from(
+        proseMirrorEl.querySelectorAll('p, h1, h2, h3, h4, h5, h6')
+      );
+
+      const tableParagraphs = docModel.paragraphs
+        .filter((p) => p.tableId === selectedTag.tableId)
+        .map((p) => p.index)
+        .filter((idx) => idx >= 0 && idx < allParaEls.length)
+        .map((idx) => allParaEls[idx]);
+
+      if (tableParagraphs.length > 0) {
+        tableParagraphs.forEach((el) => el.classList.add('is-selected-table'));
+        tableParagraphs[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }
+  }, [selectedTagUuid, tags, docModel]);
+
+  // ── Persistent highlight for pending text selection (survives focus changes) ─
   useEffect(() => {
-    // Use the CSS Custom Highlight API to keep the selected text visually
-    // highlighted even after focus moves to the sidebar search input.
-    // @ts-ignore – CSS.highlights is not yet in all TS lib typings
     if (typeof CSS === 'undefined' || !CSS.highlights) return;
 
-    if (!pendingSelection || pendingSelection.length === 0 || !editorContainerRef.current) {
-      // @ts-ignore
+    const textSelections = (pendingSelection ?? []).filter((s) => s.type === 'text');
+
+    if (textSelections.length === 0 || !editorContainerRef.current) {
       CSS.highlights.delete('pending-selection');
       return;
     }
@@ -256,7 +420,7 @@ export const DocViewer: React.FC<DocViewerProps> = ({ docModel, teman: _teman, c
 
     const ranges: Range[] = [];
 
-    for (const sel of pendingSelection) {
+    for (const sel of textSelections) {
       const paraEl = allParaEls[sel.paragraphIndex];
       if (!paraEl) continue;
 
@@ -275,17 +439,13 @@ export const DocViewer: React.FC<DocViewerProps> = ({ docModel, teman: _teman, c
     }
 
     if (ranges.length > 0) {
-      // @ts-ignore
       const highlight = new Highlight(...ranges);
-      // @ts-ignore
       CSS.highlights.set('pending-selection', highlight);
     } else {
-      // @ts-ignore
       CSS.highlights.delete('pending-selection');
     }
 
     return () => {
-      // @ts-ignore
       CSS.highlights.delete('pending-selection');
     };
   }, [pendingSelection]);
@@ -310,8 +470,7 @@ export const DocViewer: React.FC<DocViewerProps> = ({ docModel, teman: _teman, c
     const endParaEl = findParagraphElement(range.endContainer);
     if (!startParaEl || !endParaEl || !editorContainerRef.current) return;
 
-    // Scope to the ProseMirror root only — the hint banner above the editor
-    // also contains a <p> which would otherwise shift all paragraph indices by 1.
+    // Scope to ProseMirror root only.
     const proseMirrorEl = editorContainerRef.current.querySelector('.ProseMirror');
     if (!proseMirrorEl) return;
 
@@ -331,7 +490,7 @@ export const DocViewer: React.FC<DocViewerProps> = ({ docModel, teman: _teman, c
       let startOffset = 0;
       let endOffset = paraText.length;
 
-      // The DOM sequence follows visual document order, range.startContainer is always before range.endContainer.
+      // DOM follows visual order; startContainer comes before endContainer.
       if (i === startIndex) {
         startOffset = getTextOffsetInParagraph(paraEl, range.startContainer, range.startOffset);
       }
@@ -350,6 +509,7 @@ export const DocViewer: React.FC<DocViewerProps> = ({ docModel, teman: _teman, c
         const textSlice = paraText.slice(startOffset, endOffset);
         if (textSlice.trim()) {
           pendingSelections.push({
+            type: 'text',
             text: textSlice,
             paragraphIndex: i,
             startOffset,
@@ -361,7 +521,6 @@ export const DocViewer: React.FC<DocViewerProps> = ({ docModel, teman: _teman, c
 
     if (pendingSelections.length === 0) return;
 
-    // Store pending selection in Zustand — Sidebar will switch to "Assign" mode
     setPendingSelection(pendingSelections);
   }, [editor, setPendingSelection]);
 
@@ -375,7 +534,7 @@ export const DocViewer: React.FC<DocViewerProps> = ({ docModel, teman: _teman, c
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
         <p className="text-xs text-blue-600">
-          Markera text i dokumentet för att applicera en tagg via sidopanelen.
+          Markera text, klicka bild/diagram eller klicka i en tabell för att skapa en tagg.
         </p>
       </div>
 
@@ -385,6 +544,7 @@ export const DocViewer: React.FC<DocViewerProps> = ({ docModel, teman: _teman, c
         onMouseUp={handleMouseUp}
         onClick={(e) => {
           const target = e.target as HTMLElement;
+
           const markEl = target.closest('.tag-mark');
           if (markEl) {
             const uuid = markEl.getAttribute('data-tag-uuid');
@@ -393,11 +553,88 @@ export const DocViewer: React.FC<DocViewerProps> = ({ docModel, teman: _teman, c
               return;
             }
           }
+          const objectBadgeEl = target.closest('.pb-object-tag-badge');
+          if (objectBadgeEl) {
+            const uuid = objectBadgeEl.getAttribute('data-tag-uuid');
+            if (uuid) {
+              selectTag(uuid);
+              return;
+            }
+          }
+          const imgEl = target.closest('img.pb-object-node') as HTMLImageElement | null;
+          if (imgEl) {
+            const parsed = parseObjectAlt(imgEl.getAttribute('alt'));
+            if (parsed) {
+              const existingObjectTag = tags.find((t) => {
+                const targetType = t.targetType ?? 'text';
+                return (
+                  (targetType === 'image' || targetType === 'graph') &&
+                  targetType === parsed.type &&
+                  t.paragraphIndex === parsed.paragraphIndex &&
+                  t.runId === parsed.runId
+                );
+              });
 
-          // If clicking background (not a mark, not a badge, and no text selected), clear selection
+              window.getSelection()?.removeAllRanges();
+
+              if (existingObjectTag) {
+                setPendingSelection(null);
+                selectTag(existingObjectTag.uuid);
+                return;
+              }
+
+              setPendingSelection([
+                {
+                  type: parsed.type,
+                  text: parsed.type === 'image' ? 'Bild' : 'Diagram',
+                  paragraphIndex: parsed.paragraphIndex,
+                  startOffset: 0,
+                  endOffset: 0,
+                  runId: parsed.runId,
+                },
+              ]);
+              selectTag(null);
+              return;
+            }
+          }
+
           const selection = window.getSelection();
           const isCollapsed = !selection || selection.isCollapsed;
-          if (!target.closest('.tag-badge-widget') && isCollapsed) {
+
+          if (isCollapsed && !target.closest('.tag-badge-widget') && editorContainerRef.current) {
+            const proseMirrorEl = editorContainerRef.current.querySelector('.ProseMirror');
+            const paraEl = findParagraphElement(target);
+
+            if (proseMirrorEl && paraEl) {
+              const allParaEls = Array.from(
+                proseMirrorEl.querySelectorAll('p, h1, h2, h3, h4, h5, h6')
+              );
+              const paraIndex = allParaEls.indexOf(paraEl);
+
+              if (paraIndex >= 0 && paraIndex < docModel.paragraphs.length) {
+                const docPara = docModel.paragraphs[paraIndex];
+                if (docPara.tableId) {
+                  const tableParagraphs = docModel.paragraphs.filter((p) => p.tableId === docPara.tableId);
+                  const anchor = tableParagraphs.find((p) => p.isTableStart) ?? tableParagraphs[0] ?? docPara;
+                  const label = anchor.tableIndex ? `Tabell ${anchor.tableIndex}` : 'Tabell';
+
+                  setPendingSelection([
+                    {
+                      type: 'table',
+                      text: label,
+                      paragraphIndex: anchor.index,
+                      startOffset: 0,
+                      endOffset: 0,
+                      tableId: docPara.tableId,
+                    },
+                  ]);
+                  selectTag(null);
+                  window.getSelection()?.removeAllRanges();
+                  return;
+                }
+              }
+            }
+
             selectTag(null);
           }
         }}
@@ -498,3 +735,129 @@ function findDomNodeForOffset(
   }
   return null;
 }
+
+function buildObjectKey(type: 'image' | 'graph', paragraphIndex: number, runId: string): string {
+  return `${type}|${paragraphIndex}|${runId}`;
+}
+
+function encodeObjectAlt(type: 'image' | 'graph', paragraphIndex: number, runId: string): string {
+  return `${OBJECT_ALT_PREFIX}|${type}|${paragraphIndex}|${runId}`;
+}
+
+function parseObjectAlt(rawAlt: string | null): { type: 'image' | 'graph'; paragraphIndex: number; runId: string } | null {
+  if (!rawAlt || !rawAlt.startsWith(`${OBJECT_ALT_PREFIX}|`)) return null;
+
+  const parts = rawAlt.split('|');
+  if (parts.length < 4) return null;
+
+  const type = parts[1];
+  const paraIdx = parseInt(parts[2], 10);
+  const runId = parts.slice(3).join('|');
+
+  if ((type !== 'image' && type !== 'graph') || Number.isNaN(paraIdx) || !runId) {
+    return null;
+  }
+
+  return {
+    type,
+    paragraphIndex: paraIdx,
+    runId,
+  };
+}
+
+function getObjectTitle(tag: Tag | undefined, categories: Category[], fallback: string): string {
+  if (!tag) return fallback;
+  const category = categories.find((c) => c.id === tag.categoryId);
+  if (!category) return `${fallback} (taggad)`;
+  return `${fallback} - ${category.temaName}: ${category.name}`;
+}
+
+function getObjectTagLabel(tag: Tag, categories: Category[]): string {
+  const category = categories.find((c) => c.id === tag.categoryId);
+  if (!category) return tag.categoryId;
+  return `${category.temaName}: ${category.name}`;
+}
+
+function buildObjectImageAttrs(
+  src: string,
+  alt: string,
+  title: string,
+  tag: Tag | undefined,
+  categories: Category[]
+): { src: string; alt: string; title: string; class: string; style?: string; 'data-tag-uuid'?: string; 'data-tag-color'?: string } {
+  if (!tag) {
+    return {
+      src,
+      alt,
+      title,
+      class: 'pb-object-node',
+    };
+  }
+
+  const color = getObjectTagColor(tag, categories);
+  const tagBg = hexToRgba(color, 0.18);
+  const tagBorder = hexToRgba(color, 0.45);
+
+  return {
+    src,
+    alt,
+    title,
+    class: 'pb-object-node pb-object-tagged',
+    style: `--tag-color: ${color}; --tag-bg: ${tagBg}; --tag-border: ${tagBorder};`,
+    'data-tag-uuid': tag.uuid,
+    'data-tag-color': color,
+  };
+}
+
+function getObjectTagColor(tag: Tag, categories: Category[]): string {
+  const category = categories.find((c) => c.id === tag.categoryId);
+  return category?.color ?? '#3b82f6';
+}
+
+function hexToRgba(hex: string, alpha: number): string {
+  const clean = hex.replace('#', '');
+  const r = parseInt(clean.substring(0, 2), 16);
+  const g = parseInt(clean.substring(2, 4), 16);
+  const b = parseInt(clean.substring(4, 6), 16);
+
+  if (Number.isNaN(r) || Number.isNaN(g) || Number.isNaN(b)) {
+    return `rgba(59,130,246,${alpha})`;
+  }
+
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+function createGraphPlaceholderDataUri(): string {
+  const svg = `
+<svg xmlns="http://www.w3.org/2000/svg" width="240" height="90" viewBox="0 0 240 90" role="img" aria-label="Diagram">
+  <rect x="1" y="1" width="238" height="88" rx="8" fill="#f8fafc" stroke="#cbd5e1"/>
+  <path d="M18 68 L58 52 L98 58 L138 34 L178 44 L218 22" fill="none" stroke="#2563eb" stroke-width="3"/>
+  <circle cx="58" cy="52" r="3" fill="#2563eb"/>
+  <circle cx="138" cy="34" r="3" fill="#2563eb"/>
+  <text x="16" y="22" fill="#334155" font-size="12" font-family="Arial, sans-serif">Diagram</text>
+</svg>`;
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

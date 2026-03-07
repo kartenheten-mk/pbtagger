@@ -98,10 +98,13 @@ export function buildSdt(
 export interface TagMetadata {
   uuid: string;
   categoryId: string;
+  targetType?: 'text' | 'image' | 'graph' | 'table';
   text: string;
   paragraphIndex: number;
   startOffset: number;
   endOffset: number;
+  runId?: string;
+  tableId?: string;
   geometryId?: string;
   note?: string;
   createdAt: string;
@@ -109,11 +112,12 @@ export interface TagMetadata {
 
 export function buildCustomXmlItem(tags: TagMetadata[]): string {
   const tagElements = tags
-    .map(
-      (t) => `  <pb:tag uuid="${escXml(t.uuid)}" categoryId="${escXml(t.categoryId)}" paragraphIndex="${t.paragraphIndex}" startOffset="${t.startOffset}" endOffset="${t.endOffset}" createdAt="${escXml(t.createdAt)}"${t.geometryId ? ` geometryId="${escXml(t.geometryId)}"` : ''}${t.note ? ` note="${escXml(t.note)}"` : ''}>
+    .map((t) => {
+      const targetType = t.targetType ?? 'text';
+      return `  <pb:tag uuid="${escXml(t.uuid)}" categoryId="${escXml(t.categoryId)}" targetType="${escXml(targetType)}" paragraphIndex="${t.paragraphIndex}" startOffset="${t.startOffset}" endOffset="${t.endOffset}" createdAt="${escXml(t.createdAt)}"${t.runId ? ` runId="${escXml(t.runId)}"` : ''}${t.tableId ? ` tableId="${escXml(t.tableId)}"` : ''}${t.geometryId ? ` geometryId="${escXml(t.geometryId)}"` : ''}${t.note ? ` note="${escXml(t.note)}"` : ''}>
     <pb:text>${escXml(t.text)}</pb:text>
-  </pb:tag>`
-    )
+  </pb:tag>`;
+    })
     .join('\n');
 
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>

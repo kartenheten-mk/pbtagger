@@ -96,15 +96,15 @@ export const AssignTagPanel: React.FC<AssignTagPanelProps> = ({
     <div className="flex-1 flex flex-col overflow-hidden">
       {/* Selected text preview */}
       <div className="px-4 pt-3 pb-2 border-b border-gray-100">
-        <p className="text-xs text-gray-500 mb-1 font-medium">Markerad text</p>
+        <p className="text-xs text-gray-500 mb-1 font-medium">Markerat innehåll</p>
         {pendingText ? (
           <p className="text-xs text-gray-700 bg-gray-50 rounded-lg p-2.5 line-clamp-3 font-mono border border-gray-100 leading-relaxed">
             "{pendingText.length > 120 ? pendingText.slice(0, 120) + '…' : pendingText}"
           </p>
         ) : (
           <div className="bg-gray-50 rounded-lg p-3 border border-dashed border-gray-200 text-center">
-            <p className="text-xs text-gray-400">Ingen text markerad</p>
-            <p className="text-xs text-gray-400 mt-0.5">Markera text i dokumentet</p>
+            <p className="text-xs text-gray-400">Inget innehåll markerat</p>
+            <p className="text-xs text-gray-400 mt-0.5">Markera text, bild, diagram eller tabell</p>
           </div>
         )}
       </div>
@@ -330,3 +330,4 @@ export const AssignTagPanel: React.FC<AssignTagPanelProps> = ({
     </div>
   );
 };
+

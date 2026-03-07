@@ -10,11 +10,10 @@
  */
 
 import PizZip from 'pizzip';
-import type { DocModel, DocParagraph, DocRun, Tag } from '../types';
+import type { DocModel, DocParagraph, DocRun, Tag, TagTargetType } from '../types';
 import { CUSTOM_XML_NS } from './ContentControlBuilder';
 import {
   parseXml,
-  wChildren,
   wChild,
   wAttr,
   getHeadingLevel,
@@ -45,7 +44,7 @@ export async function parseDocx(buffer: ArrayBuffer): Promise<ParseResult> {
   const docXmlString = docXmlFile.asText();
   const docDom = parseXml(docXmlString);
 
-  // Parse relationships to map embed IDs to image paths
+  // Parse relationships to map embed IDs to target paths
   const relsMap: Record<string, string> = {};
   const relsFile = zip.file('word/_rels/document.xml.rels');
   if (relsFile) {
@@ -83,6 +82,12 @@ export async function parseDocx(buffer: ArrayBuffer): Promise<ParseResult> {
 
 // ─── Internal helpers ─────────────────────────────────────────────────────────
 
+interface TableContext {
+  tableId: string;
+  tableIndex: number;
+  firstParagraphSeen: boolean;
+}
+
 /**
  * Walk all top-level <w:p> elements in the body, including those inside
  * tables (<w:tbl> → <w:tr> → <w:tc> → <w:p>).
@@ -90,21 +95,44 @@ export async function parseDocx(buffer: ArrayBuffer): Promise<ParseResult> {
 function extractParagraphs(body: Element, zip: PizZip, relsMap: Record<string, string>): DocParagraph[] {
   const result: DocParagraph[] = [];
   let index = 0;
+  let tableCounter = 0;
 
-  function walkNode(node: Element) {
+  function walkNode(node: Element, tableCtx?: TableContext) {
     if (node.namespaceURI === NS.w && node.localName === 'p') {
-      const para = parseParagraph(node, index, zip, relsMap);
+      const para = parseParagraph(node, index, zip, relsMap, tableCtx);
       result.push(para);
       index++;
+      if (tableCtx) {
+        tableCtx.firstParagraphSeen = true;
+      }
       return;
     }
 
-    // Recurse into child elements (handles w:tbl, w:tr, w:tc, w:sdt, etc.)
+    // Each table gets a stable document-order table id/index.
+    if (node.namespaceURI === NS.w && node.localName === 'tbl') {
+      tableCounter++;
+      const nestedTableCtx: TableContext = {
+        tableId: `table_${tableCounter}`,
+        tableIndex: tableCounter,
+        firstParagraphSeen: false,
+      };
+
+      const tblChildren = node.childNodes;
+      for (let i = 0; i < tblChildren.length; i++) {
+        const child = tblChildren[i];
+        if (child.nodeType === 1) {
+          walkNode(child as Element, nestedTableCtx);
+        }
+      }
+      return;
+    }
+
+    // Recurse into child elements (handles w:tr, w:tc, w:sdt, etc.)
     const children = node.childNodes;
     for (let i = 0; i < children.length; i++) {
       const child = children[i];
       if (child.nodeType === 1) {
-        walkNode(child as Element);
+        walkNode(child as Element, tableCtx);
       }
     }
   }
@@ -121,14 +149,33 @@ function extractParagraphs(body: Element, zip: PizZip, relsMap: Record<string, s
   return result;
 }
 
-function parseParagraph(para: Element, index: number, zip: PizZip, relsMap: Record<string, string>): DocParagraph {
+function parseParagraph(
+  para: Element,
+  index: number,
+  zip: PizZip,
+  relsMap: Record<string, string>,
+  tableCtx?: TableContext
+): DocParagraph {
   const headingLevel = getHeadingLevel(para);
   const alignment = getParagraphAlignment(para);
   const listLevel = getListLevel(para);
-
   const runs = extractRuns(para, index, zip, relsMap);
 
-  return { index, runs, headingLevel, alignment, listLevel };
+  const paragraph: DocParagraph = {
+    index,
+    runs,
+    headingLevel,
+    alignment,
+    listLevel,
+  };
+
+  if (tableCtx) {
+    paragraph.tableId = tableCtx.tableId;
+    paragraph.tableIndex = tableCtx.tableIndex;
+    paragraph.isTableStart = !tableCtx.firstParagraphSeen;
+  }
+
+  return paragraph;
 }
 
 /**
@@ -202,18 +249,29 @@ function extractRuns(para: Element, paraIndex: number, zip: PizZip, relsMap: Rec
 
 /**
  * Parse a single <w:r> run element into a DocRun.
- * Returns null if the run contains no text (e.g. image runs).
+ * Returns null if the run contains no text or supported object.
  */
 function parseRun(runEl: Element, paraIndex: number, runIndex: number, zip: PizZip, relsMap: Record<string, string>): DocRun | null {
-  // Check for images
+  const runId = `p${paraIndex}_r${runIndex}`;
+
+  // Check for images and charts in drawings
   const drawings = runEl.getElementsByTagNameNS(NS.w, 'drawing');
   const objects = runEl.getElementsByTagNameNS(NS.w, 'object');
   let embedId: string | null = null;
+  let chartRelId: string | null = null;
 
   if (drawings.length > 0) {
-    const blips = drawings[0].getElementsByTagNameNS(NS.a, 'blip');
+    const drawing = drawings[0];
+    const blips = drawing.getElementsByTagNameNS(NS.a, 'blip');
     if (blips.length > 0) {
       embedId = blips[0].getAttributeNS(NS.r, 'embed') || blips[0].getAttribute('r:embed');
+    }
+
+    if (!embedId) {
+      const chartEls = drawing.getElementsByTagNameNS(NS.c, 'chart');
+      if (chartEls.length > 0) {
+        chartRelId = chartEls[0].getAttributeNS(NS.r, 'id') || chartEls[0].getAttribute('r:id');
+      }
     }
   }
 
@@ -249,12 +307,21 @@ function parseRun(runEl: Element, paraIndex: number, runIndex: number, zip: PizZ
       const base64 = typeof window !== 'undefined' ? window.btoa(binary) : btoa(binary);
 
       return {
-        id: `p${paraIndex}_r${runIndex}`,
+        id: runId,
         text: '',
         isImage: true,
         imageUrl: `data:${mime};base64,${base64}`
       };
     }
+  }
+
+  if (chartRelId) {
+    return {
+      id: runId,
+      text: '',
+      isGraph: true,
+      graphRelId: chartRelId,
+    };
   }
 
   // Get all w:t nodes
@@ -304,7 +371,7 @@ function parseRun(runEl: Element, paraIndex: number, runIndex: number, zip: PizZ
   }
 
   return {
-    id: `p${paraIndex}_r${runIndex}`,
+    id: runId,
     text,
     bold: bold || undefined,
     italic: italic || undefined,
@@ -395,6 +462,9 @@ function extractTagsFromCustomXml(zip: PizZip): Tag[] {
       const createdAt = el.getAttribute('createdAt') ?? new Date().toISOString();
       const geometryId = el.getAttribute('geometryId') || undefined;
       const note = el.getAttribute('note') || undefined;
+      const runId = el.getAttribute('runId') || undefined;
+      const tableId = el.getAttribute('tableId') || undefined;
+      const targetType = normalizeTagTargetType(el.getAttribute('targetType'));
 
       // Read <pb:text> child
       const textEls = el.getElementsByTagNameNS(CUSTOM_XML_NS, 'text');
@@ -405,10 +475,13 @@ function extractTagsFromCustomXml(zip: PizZip): Tag[] {
       tags.push({
         uuid,
         categoryId,
+        targetType,
         text,
         paragraphIndex,
         startOffset,
         endOffset,
+        runId,
+        tableId,
         geometryId,
         note,
         createdAt,
@@ -420,4 +493,11 @@ function extractTagsFromCustomXml(zip: PizZip): Tag[] {
     // If parsing fails, just return no tags
     return [];
   }
+}
+
+function normalizeTagTargetType(value: string | null): TagTargetType {
+  if (value === 'image' || value === 'graph' || value === 'table') {
+    return value;
+  }
+  return 'text';
 }

@@ -23,6 +23,8 @@ export const NS = {
     'http://schemas.openxmlformats.org/drawingml/2006/main',
   pic:
     'http://schemas.openxmlformats.org/drawingml/2006/picture',
+  c:
+    'http://schemas.openxmlformats.org/drawingml/2006/chart',
   v:
     'urn:schemas-microsoft-com:vml',
 } as const;
@@ -146,3 +148,5 @@ export function getListLevel(para: Element): number | undefined {
   const val = wAttr(ilvl, 'val');
   return val !== '' ? parseInt(val, 10) : undefined;
 }
+
+

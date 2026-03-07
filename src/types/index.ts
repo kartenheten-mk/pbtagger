@@ -46,9 +46,13 @@ export interface Category {
 
 // ─── Tag ─────────────────────────────────────────────────────────────────────
 
+export type TagTargetType = 'text' | 'image' | 'graph' | 'table';
+
 export interface Tag {
   uuid: string;
   categoryId: string;
+  /** What kind of document object this tag targets. Defaults to 'text'. */
+  targetType?: TagTargetType;
   /** Plain text content of the tagged selection */
   text: string;
   /** Index of the paragraph in DocModel.paragraphs */
@@ -57,6 +61,10 @@ export interface Tag {
   startOffset: number;
   /** Character offset inside the paragraph's concatenated text (end) */
   endOffset: number;
+  /** Run id anchor for image/graph tags */
+  runId?: string;
+  /** Table id anchor for table tags */
+  tableId?: string;
   /** UUID of the linked geometry, if any */
   geometryId?: string;
   /** Human readable note */
@@ -88,10 +96,12 @@ export interface DocRun {
   underline?: boolean;
   strike?: boolean;
   fontSize?: number; // half-points as stored in OOXML
-  color?: string;    // RRGGBB hex
+  color?: string; // RRGGBB hex
   fontFamily?: string;
   isImage?: boolean;
   imageUrl?: string; // Base64 Data URI
+  isGraph?: boolean;
+  graphRelId?: string;
 }
 
 export interface DocParagraph {
@@ -104,19 +114,28 @@ export interface DocParagraph {
   alignment?: string;
   /** Numbering list info */
   listLevel?: number;
+  /** Present when this paragraph belongs to a table */
+  tableId?: string;
+  /** 1-based table number in document order */
+  tableIndex?: number;
+  /** True for the first paragraph encountered in a table */
+  isTableStart?: boolean;
 }
 
 export interface DocModel {
   paragraphs: DocParagraph[];
 }
 
-// ─── Pending Selection (text selected in editor, awaiting tag assignment) ────
+// ─── Pending Selection (selected in editor, awaiting tag assignment) ─────────
 
 export interface PendingSelection {
+  type: TagTargetType;
   text: string;
   paragraphIndex: number;
   startOffset: number;
   endOffset: number;
+  runId?: string;
+  tableId?: string;
 }
 
 // ─── App State ───────────────────────────────────────────────────────────────
@@ -138,7 +157,7 @@ export interface AppState {
   selectedTagUuid: string | null;
   /** UUID of the tag being edited (for geometry linking) */
   linkingTagUuid: string | null;
-  /** Text selection waiting to be tagged via the sidebar */
+  /** Text/object selection waiting to be tagged via the sidebar */
   pendingSelection: PendingSelection[] | null;
   /** Whether to visually show tags in the document viewer */
   showTags: boolean;

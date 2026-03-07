@@ -29,7 +29,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ teman, categories }) => {
   const [mode, setMode] = useState<SidebarMode>('view');
   const [showLegend, setShowLegend] = useState(false);
 
-  // ── Auto-switch to Assign mode when text is selected ─────────────────────
+  // ── Auto-switch to Assign mode when a new selection is created ────────────
   useEffect(() => {
     if (pendingSelection && pendingSelection.length > 0) {
       setMode('assign');
@@ -57,10 +57,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ teman, categories }) => {
     const newTags: Tag[] = pendingSelection.map((sel) => ({
       uuid: uuidv4(),
       categoryId,
+      targetType: sel.type,
       text: sel.text,
       paragraphIndex: sel.paragraphIndex,
       startOffset: sel.startOffset,
       endOffset: sel.endOffset,
+      runId: sel.runId,
+      tableId: sel.tableId,
       note: note || undefined,
       createdAt: new Date().toISOString(),
     }));
@@ -122,7 +125,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ teman, categories }) => {
         <AssignTagPanel
           teman={teman}
           categories={categories}
-          pendingText={pendingSelection ? pendingSelection.map(s => s.text).join('\n\n') : null}
+          pendingText={pendingSelection ? pendingSelection.map((s) => s.text).join('\n\n') : null}
           onApply={handleApplyTag}
           onCancel={handleCancelAssign}
         />
@@ -197,3 +200,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ teman, categories }) => {
     </aside>
   );
 };
+
+export default Sidebar;
+

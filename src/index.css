@@ -95,13 +95,22 @@
   transition: transform 0.2s ease-in-out, outline 0.2s;
 }
 
+
+/* Badge rendered above tagged images/graphs */
+.pb-object-tag-badge {
+  position: absolute;
+  display: inline-flex;
+  width: fit-content;
+  margin: 0;
+  z-index: 20;
+}
+
 .tag-badge-widget.is-selected {
   outline: 2px solid var(--tag-color);
   outline-offset: 1px;
   transform: scale(1.05);
   z-index: 10;
 }
-
 .tag-badge-label {
   font-size: 0.6rem;
   font-weight: 700;
@@ -150,3 +159,46 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
 }
+/* Clickable non-text objects (images/graphs) */
+.pb-object-node {
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: box-shadow 0.2s;
+}
+
+/* Always-visible, toned down theme color for tagged images/graphs */
+.pb-object-node.pb-object-tagged {
+  box-shadow:
+    0 0 0 2px var(--tag-border, rgba(59, 130, 246, 0.45)),
+    0 0 0 7px var(--tag-bg, rgba(59, 130, 246, 0.18));
+}
+
+.pb-object-node.pb-object-tagged:hover {
+  box-shadow:
+    0 0 0 2px var(--tag-border, rgba(59, 130, 246, 0.6)),
+    0 0 0 8px var(--tag-bg, rgba(59, 130, 246, 0.24));
+}
+
+.pb-object-node.is-selected-object {
+  box-shadow:
+    0 0 0 3px var(--tag-color, #2563eb),
+    0 0 0 9px var(--tag-bg, rgba(59, 130, 246, 0.25));
+}
+
+/* Table paragraph highlight when a table tag is selected */
+.is-selected-table {
+  background-color: rgba(59, 130, 246, 0.08);
+  box-shadow: inset 3px 0 0 rgba(37, 99, 235, 0.7);
+}
+
+
+
+
+
+
+
+
+
+

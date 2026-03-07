@@ -14,6 +14,13 @@ export interface TagListItemProps {
   onUnlinkGeometry: () => void;
 }
 
+const TARGET_LABEL: Record<'text' | 'image' | 'graph' | 'table', string> = {
+  text: 'TEXT',
+  image: 'BILD',
+  graph: 'DIAGRAM',
+  table: 'TABELL',
+};
+
 export const TagListItem: React.FC<TagListItemProps> = ({
   tag,
   category,
@@ -24,6 +31,8 @@ export const TagListItem: React.FC<TagListItemProps> = ({
   onLinkGeometry,
   onUnlinkGeometry,
 }) => {
+  const targetType = tag.targetType ?? 'text';
+
   return (
     <li
       className={`px-3 py-2.5 cursor-pointer transition-colors ${isSelected ? 'bg-blue-50' : 'hover:bg-gray-50'
@@ -64,9 +73,16 @@ export const TagListItem: React.FC<TagListItemProps> = ({
         </p>
       )}
 
+      {/* Target type */}
+      <div className="mb-1">
+        <span className="text-[10px] font-semibold tracking-wide text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
+          {TARGET_LABEL[targetType]}
+        </span>
+      </div>
+
       {/* Tag text */}
       <p className="text-xs text-gray-700 leading-relaxed line-clamp-2">
-        "{tag.text}"
+        {targetType === 'text' ? `"${tag.text}"` : tag.text}
       </p>
 
       {/* Note */}

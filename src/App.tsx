@@ -97,7 +97,7 @@ export default function App() {
 
         {/* Centre: document viewer */}
         <main className="flex-1 overflow-y-auto bg-white">
-          <DocViewer docModel={docModel} teman={teman} categories={categories} />
+          <DocViewer docModel={docModel} categories={categories} />
         </main>
 
         {/* Right: geometry panel */}
@@ -106,3 +106,4 @@ export default function App() {
     </div>
   );
 }
+

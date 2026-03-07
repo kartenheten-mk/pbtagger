@@ -3,14 +3,13 @@
  *
  * Takes the original PizZip archive + the current list of tags and:
  *  1. Parses word/document.xml into a mutable DOM
- *  2. Injects <w:sdt> Content Controls around the tagged text runs
+ *  2. Injects <w:sdt> Content Controls around tagged text runs
  *  3. Writes / updates customXml/item1.xml with all tag metadata
  *  4. Updates [Content_Types].xml and word/_rels/document.xml.rels if needed
  *  5. Re-zips and triggers a browser download
  *
  * All un-tagged content (images, tables, headers, footers, styles, etc.)
- * is preserved byte-for-byte because we only modify the two XML files above
- * and only in the specific run locations that are tagged.
+ * is preserved byte-for-byte because we only modify the targeted XML files.
  */
 
 import PizZip from 'pizzip';
@@ -56,24 +55,28 @@ export async function exportDocx(
   const docXmlString = docXmlFile.asText();
   const docDom = parseXml(docXmlString);
 
-  // ── 3. Inject <w:sdt> Content Controls ───────────────────────────────────
-  if (tags.length > 0) {
-    injectContentControls(docDom, docModel, tags);
+  // ── 3. Inject <w:sdt> Content Controls for text tags only ─────────────────
+  const textTags = tags.filter(isTextTag);
+  if (textTags.length > 0) {
+    injectContentControls(docDom, docModel, textTags);
   }
 
   // ── 4. Serialize modified document.xml back into ZIP ─────────────────────
   const modifiedDocXml = serializeXml(docDom);
   zip.file('word/document.xml', modifiedDocXml);
 
-  // ── 5. Write Custom XML part ───────────────────────────────────────────────
+  // ── 5. Write Custom XML part (all tag types) ──────────────────────────────
   const customXmlContent = buildCustomXmlItem(
     tags.map((t) => ({
       uuid: t.uuid,
       categoryId: t.categoryId,
+      targetType: t.targetType ?? 'text',
       text: t.text,
       paragraphIndex: t.paragraphIndex,
       startOffset: t.startOffset,
       endOffset: t.endOffset,
+      runId: t.runId,
+      tableId: t.tableId,
       geometryId: t.geometryId,
       note: t.note,
       createdAt: t.createdAt,
@@ -100,15 +103,7 @@ export async function exportDocx(
 // ─── Content Control injection ────────────────────────────────────────────────
 
 /**
- * Walk the document DOM and inject <w:sdt> wrappers + bookmarks for each tag.
- *
- * Strategy:
- *   - Collect all <w:p> elements in document order (matching the index from
- *     the parser)
- *   - For each tag, find the target paragraph by index
- *   - Within that paragraph, find the <w:r> runs that cover the offset range
- *   - Split runs at the boundaries, then wrap the affected runs in a <w:sdt>
- *   - Also inject <w:bookmarkStart> / <w:bookmarkEnd> around the <w:sdt>
+ * Walk the document DOM and inject <w:sdt> wrappers + bookmarks for text tags.
  */
 function injectContentControls(
   docDom: Document,
@@ -139,4 +134,9 @@ function injectContentControls(
 
     injectSdtIntoParagraph(docDom, paraEl, docPara, tag, bookmarkCounter, STORE_ITEM_ID);
   }
+}
+
+function isTextTag(tag: Tag): boolean {
+  const type = tag.targetType ?? 'text';
+  return type === 'text' && tag.endOffset > tag.startOffset;
 }

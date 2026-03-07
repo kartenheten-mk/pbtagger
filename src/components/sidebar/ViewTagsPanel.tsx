@@ -163,7 +163,7 @@ export const ViewTagsPanel: React.FC<ViewTagsPanelProps> = ({
             </div>
             <p className="text-sm font-medium text-gray-500">Inga taggar ännu</p>
             <p className="text-xs text-gray-400 mt-1">
-              Markera text i dokumentet för att applicera en tagg
+              Markera text, bild, diagram eller tabell för att applicera en tagg
             </p>
           </div>
         ) : (
@@ -188,3 +188,4 @@ export const ViewTagsPanel: React.FC<ViewTagsPanelProps> = ({
     </>
   );
 };
+
