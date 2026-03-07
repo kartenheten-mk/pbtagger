@@ -43,6 +43,9 @@ interface DocumentActions {
 
   // ─── Pending selection (text selected in editor, awaiting tag) ──────────
   setPendingSelection: (selection: PendingSelection[] | null) => void;
+
+  // ─── UI State ───────────────────────────────────────────────────────────
+  toggleShowTags: () => void;
 }
 
 const initialState: AppState = {
@@ -55,6 +58,7 @@ const initialState: AppState = {
   selectedTagUuid: null,
   linkingTagUuid: null,
   pendingSelection: null,
+  showTags: true,
 };
 
 // ─── Debounced auto-save to IndexedDB ──────────────────────────────────────
@@ -93,7 +97,7 @@ export const useDocumentStore = create<AppState & DocumentActions>()(
         setDocument: (zipBuffer, docModel, fileName) => {
           const documentId = uuidv4();
           const now = new Date().toISOString();
-          set({ documentId, zipBuffer, docModel, fileName, tags: [], geometries: [], pendingSelection: null });
+          set({ documentId, zipBuffer, docModel, fileName, tags: [], geometries: [], pendingSelection: null, showTags: true });
           // Clear undo/redo history — it belongs to the previous document
           useDocumentStore.temporal.getState().clear();
           // Save to IndexedDB immediately
@@ -128,6 +132,7 @@ export const useDocumentStore = create<AppState & DocumentActions>()(
             selectedTagUuid: null,
             linkingTagUuid: null,
             pendingSelection: null,
+            showTags: true,
           });
           useDocumentStore.temporal.getState().clear();
         },
@@ -242,6 +247,9 @@ export const useDocumentStore = create<AppState & DocumentActions>()(
 
         // ─── Pending selection ──────────────────────────────────────────────
         setPendingSelection: (selection) => set({ pendingSelection: selection }),
+
+        // ─── UI State ───────────────────────────────────────────────────────
+        toggleShowTags: () => set((state) => ({ showTags: !state.showTags })),
       }),
       {
         name: 'pb-tagger-storage',

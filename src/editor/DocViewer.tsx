@@ -135,11 +135,11 @@ interface DocViewerProps {
 }
 
 export const DocViewer: React.FC<DocViewerProps> = ({ docModel, teman: _teman, categories }) => {
-  const { tags, setPendingSelection } = useDocumentStore();
+  const { tags, setPendingSelection, showTags } = useDocumentStore();
   const editorContainerRef = useRef<HTMLDivElement>(null);
 
   // ── Build TipTap initial content ─────────────────────────────────────────
-  const initialContent = docModelToTipTap(docModel, [], categories);
+  const initialContent = docModelToTipTap(docModel, showTags ? tags : [], categories);
 
   const editor = useEditor({
     extensions: [
@@ -168,9 +168,9 @@ export const DocViewer: React.FC<DocViewerProps> = ({ docModel, teman: _teman, c
   // ── Sync tags → editor marks whenever tags change ─────────────────────────
   useEffect(() => {
     if (!editor) return;
-    const newContent = docModelToTipTap(docModel, tags, categories);
+    const newContent = docModelToTipTap(docModel, showTags ? tags : [], categories);
     editor.commands.setContent(newContent, { emitUpdate: false });
-  }, [editor, tags, docModel, categories]);
+  }, [editor, tags, docModel, categories, showTags]);
 
   // ─── Handle text selection → store in Zustand (sidebar will pick up) ───────
   const handleMouseUp = useCallback(() => {

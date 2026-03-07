@@ -138,4 +138,6 @@ export interface AppState {
   linkingTagUuid: string | null;
   /** Text selection waiting to be tagged via the sidebar */
   pendingSelection: PendingSelection[] | null;
+  /** Whether to visually show tags in the document viewer */
+  showTags: boolean;
 }
