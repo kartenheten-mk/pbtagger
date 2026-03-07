@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import type { Tema, Tag, Category, Geometry } from '../../types';
 import { TagListItem } from './TagListItem';
+import { hexToRgba } from './utils';
 
 export interface ViewTagsPanelProps {
   teman: Tema[];
@@ -28,6 +29,35 @@ export const ViewTagsPanel: React.FC<ViewTagsPanelProps> = ({
   onUnlinkGeometry,
 }) => {
   const [filterTemaId, setFilterTemaId] = useState<string>('all');
+  const listContainerRef = useRef<HTMLDivElement>(null);
+
+  // ── Auto-scroll to selected tag ──────────────────────────────────────────
+  useEffect(() => {
+    if (!selectedTagUuid || !listContainerRef.current) return;
+
+    // Small delay to ensure the item is rendered/filtered
+    const timer = setTimeout(() => {
+      const selectedEl = listContainerRef.current?.querySelector(`[data-tag-uuid="${selectedTagUuid}"]`);
+      if (selectedEl) {
+        selectedEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    }, 100);
+
+    return () => clearTimeout(timer);
+  }, [selectedTagUuid, filterTemaId]);
+
+  // ── Auto-reset filter if selected tag is hidden ──────────────────────────
+  useEffect(() => {
+    if (!selectedTagUuid || filterTemaId === 'all') return;
+
+    const tag = tags.find((t) => t.uuid === selectedTagUuid);
+    if (!tag) return;
+
+    const cat = categories.find((c) => c.id === tag.categoryId);
+    if (cat && cat.temaId !== filterTemaId) {
+      setFilterTemaId('all');
+    }
+  }, [selectedTagUuid, tags, categories, filterTemaId]);
 
   const filteredTags =
     filterTemaId === 'all'
@@ -53,12 +83,12 @@ export const ViewTagsPanel: React.FC<ViewTagsPanelProps> = ({
       </div>
 
       {/* Tema filter */}
-      <div className="px-3 py-2 border-b border-gray-100 flex gap-1 flex-wrap">
+      <div className="px-3 py-2 border-b border-gray-100 flex gap-1.5 flex-wrap">
         <button
           onClick={() => setFilterTemaId('all')}
-          className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${filterTemaId === 'all'
-            ? 'bg-gray-800 text-white'
-            : 'text-gray-500 hover:bg-gray-100'
+          className={`px-3 py-1 rounded-full text-xs font-semibold transition-all ${filterTemaId === 'all'
+            ? 'bg-gray-800 text-white shadow-sm'
+            : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
             }`}
         >
           Alla
@@ -69,15 +99,30 @@ export const ViewTagsPanel: React.FC<ViewTagsPanelProps> = ({
           return (
             <button
               key={tema.id}
-              onClick={() => setFilterTemaId(tema.id)}
-              className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${filterTemaId === tema.id
-                ? 'text-white'
-                : 'text-gray-500 hover:bg-gray-100'
+              onClick={() => {
+                setFilterTemaId(tema.id);
+                // If a tag is selected and it doesn't belong to this theme, deselect it
+                if (selectedTagUuid) {
+                  const tag = tags.find((t) => t.uuid === selectedTagUuid);
+                  const cat = categories.find((c) => c.id === tag?.categoryId);
+                  if (cat && cat.temaId !== tema.id) {
+                    onSelectTag(selectedTagUuid); // Toggle off by passing current uuid (which triggers the toggle logic in Sidebar.tsx)
+                  }
+                }
+              }}
+              className={`px-2.5 py-1 rounded-full text-xs font-medium transition-all ${filterTemaId === tema.id
+                ? 'text-white shadow-sm'
+                : 'hover:brightness-95'
                 }`}
-              style={filterTemaId === tema.id ? { backgroundColor: tema.color } : {}}
+              style={{
+                backgroundColor: filterTemaId === tema.id ? tema.color : hexToRgba(tema.color, 0.1),
+                color: filterTemaId === tema.id ? 'white' : tema.color
+              }}
               title={tema.name}
             >
-              {tema.name.split(' ').slice(0, 2).join(' ')}
+              <span className="truncate max-w-[120px] inline-block align-bottom">
+                {tema.name}
+              </span>
               <span className="opacity-75 ml-1">({count})</span>
             </button>
           );
@@ -85,7 +130,7 @@ export const ViewTagsPanel: React.FC<ViewTagsPanelProps> = ({
       </div>
 
       {/* Tag list */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto" ref={listContainerRef}>
         {filteredTags.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full p-6 text-center">
             <div className="w-10 h-10 bg-gray-100 rounded-xl flex items-center justify-center mb-3">

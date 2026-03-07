@@ -35,6 +35,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ teman, categories }) => {
     }
   }, [pendingSelection]);
 
+  // ── Auto-switch to View mode when an existing tag is selected ─────────────
+  useEffect(() => {
+    if (selectedTagUuid) {
+      setMode('view');
+    }
+  }, [selectedTagUuid]);
+
   const handleCancelAssign = () => {
     setPendingSelection(null);
     window.getSelection()?.removeAllRanges();

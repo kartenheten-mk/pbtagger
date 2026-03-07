@@ -98,34 +98,34 @@ export const TagMark = Mark.create<Record<string, never>>({
     return {
       setTagMark:
         (attrs: TagMarkAttributes) =>
-        ({ commands }) => {
-          return commands.setMark(this.name, attrs);
-        },
+          ({ commands }) => {
+            return commands.setMark(this.name, attrs);
+          },
 
       unsetTagMarkByUuid:
         (tagUuid: string) =>
-        ({ tr, state, dispatch }) => {
-          const { doc } = state;
-          let found = false;
+          ({ tr, state, dispatch }) => {
+            const { doc } = state;
+            let found = false;
 
-          doc.descendants((node, pos) => {
-            if (!node.isText) return;
-            const mark = node.marks.find(
-              (m) =>
-                m.type.name === 'tagMark' &&
-                m.attrs.tagUuid === tagUuid
-            );
-            if (mark) {
-              found = true;
-              tr.removeMark(pos, pos + node.nodeSize, mark.type);
+            doc.descendants((node, pos) => {
+              if (!node.isText) return;
+              const mark = node.marks.find(
+                (m) =>
+                  m.type.name === 'tagMark' &&
+                  m.attrs.tagUuid === tagUuid
+              );
+              if (mark) {
+                found = true;
+                tr.removeMark(pos, pos + node.nodeSize, mark.type);
+              }
+            });
+
+            if (found && dispatch) {
+              dispatch(tr);
             }
-          });
-
-          if (found && dispatch) {
-            dispatch(tr);
-          }
-          return found;
-        },
+            return found;
+          },
     };
   },
 
@@ -165,6 +165,17 @@ export const TagMark = Mark.create<Record<string, never>>({
                 badge.style.setProperty('--tag-color', color);
                 badge.style.setProperty('--tag-bg', hexToRgba(color, 0.1));
                 badge.style.setProperty('--tag-border', hexToRgba(color, 0.4));
+
+                // Clicking the badge selects the tag
+                badge.addEventListener('mousedown', (e) => {
+                  // Only select if we're not clicking the close button
+                  const target = e.target as HTMLElement;
+                  if (!target.closest('.tag-badge-close')) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    useDocumentStore.getState().selectTag(uuid);
+                  }
+                });
 
                 const labelSpan = document.createElement('span');
                 labelSpan.className = 'tag-badge-label';

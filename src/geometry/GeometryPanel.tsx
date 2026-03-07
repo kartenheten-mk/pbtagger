@@ -54,6 +54,15 @@ export const GeometryPanel: React.FC = () => {
   const isLinking = !!linkingTagUuid;
   const linkingTag = tags.find((t) => t.uuid === linkingTagUuid);
 
+  // ── Auto-expand geometry when a linked tag is selected ────────────────────
+  useEffect(() => {
+    if (!selectedTagUuid) return;
+    const tag = tags.find((t) => t.uuid === selectedTagUuid);
+    if (tag?.geometryId) {
+      setExpandedGeoUuid(tag.geometryId);
+    }
+  }, [selectedTagUuid, tags]);
+
   // ── Draw the canvas ────────────────────────────────────────────────────────
   useEffect(() => {
     const canvas = canvasRef.current;

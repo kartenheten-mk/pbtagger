@@ -29,6 +29,7 @@ export const TagListItem: React.FC<TagListItemProps> = ({
       className={`px-3 py-2.5 cursor-pointer transition-colors ${isSelected ? 'bg-blue-50' : 'hover:bg-gray-50'
         }`}
       onClick={onSelect}
+      data-tag-uuid={tag.uuid}
     >
       {/* Category badge + remove button */}
       <div className="flex items-start justify-between gap-2 mb-1">

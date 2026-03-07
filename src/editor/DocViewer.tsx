@@ -152,7 +152,7 @@ interface DocViewerProps {
 }
 
 export const DocViewer: React.FC<DocViewerProps> = ({ docModel, teman: _teman, categories }) => {
-  const { tags, pendingSelection, setPendingSelection, showTags, selectedTagUuid } = useDocumentStore();
+  const { tags, pendingSelection, setPendingSelection, showTags, selectedTagUuid, selectTag } = useDocumentStore();
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const lastUpdateRef = useRef({ tags, docModel, showTags, selectedTagUuid });
 
@@ -383,6 +383,24 @@ export const DocViewer: React.FC<DocViewerProps> = ({ docModel, teman: _teman, c
       <div
         className="px-8 py-6 cursor-text select-text"
         onMouseUp={handleMouseUp}
+        onClick={(e) => {
+          const target = e.target as HTMLElement;
+          const markEl = target.closest('.tag-mark');
+          if (markEl) {
+            const uuid = markEl.getAttribute('data-tag-uuid');
+            if (uuid) {
+              selectTag(uuid);
+              return;
+            }
+          }
+
+          // If clicking background (not a mark, not a badge, and no text selected), clear selection
+          const selection = window.getSelection();
+          const isCollapsed = !selection || selection.isCollapsed;
+          if (!target.closest('.tag-badge-widget') && isCollapsed) {
+            selectTag(null);
+          }
+        }}
       >
         <EditorContent editor={editor} />
       </div>
