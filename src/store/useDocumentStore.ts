@@ -15,7 +15,8 @@ interface DocumentActions {
   setDocument: (
     zipBuffer: ArrayBuffer,
     docModel: DocModel,
-    fileName: string
+    fileName: string,
+    initialTags?: Tag[]
   ) => void;
   clearDocument: () => void;
 
@@ -94,10 +95,11 @@ export const useDocumentStore = create<AppState & DocumentActions>()(
         ...initialState,
 
         // ─── Document lifecycle ─────────────────────────────────────────────
-        setDocument: (zipBuffer, docModel, fileName) => {
+        setDocument: (zipBuffer, docModel, fileName, initialTags) => {
           const documentId = uuidv4();
           const now = new Date().toISOString();
-          set({ documentId, zipBuffer, docModel, fileName, tags: [], geometries: [], pendingSelection: null, showTags: true });
+          const tags = initialTags ?? [];
+          set({ documentId, zipBuffer, docModel, fileName, tags, geometries: [], pendingSelection: null, showTags: true });
           // Clear undo/redo history — it belongs to the previous document
           useDocumentStore.temporal.getState().clear();
           // Save to IndexedDB immediately
@@ -106,7 +108,7 @@ export const useDocumentStore = create<AppState & DocumentActions>()(
             fileName,
             zipBuffer,
             docModel,
-            tags: [],
+            tags,
             geometries: [],
             createdAt: now,
             updatedAt: now,

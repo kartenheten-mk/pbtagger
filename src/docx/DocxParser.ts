@@ -10,7 +10,8 @@
  */
 
 import PizZip from 'pizzip';
-import type { DocModel, DocParagraph, DocRun } from '../types';
+import type { DocModel, DocParagraph, DocRun, Tag } from '../types';
+import { CUSTOM_XML_NS } from './ContentControlBuilder';
 import {
   parseXml,
   wChildren,
@@ -27,6 +28,7 @@ import {
 export interface ParseResult {
   zip: PizZip;
   docModel: DocModel;
+  tags: Tag[];
 }
 
 /**
@@ -69,9 +71,13 @@ export async function parseDocx(buffer: ArrayBuffer): Promise<ParseResult> {
 
   const paragraphs = extractParagraphs(body, zip, relsMap);
 
+  // Extract any embedded tags from a previously exported file
+  const tags = extractTagsFromCustomXml(zip);
+
   return {
     zip,
     docModel: { paragraphs },
+    tags,
   };
 }
 
@@ -356,4 +362,62 @@ export function getRunSlicesForRange(
   }
 
   return slices;
+}
+
+// ─── Custom XML tag extraction ───────────────────────────────────────────────
+
+/**
+ * Read tag metadata from customXml/item1.xml (written by the exporter).
+ * Returns an empty array if the file doesn't exist or isn't ours.
+ */
+function extractTagsFromCustomXml(zip: PizZip): Tag[] {
+  const CUSTOM_XML_PATH = 'customXml/item1.xml';
+  const xmlFile = zip.file(CUSTOM_XML_PATH);
+  if (!xmlFile) return [];
+
+  try {
+    const doc = parseXml(xmlFile.asText());
+
+    // Look for <pb:tag> elements under our namespace
+    const tagEls = doc.getElementsByTagNameNS(CUSTOM_XML_NS, 'tag');
+    if (!tagEls || tagEls.length === 0) return [];
+
+    const tags: Tag[] = [];
+
+    for (let i = 0; i < tagEls.length; i++) {
+      const el = tagEls[i] as Element;
+
+      const uuid = el.getAttribute('uuid') ?? '';
+      const categoryId = el.getAttribute('categoryId') ?? '';
+      const paragraphIndex = parseInt(el.getAttribute('paragraphIndex') ?? '0', 10);
+      const startOffset = parseInt(el.getAttribute('startOffset') ?? '0', 10);
+      const endOffset = parseInt(el.getAttribute('endOffset') ?? '0', 10);
+      const createdAt = el.getAttribute('createdAt') ?? new Date().toISOString();
+      const geometryId = el.getAttribute('geometryId') || undefined;
+      const note = el.getAttribute('note') || undefined;
+
+      // Read <pb:text> child
+      const textEls = el.getElementsByTagNameNS(CUSTOM_XML_NS, 'text');
+      const text = textEls.length > 0 ? (textEls[0].textContent ?? '') : '';
+
+      if (!uuid || !categoryId) continue;
+
+      tags.push({
+        uuid,
+        categoryId,
+        text,
+        paragraphIndex,
+        startOffset,
+        endOffset,
+        geometryId,
+        note,
+        createdAt,
+      });
+    }
+
+    return tags;
+  } catch {
+    // If parsing fails, just return no tags
+    return [];
+  }
 }

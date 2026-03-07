@@ -43,10 +43,10 @@ export default function App() {
       setIsLoading(true);
       setParseError(null);
       try {
-        const { zip, docModel: model } = await parseDocx(buffer);
+        const { zip, docModel: model, tags: embeddedTags } = await parseDocx(buffer);
         // Store the zip's raw bytes so the exporter can re-open it losslessly
         const zipBytes = zip.generate({ type: 'arraybuffer' });
-        setDocument(zipBytes, model, fileName);
+        setDocument(zipBytes, model, fileName, embeddedTags);
       } catch (err) {
         console.error('Failed to parse .docx:', err);
         setParseError(
