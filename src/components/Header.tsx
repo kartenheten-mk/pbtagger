@@ -5,8 +5,9 @@
  * and the Export button.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useDocumentStore } from '../store/useDocumentStore';
+import { useStoreWithEqualityFn } from 'zustand/traditional';
 import { exportDocx } from '../docx/DocxExporter';
 import PizZip from 'pizzip';
 
@@ -18,6 +19,38 @@ export const Header: React.FC<HeaderProps> = ({ onClearDocument }) => {
   const { fileName, tags, zipBuffer, docModel } = useDocumentStore();
   const [isExporting, setIsExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
+
+  // ─── Undo / Redo via zundo temporal store ─────────────────────────────
+  const { undo, redo, pastStates, futureStates } = useStoreWithEqualityFn(
+    useDocumentStore.temporal,
+    (state) => ({
+      undo: state.undo,
+      redo: state.redo,
+      pastStates: state.pastStates,
+      futureStates: state.futureStates,
+    }),
+  );
+  const canUndo = pastStates.length > 0;
+  const canRedo = futureStates.length > 0;
+
+  const handleUndo = useCallback(() => { if (canUndo) undo(); }, [canUndo, undo]);
+  const handleRedo = useCallback(() => { if (canRedo) redo(); }, [canRedo, redo]);
+
+  // Ctrl+Z / Ctrl+Y keyboard shortcuts
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        handleUndo();
+      }
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
+        e.preventDefault();
+        handleRedo();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [handleUndo, handleRedo]);
 
   const handleExport = async () => {
     if (!zipBuffer || !docModel) return;
@@ -70,6 +103,32 @@ export const Header: React.FC<HeaderProps> = ({ onClearDocument }) => {
         <span className="text-xs font-semibold text-gray-600">
           {tags.length} {tags.length === 1 ? 'tag' : 'tags'}
         </span>
+      </div>
+
+      {/* Undo / Redo */}
+      <div className="flex items-center gap-1">
+        <button
+          onClick={handleUndo}
+          disabled={!canUndo}
+          className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 disabled:text-gray-300 disabled:hover:bg-transparent rounded-lg transition-colors"
+          title="Undo (Ctrl+Z)"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+              d="M3 10h10a5 5 0 015 5v2M3 10l4-4M3 10l4 4" />
+          </svg>
+        </button>
+        <button
+          onClick={handleRedo}
+          disabled={!canRedo}
+          className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 disabled:text-gray-300 disabled:hover:bg-transparent rounded-lg transition-colors"
+          title="Redo (Ctrl+Y)"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+              d="M21 10H11a5 5 0 00-5 5v2M21 10l-4-4M21 10l-4 4" />
+          </svg>
+        </button>
       </div>
 
       {/* Export error */}

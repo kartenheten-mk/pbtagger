@@ -128,10 +128,11 @@ function extractRuns(para: Element, paraIndex: number): DocRun[] {
       return;
     }
 
-    // Recurse into hyperlinks, sdt content, etc.
+    // Recurse into hyperlinks, sdt content, content controls, etc.
     if (
       nsURI === NS.w &&
       (localName === 'hyperlink' ||
+        localName === 'sdt' ||
         localName === 'sdtContent' ||
         localName === 'ins' ||
         localName === 'del')
