@@ -17,7 +17,7 @@
 
 import React, { useRef, useEffect, useCallback, useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import type { Geometry, GeometryType } from '../types';
+import type { Geometry, GeometryType, Tag } from '../types';
 import { useDocumentStore } from '../store/useDocumentStore';
 
 // ─── Mock geometry colours ────────────────────────────────────────────────────
@@ -43,10 +43,12 @@ export const GeometryPanel: React.FC = () => {
     removeGeometry,
     finishLinking,
     cancelLinking,
+    selectTag,
   } = useDocumentStore();
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [hoveredUuid, setHoveredUuid] = useState<string | null>(null);
+  const [expandedGeoUuid, setExpandedGeoUuid] = useState<string | null>(null);
 
   const isLinking = !!linkingTagUuid;
   const linkingTag = tags.find((t) => t.uuid === linkingTagUuid);
@@ -165,9 +167,29 @@ export const GeometryPanel: React.FC = () => {
     (geo: Geometry) => {
       if (isLinking && linkingTagUuid) {
         finishLinking(linkingTagUuid, geo.uuid);
+        return;
       }
+      // Toggle expansion to show linked tags
+      const linkedTags = tags.filter((t) => t.geometryId === geo.uuid);
+      if (linkedTags.length === 0) return;
+      if (linkedTags.length === 1) {
+        // Only one tag — pan directly to it
+        selectTag(linkedTags[0].uuid);
+        setExpandedGeoUuid(null);
+        return;
+      }
+      // Multiple tags — toggle the dropdown
+      setExpandedGeoUuid((prev) => (prev === geo.uuid ? null : geo.uuid));
     },
-    [isLinking, linkingTagUuid, finishLinking]
+    [isLinking, linkingTagUuid, finishLinking, tags, selectTag]
+  );
+
+  const handleTagSubClick = useCallback(
+    (e: React.MouseEvent, tag: Tag) => {
+      e.stopPropagation();
+      selectTag(tag.uuid);
+    },
+    [selectTag]
   );
 
   return (
@@ -248,59 +270,119 @@ export const GeometryPanel: React.FC = () => {
         ) : (
           <ul className="space-y-1">
             {geometries.map((geo) => {
-              const linkedCount = tags.filter((t) => t.geometryId === geo.uuid).length;
+              const linkedTags = tags.filter((t) => t.geometryId === geo.uuid);
+              const linkedCount = linkedTags.length;
               const color = TYPE_COLORS[geo.type];
               const isSelected = selectedTagUuid && tags.find((t) => t.uuid === selectedTagUuid)?.geometryId === geo.uuid;
+              const isExpanded = expandedGeoUuid === geo.uuid;
+              const hasLinkedTags = linkedCount > 0;
 
               return (
-                <li
-                  key={geo.uuid}
-                  onMouseEnter={() => setHoveredUuid(geo.uuid)}
-                  onMouseLeave={() => setHoveredUuid(null)}
-                  onClick={() => handleGeometryClick(geo)}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition-all ${isLinking
+                <li key={geo.uuid} className="group">
+                  <div
+                    onMouseEnter={() => setHoveredUuid(geo.uuid)}
+                    onMouseLeave={() => setHoveredUuid(null)}
+                    onClick={() => handleGeometryClick(geo)}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition-all ${isLinking
                       ? 'cursor-pointer border-blue-200 hover:border-blue-400 hover:bg-blue-50'
-                      : isSelected
-                        ? 'bg-blue-50 border-blue-300 ring-1 ring-blue-500 cursor-default'
+                      : hasLinkedTags
+                        ? isSelected
+                          ? 'bg-blue-50 border-blue-300 ring-1 ring-blue-500 cursor-pointer'
+                          : 'border-transparent hover:bg-gray-50 cursor-pointer'
                         : 'border-transparent hover:bg-gray-50 cursor-default'
-                    } ${hoveredUuid === geo.uuid && !isSelected ? 'bg-gray-50' : ''}`}
-                >
-                  {/* Type icon */}
-                  <span
-                    className="text-base flex-shrink-0 w-6 text-center"
-                    style={{ color }}
+                      } ${hoveredUuid === geo.uuid && !isSelected ? 'bg-gray-50' : ''}`}
                   >
-                    {TYPE_ICONS[geo.type]}
-                  </span>
+                    {/* Type icon */}
+                    <span
+                      className="text-base flex-shrink-0 w-6 text-center"
+                      style={{ color }}
+                    >
+                      {TYPE_ICONS[geo.type]}
+                    </span>
 
-                  {/* Name */}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium text-gray-700 truncate">{geo.name}</p>
-                    <p className="text-xs text-gray-400">
-                      {geo.type} · {linkedCount} tag{linkedCount !== 1 ? 's' : ''}
-                    </p>
+                    {/* Name */}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-gray-700 truncate">{geo.name}</p>
+                      <p className="text-xs text-gray-400">
+                        {geo.type} · {linkedCount} tag{linkedCount !== 1 ? 's' : ''}
+                      </p>
+                    </div>
+
+                    {/* Expand chevron (only if multiple linked tags) */}
+                    {linkedCount > 1 && (
+                      <svg
+                        className={`w-3.5 h-3.5 text-gray-400 transition-transform duration-200 flex-shrink-0 ${isExpanded ? 'rotate-180' : ''
+                          }`}
+                        fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    )}
+
+                    {/* Pan icon (only if exactly 1 tag) */}
+                    {linkedCount === 1 && (
+                      <span title="Pan to tag">
+                        <svg
+                          className="w-3.5 h-3.5 text-gray-300 group-hover:text-blue-400 transition-colors flex-shrink-0"
+                          fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                            d="M15 12H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      </span>
+                    )}
+
+                    {/* Colour swatch */}
+                    <span
+                      className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                      style={{ backgroundColor: color }}
+                    />
+
+                    {/* Remove */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeGeometry(geo.uuid);
+                      }}
+                      className="text-gray-200 hover:text-red-400 transition-colors flex-shrink-0"
+                      title="Remove geometry"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
                   </div>
 
-                  {/* Colour swatch */}
-                  <span
-                    className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                    style={{ backgroundColor: color }}
-                  />
-
-                  {/* Remove */}
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      removeGeometry(geo.uuid);
-                    }}
-                    className="text-gray-200 hover:text-red-400 transition-colors flex-shrink-0"
-                    title="Remove geometry"
-                  >
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </button>
+                  {/* ── Expanded sub-list of linked tags ─────────────────── */}
+                  {isExpanded && linkedTags.length > 0 && (
+                    <ul className="mt-1 ml-6 mr-2 space-y-0.5 border-l-2 border-gray-100 pl-3 pb-1">
+                      {linkedTags.map((tag) => (
+                        <li
+                          key={tag.uuid}
+                          onClick={(e) => handleTagSubClick(e, tag)}
+                          className={`flex items-center gap-2 px-2.5 py-1.5 rounded-md cursor-pointer transition-all text-xs ${selectedTagUuid === tag.uuid
+                            ? 'bg-blue-50 text-blue-700 ring-1 ring-blue-300'
+                            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-800'
+                            }`}
+                        >
+                          {/* Tag icon */}
+                          <svg className="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                              d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                          </svg>
+                          {/* Tag text preview */}
+                          <span className="truncate">
+                            {tag.text.length > 50 ? tag.text.slice(0, 50) + '…' : tag.text}
+                          </span>
+                          {/* Pan arrow */}
+                          <svg className="w-3 h-3 flex-shrink-0 ml-auto opacity-0 group-hover:opacity-60 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                          </svg>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </li>
               );
             })}
