@@ -120,6 +120,8 @@ export interface PendingSelection {
 // ─── App State ───────────────────────────────────────────────────────────────
 
 export interface AppState {
+  /** UUID of the currently loaded document in IndexedDB */
+  documentId: string | null;
   /** Original ZIP bytes kept in memory for lossless export */
   zipBuffer: ArrayBuffer | null;
   /** Parsed document model */

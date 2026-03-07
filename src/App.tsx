@@ -19,6 +19,7 @@ import React, { useState, useCallback } from 'react';
 import { FileUpload } from './components/FileUpload';
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
+import { DocumentList } from './components/DocumentList';
 import { DocViewer } from './editor/DocViewer';
 import { GeometryPanel } from './geometry/GeometryPanel';
 import { useDocumentStore } from './store/useDocumentStore';
@@ -70,7 +71,10 @@ export default function App() {
   if (!docModel) {
     return (
       <div className="h-screen bg-gray-50 flex flex-col">
-        <FileUpload onFile={handleFile} isLoading={isLoading} />
+        <div className="flex-1 flex flex-col items-center justify-center overflow-y-auto p-4">
+          <FileUpload onFile={handleFile} isLoading={isLoading} />
+          <DocumentList />
+        </div>
         {parseError && (
           <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-red-600 text-white text-sm px-5 py-3 rounded-xl shadow-lg max-w-sm text-center">
             {parseError}

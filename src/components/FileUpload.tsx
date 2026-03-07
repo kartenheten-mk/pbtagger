@@ -55,7 +55,7 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFile, isLoading }) => 
   );
 
   return (
-    <div className="flex flex-col items-center justify-center h-full p-8">
+    <div className="flex flex-col items-center justify-center p-8 w-full">
       {/* Logo / branding */}
       <div className="mb-8 text-center">
         <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
@@ -72,11 +72,10 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFile, isLoading }) => 
 
       {/* Drop zone */}
       <div
-        className={`relative w-full max-w-lg border-2 border-dashed rounded-2xl p-12 text-center transition-all cursor-pointer ${
-          isDragOver
+        className={`relative w-full max-w-lg border-2 border-dashed rounded-2xl p-12 text-center transition-all cursor-pointer ${isDragOver
             ? 'border-blue-400 bg-blue-50'
             : 'border-gray-300 bg-gray-50 hover:border-blue-300 hover:bg-blue-50/50'
-        } ${isLoading ? 'opacity-50 pointer-events-none' : ''}`}
+          } ${isLoading ? 'opacity-50 pointer-events-none' : ''}`}
         onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
         onDragLeave={() => setIsDragOver(false)}
         onDrop={handleDrop}
@@ -97,9 +96,8 @@ export const FileUpload: React.FC<FileUploadProps> = ({ onFile, isLoading }) => 
           </div>
         ) : (
           <>
-            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4 transition-colors ${
-              isDragOver ? 'bg-blue-100' : 'bg-white shadow-sm'
-            }`}>
+            <div className={`w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4 transition-colors ${isDragOver ? 'bg-blue-100' : 'bg-white shadow-sm'
+              }`}>
               <svg className={`w-7 h-7 transition-colors ${isDragOver ? 'text-blue-500' : 'text-gray-400'}`}
                 fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
