@@ -38,6 +38,7 @@ export const GeometryPanel: React.FC = () => {
     geometries,
     tags,
     linkingTagUuid,
+    selectedTagUuid,
     addGeometry,
     removeGeometry,
     finishLinking,
@@ -89,10 +90,11 @@ export const GeometryPanel: React.FC = () => {
       const row = Math.floor(i / 4) * 80 + 60;
       const color = TYPE_COLORS[geo.type];
       const isHovered = hoveredUuid === geo.uuid;
+      const isSelected = selectedTagUuid && tags.find((t) => t.uuid === selectedTagUuid)?.geometryId === geo.uuid;
 
-      ctx.fillStyle = isHovered ? color + 'dd' : color + '55';
+      ctx.fillStyle = isHovered || isSelected ? color + 'dd' : color + '55';
       ctx.strokeStyle = color;
-      ctx.lineWidth = isHovered ? 2 : 1.5;
+      ctx.lineWidth = isHovered || isSelected ? 2 : 1.5;
 
       if (geo.type === 'point') {
         ctx.beginPath();
@@ -248,6 +250,7 @@ export const GeometryPanel: React.FC = () => {
             {geometries.map((geo) => {
               const linkedCount = tags.filter((t) => t.geometryId === geo.uuid).length;
               const color = TYPE_COLORS[geo.type];
+              const isSelected = selectedTagUuid && tags.find((t) => t.uuid === selectedTagUuid)?.geometryId === geo.uuid;
 
               return (
                 <li
@@ -255,11 +258,12 @@ export const GeometryPanel: React.FC = () => {
                   onMouseEnter={() => setHoveredUuid(geo.uuid)}
                   onMouseLeave={() => setHoveredUuid(null)}
                   onClick={() => handleGeometryClick(geo)}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition-all ${
-                    isLinking
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition-all ${isLinking
                       ? 'cursor-pointer border-blue-200 hover:border-blue-400 hover:bg-blue-50'
-                      : 'border-transparent hover:bg-gray-50 cursor-default'
-                  } ${hoveredUuid === geo.uuid ? 'bg-gray-50' : ''}`}
+                      : isSelected
+                        ? 'bg-blue-50 border-blue-300 ring-1 ring-blue-500 cursor-default'
+                        : 'border-transparent hover:bg-gray-50 cursor-default'
+                    } ${hoveredUuid === geo.uuid && !isSelected ? 'bg-gray-50' : ''}`}
                 >
                   {/* Type icon */}
                   <span

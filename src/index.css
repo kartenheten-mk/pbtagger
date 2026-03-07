@@ -51,11 +51,18 @@
   border-radius: 2px;
   padding: 1px 0;
   cursor: pointer;
-  transition: opacity 0.15s;
+  transition: opacity 0.15s, background-color 0.2s, box-shadow 0.2s;
 }
 
 .tag-mark:hover {
   opacity: 0.8;
+}
+
+/* Override inline background and add a bolder shadow for selected text */
+.tag-mark.is-selected {
+  background-color: var(--tag-bg, #bfdbfe) !important;
+  box-shadow: 0 0 0 1px var(--tag-color, #3b82f6);
+  opacity: 1;
 }
 
 /* ── Inline tag badge widget ─────────────────────────────────────────────── */
@@ -77,6 +84,14 @@
   color: var(--tag-color);
   /* Prevent the badge from being included in text selections */
   user-select: none;
+  transition: transform 0.2s ease-in-out, outline 0.2s;
+}
+
+.tag-badge-widget.is-selected {
+  outline: 2px solid var(--tag-color);
+  outline-offset: 1px;
+  transform: scale(1.05);
+  z-index: 10;
 }
 
 .tag-badge-label {

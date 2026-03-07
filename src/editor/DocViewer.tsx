@@ -152,11 +152,13 @@ interface DocViewerProps {
 }
 
 export const DocViewer: React.FC<DocViewerProps> = ({ docModel, teman: _teman, categories }) => {
-  const { tags, setPendingSelection, showTags } = useDocumentStore();
+  const { tags, setPendingSelection, showTags, selectedTagUuid } = useDocumentStore();
   const editorContainerRef = useRef<HTMLDivElement>(null);
+  const lastUpdateRef = useRef({ tags, docModel, showTags, selectedTagUuid });
 
   // ── Build TipTap initial content ─────────────────────────────────────────
-  const initialContent = docModelToTipTap(docModel, showTags ? tags : [], categories);
+  const visibleTags = showTags ? tags : tags.filter(t => t.uuid === selectedTagUuid);
+  const initialContent = docModelToTipTap(docModel, visibleTags, categories);
 
   const editor = useEditor({
     extensions: [
@@ -189,9 +191,48 @@ export const DocViewer: React.FC<DocViewerProps> = ({ docModel, teman: _teman, c
   // ── Sync tags → editor marks whenever tags change ─────────────────────────
   useEffect(() => {
     if (!editor) return;
-    const newContent = docModelToTipTap(docModel, showTags ? tags : [], categories);
+
+    const prev = lastUpdateRef.current;
+    lastUpdateRef.current = { tags, docModel, showTags, selectedTagUuid };
+
+    // Don't rebuild TipTap content if ONLY the selectedTagUuid changed AND showTags is true.
+    // (This prevents the DOM from reloading, which ruins smooth scrolling).
+    if (
+      showTags &&
+      prev.showTags === showTags &&
+      prev.tags === tags &&
+      prev.docModel === docModel &&
+      prev.selectedTagUuid !== selectedTagUuid
+    ) {
+      return;
+    }
+
+    const visibleTags = showTags ? tags : tags.filter(t => t.uuid === selectedTagUuid);
+    const newContent = docModelToTipTap(docModel, visibleTags, categories);
+
+    // TipTap setContent replaces the DOM synchronously.
     editor.commands.setContent(newContent, { emitUpdate: false });
-  }, [editor, tags, docModel, categories, showTags]);
+  }, [editor, tags, docModel, categories, showTags, selectedTagUuid]);
+
+  // ── Highlight and scroll to selected tag ───────────────────────────────────
+  useEffect(() => {
+    if (!editorContainerRef.current) return;
+
+    // Clear previous highlights
+    const prevSelected = editorContainerRef.current.querySelectorAll('.is-selected');
+    prevSelected.forEach(el => el.classList.remove('is-selected'));
+
+    if (!selectedTagUuid) return;
+
+    // Find all badge and mark elements for the selected tag
+    const elements = editorContainerRef.current.querySelectorAll(`[data-tag-uuid="${selectedTagUuid}"]`);
+
+    if (elements.length > 0) {
+      elements.forEach(el => el.classList.add('is-selected'));
+      // Scroll to the first element smoothly
+      elements[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [selectedTagUuid, tags, showTags, docModel]);
 
   // ─── Handle text selection → store in Zustand (sidebar will pick up) ───────
   const handleMouseUp = useCallback(() => {
