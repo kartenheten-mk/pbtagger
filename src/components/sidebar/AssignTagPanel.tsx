@@ -35,7 +35,6 @@ export const AssignTagPanel: React.FC<AssignTagPanelProps> = ({
   const selectedTema = teman.find((t) => t.id === selectedTemaId);
   const selectedGrupp = selectedTema?.grupper.find((g) => g.id === selectedGruppId);
   const hasUndergrupper = (selectedGrupp?.undergrupper.length ?? 0) > 0;
-  const resolvedCategory = categories.find((c) => c.id === selectedLeafId);
 
   const searchResults = searchQuery
     ? categories.filter((c) =>
@@ -57,23 +56,22 @@ export const AssignTagPanel: React.FC<AssignTagPanelProps> = ({
     const tema = teman.find((t) => t.id === selectedTemaId);
     const grupp = tema?.grupper.find((g) => g.id === gruppId);
     if (grupp && grupp.undergrupper.length === 0) {
-      setSelectedLeafId(`${selectedTemaId}--${gruppId}`);
+      const leafId = `${selectedTemaId}--${gruppId}`;
+      setSelectedLeafId(leafId);
+      if (pendingText) onApply(leafId, note);
     }
   };
 
   const handleUndergruppChange = (undergruppId: string) => {
-    setSelectedLeafId(`${selectedTemaId}--${selectedGruppId}--${undergruppId}`);
+    const leafId = `${selectedTemaId}--${selectedGruppId}--${undergruppId}`;
+    setSelectedLeafId(leafId);
+    if (pendingText) onApply(leafId, note);
   };
 
   const handleSearchResultClick = (categoryId: string) => {
     setSelectedLeafId(categoryId);
+    if (pendingText) onApply(categoryId, note);
   };
-
-  const canApply =
-    !!selectedLeafId &&
-    (searchQuery !== '' || !hasUndergrupper || selectedLeafId.split('--').length === 3) &&
-    !!pendingText;
-
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       {/* Selected text preview */}
@@ -140,8 +138,8 @@ export const AssignTagPanel: React.FC<AssignTagPanelProps> = ({
                     key={cat.id}
                     onClick={() => handleSearchResultClick(cat.id)}
                     className={`w-full flex flex-col items-start gap-0.5 px-3 py-2 rounded-lg transition-colors text-left border ${selectedLeafId === cat.id
-                        ? 'font-semibold ring-1'
-                        : 'text-gray-700 hover:opacity-80'
+                      ? 'font-semibold ring-1'
+                      : 'text-gray-700 hover:opacity-80'
                       }`}
                     style={
                       selectedLeafId === cat.id
@@ -304,22 +302,9 @@ export const AssignTagPanel: React.FC<AssignTagPanelProps> = ({
       <div className="px-4 py-3 border-t border-gray-100 flex gap-2">
         <button
           onClick={onCancel}
-          className="flex-1 px-3 py-2 text-sm text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors font-medium"
+          className="w-full px-3 py-2 text-sm text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors font-medium"
         >
           Avbryt
-        </button>
-        <button
-          onClick={() => {
-            if (canApply) onApply(selectedLeafId, note);
-          }}
-          disabled={!canApply}
-          className="flex-1 px-3 py-2 text-sm text-white rounded-lg transition-colors font-medium disabled:opacity-40 disabled:cursor-not-allowed"
-          style={{
-            backgroundColor:
-              resolvedCategory?.color ?? selectedTema?.color ?? '#3b82f6',
-          }}
-        >
-          Applicera
         </button>
       </div>
     </div>
