@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import type { Tema, Category } from '../../types';
 import { hexToRgba } from './utils';
 
@@ -22,6 +22,8 @@ export const AssignTagPanel: React.FC<AssignTagPanelProps> = ({
   const [selectedLeafId, setSelectedLeafId] = useState('');
   const [note, setNote] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const gruppSectionRef = useRef<HTMLDivElement>(null);
+  const undergruppSectionRef = useRef<HTMLDivElement>(null);
 
   // Reset picker when a new selection arrives
   useEffect(() => {
@@ -35,6 +37,24 @@ export const AssignTagPanel: React.FC<AssignTagPanelProps> = ({
   const selectedTema = teman.find((t) => t.id === selectedTemaId);
   const selectedGrupp = selectedTema?.grupper.find((g) => g.id === selectedGruppId);
   const hasUndergrupper = (selectedGrupp?.undergrupper.length ?? 0) > 0;
+
+  // Auto-scroll to Grupp section when a Tema is selected
+  useEffect(() => {
+    if (selectedTemaId && gruppSectionRef.current) {
+      setTimeout(() => {
+        gruppSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }, 50);
+    }
+  }, [selectedTemaId]);
+
+  // Auto-scroll to Undergrupp section when a Grupp with undergrupper is selected
+  useEffect(() => {
+    if (selectedGruppId && hasUndergrupper && undergruppSectionRef.current) {
+      setTimeout(() => {
+        undergruppSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }, 50);
+    }
+  }, [selectedGruppId, hasUndergrupper]);
 
   const searchResults = searchQuery
     ? categories.filter((c) =>
@@ -203,7 +223,7 @@ export const AssignTagPanel: React.FC<AssignTagPanelProps> = ({
 
             {/* Step 2: Grupp */}
             {selectedTema && (
-              <div>
+              <div ref={gruppSectionRef}>
                 <p className="text-xs text-gray-500 mb-2 font-semibold flex items-center gap-1.5">
                   <span className="w-4 h-4 bg-gray-200 rounded-full inline-flex items-center justify-center text-gray-600 text-xs font-bold flex-shrink-0">
                     2
@@ -244,7 +264,7 @@ export const AssignTagPanel: React.FC<AssignTagPanelProps> = ({
 
             {/* Step 3: Undergrupp */}
             {selectedGrupp && hasUndergrupper && (
-              <div>
+              <div ref={undergruppSectionRef}>
                 <p className="text-xs text-gray-500 mb-2 font-semibold flex items-center gap-1.5">
                   <span className="w-4 h-4 bg-gray-200 rounded-full inline-flex items-center justify-center text-gray-600 text-xs font-bold flex-shrink-0">
                     3
