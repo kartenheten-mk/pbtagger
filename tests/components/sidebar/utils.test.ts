@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { hexToRgba } from './utils';
+import { hexToRgba } from '../../../src/components/sidebar/utils';
 
 describe('hexToRgba', () => {
   it('converts a standard 6-character hex color to rgba string', () => {
