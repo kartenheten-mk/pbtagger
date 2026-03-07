@@ -44,6 +44,7 @@ export const GeometryPanel: React.FC = () => {
     finishLinking,
     cancelLinking,
     selectTag,
+    unlinkGeometry,
   } = useDocumentStore();
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -172,14 +173,12 @@ export const GeometryPanel: React.FC = () => {
       // Toggle expansion to show linked tags
       const linkedTags = tags.filter((t) => t.geometryId === geo.uuid);
       if (linkedTags.length === 0) return;
-      if (linkedTags.length === 1) {
-        // Only one tag — pan directly to it
+      // Toggle the dropdown; for single-tag also pan directly
+      const willExpand = expandedGeoUuid !== geo.uuid;
+      setExpandedGeoUuid(willExpand ? geo.uuid : null);
+      if (linkedTags.length === 1 && willExpand) {
         selectTag(linkedTags[0].uuid);
-        setExpandedGeoUuid(null);
-        return;
       }
-      // Multiple tags — toggle the dropdown
-      setExpandedGeoUuid((prev) => (prev === geo.uuid ? null : geo.uuid));
     },
     [isLinking, linkingTagUuid, finishLinking, tags, selectTag]
   );
@@ -308,8 +307,8 @@ export const GeometryPanel: React.FC = () => {
                       </p>
                     </div>
 
-                    {/* Expand chevron (only if multiple linked tags) */}
-                    {linkedCount > 1 && (
+                    {/* Expand chevron (if has linked tags) */}
+                    {linkedCount > 0 && (
                       <svg
                         className={`w-3.5 h-3.5 text-gray-400 transition-transform duration-200 flex-shrink-0 ${isExpanded ? 'rotate-180' : ''
                           }`}
@@ -317,19 +316,6 @@ export const GeometryPanel: React.FC = () => {
                       >
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                       </svg>
-                    )}
-
-                    {/* Pan icon (only if exactly 1 tag) */}
-                    {linkedCount === 1 && (
-                      <span title="Pan to tag">
-                        <svg
-                          className="w-3.5 h-3.5 text-gray-300 group-hover:text-blue-400 transition-colors flex-shrink-0"
-                          fill="none" stroke="currentColor" viewBox="0 0 24 24"
-                        >
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                            d="M15 12H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                      </span>
                     )}
 
                     {/* Colour swatch */}
@@ -372,13 +358,22 @@ export const GeometryPanel: React.FC = () => {
                               d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
                           </svg>
                           {/* Tag text preview */}
-                          <span className="truncate">
+                          <span className="truncate flex-1">
                             {tag.text.length > 50 ? tag.text.slice(0, 50) + '…' : tag.text}
                           </span>
-                          {/* Pan arrow */}
-                          <svg className="w-3 h-3 flex-shrink-0 ml-auto opacity-0 group-hover:opacity-60 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                          </svg>
+                          {/* Unlink button */}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              unlinkGeometry(tag.uuid);
+                            }}
+                            className="text-gray-300 hover:text-red-400 transition-colors flex-shrink-0 ml-auto"
+                            title="Avlänka"
+                          >
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
                         </li>
                       ))}
                     </ul>
