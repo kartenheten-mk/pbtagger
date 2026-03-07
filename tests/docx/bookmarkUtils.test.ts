@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { generateBookmarkName } from './bookmarkUtils';
-import type { Tag } from '../types';
+import { generateBookmarkName } from '../../src/docx/bookmarkUtils';
+import type { Tag } from '../../src/types';
 
 describe('generateBookmarkName', () => {
   it('generates a clean bookmark name for a given tag', () => {
