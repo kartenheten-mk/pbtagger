@@ -43,13 +43,31 @@ export async function parseDocx(buffer: ArrayBuffer): Promise<ParseResult> {
   const docXmlString = docXmlFile.asText();
   const docDom = parseXml(docXmlString);
 
+  // Parse relationships to map embed IDs to image paths
+  const relsMap: Record<string, string> = {};
+  const relsFile = zip.file('word/_rels/document.xml.rels');
+  if (relsFile) {
+    const relsDoc = parseXml(relsFile.asText());
+    const rels = relsDoc.getElementsByTagName('*');
+    for (let i = 0; i < rels.length; i++) {
+      const el = rels[i] as Element;
+      if (el.localName === 'Relationship') {
+        const id = el.getAttribute('Id');
+        const target = el.getAttribute('Target');
+        if (id && target) {
+          relsMap[id] = target;
+        }
+      }
+    }
+  }
+
   const bodyElements = docDom.getElementsByTagNameNS(NS.w, 'body');
   if (!bodyElements || bodyElements.length === 0) {
     throw new Error('Invalid .docx: <w:body> not found in document.xml');
   }
   const body = bodyElements[0] as Element;
 
-  const paragraphs = extractParagraphs(body);
+  const paragraphs = extractParagraphs(body, zip, relsMap);
 
   return {
     zip,
@@ -63,13 +81,13 @@ export async function parseDocx(buffer: ArrayBuffer): Promise<ParseResult> {
  * Walk all top-level <w:p> elements in the body, including those inside
  * tables (<w:tbl> → <w:tr> → <w:tc> → <w:p>).
  */
-function extractParagraphs(body: Element): DocParagraph[] {
+function extractParagraphs(body: Element, zip: PizZip, relsMap: Record<string, string>): DocParagraph[] {
   const result: DocParagraph[] = [];
   let index = 0;
 
   function walkNode(node: Element) {
     if (node.namespaceURI === NS.w && node.localName === 'p') {
-      const para = parseParagraph(node, index);
+      const para = parseParagraph(node, index, zip, relsMap);
       result.push(para);
       index++;
       return;
@@ -97,12 +115,12 @@ function extractParagraphs(body: Element): DocParagraph[] {
   return result;
 }
 
-function parseParagraph(para: Element, index: number): DocParagraph {
+function parseParagraph(para: Element, index: number, zip: PizZip, relsMap: Record<string, string>): DocParagraph {
   const headingLevel = getHeadingLevel(para);
   const alignment = getParagraphAlignment(para);
   const listLevel = getListLevel(para);
 
-  const runs = extractRuns(para, index);
+  const runs = extractRuns(para, index, zip, relsMap);
 
   return { index, runs, headingLevel, alignment, listLevel };
 }
@@ -111,7 +129,7 @@ function parseParagraph(para: Element, index: number): DocParagraph {
  * Extract <w:r> runs from a paragraph.
  * Also handles <w:hyperlink> and <w:sdt> (content controls already in the doc).
  */
-function extractRuns(para: Element, paraIndex: number): DocRun[] {
+function extractRuns(para: Element, paraIndex: number, zip: PizZip, relsMap: Record<string, string>): DocRun[] {
   const runs: DocRun[] = [];
   let runIndex = 0;
 
@@ -120,7 +138,7 @@ function extractRuns(para: Element, paraIndex: number): DocRun[] {
     const nsURI = node.namespaceURI;
 
     if (nsURI === NS.w && localName === 'r') {
-      const run = parseRun(node, paraIndex, runIndex);
+      const run = parseRun(node, paraIndex, runIndex, zip, relsMap);
       if (run !== null) {
         runs.push(run);
         runIndex++;
@@ -153,7 +171,7 @@ function extractRuns(para: Element, paraIndex: number): DocRun[] {
       if (child.nodeType === 1) {
         const childEl = child as Element;
         if (childEl.namespaceURI === NS.w && childEl.localName === 'r') {
-          const run = parseRun(childEl, paraIndex, runIndex);
+          const run = parseRun(childEl, paraIndex, runIndex, zip, relsMap);
           if (run !== null) {
             runs.push(run);
             runIndex++;
@@ -180,7 +198,59 @@ function extractRuns(para: Element, paraIndex: number): DocRun[] {
  * Parse a single <w:r> run element into a DocRun.
  * Returns null if the run contains no text (e.g. image runs).
  */
-function parseRun(runEl: Element, paraIndex: number, runIndex: number): DocRun | null {
+function parseRun(runEl: Element, paraIndex: number, runIndex: number, zip: PizZip, relsMap: Record<string, string>): DocRun | null {
+  // Check for images
+  const drawings = runEl.getElementsByTagNameNS(NS.w, 'drawing');
+  const objects = runEl.getElementsByTagNameNS(NS.w, 'object');
+  let embedId: string | null = null;
+
+  if (drawings.length > 0) {
+    const blips = drawings[0].getElementsByTagNameNS(NS.a, 'blip');
+    if (blips.length > 0) {
+      embedId = blips[0].getAttributeNS(NS.r, 'embed') || blips[0].getAttribute('r:embed');
+    }
+  }
+
+  if (!embedId && objects.length > 0) {
+    const imagedata = objects[0].getElementsByTagName('*');
+    for (let i = 0; i < imagedata.length; i++) {
+      if (imagedata[i].localName === 'imagedata') {
+        embedId = imagedata[i].getAttributeNS(NS.r, 'id') || imagedata[i].getAttribute('r:id');
+        break;
+      }
+    }
+  }
+
+  if (embedId && relsMap[embedId]) {
+    let target = relsMap[embedId];
+    if (target.startsWith('/')) target = target.slice(1);
+    else target = 'word/' + target;
+
+    const mediaFile = zip.file(target);
+    if (mediaFile) {
+      const data = mediaFile.asUint8Array();
+      const ext = target.split('.').pop()?.toLowerCase();
+      let mime = 'image/jpeg';
+      if (ext === 'png') mime = 'image/png';
+      else if (ext === 'gif') mime = 'image/gif';
+      else if (ext === 'svg') mime = 'image/svg+xml';
+
+      let binary = '';
+      const len = data.byteLength;
+      for (let i = 0; i < len; i++) {
+        binary += String.fromCharCode(data[i]);
+      }
+      const base64 = typeof window !== 'undefined' ? window.btoa(binary) : btoa(binary);
+
+      return {
+        id: `p${paraIndex}_r${runIndex}`,
+        text: '',
+        isImage: true,
+        imageUrl: `data:${mime};base64,${base64}`
+      };
+    }
+  }
+
   // Get all w:t nodes
   const tNodes = runEl.getElementsByTagNameNS(NS.w, 't');
   if (tNodes.length === 0) return null;

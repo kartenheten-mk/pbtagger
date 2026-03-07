@@ -19,6 +19,7 @@
 import React, { useEffect, useRef, useCallback } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
+import Image from '@tiptap/extension-image';
 
 import { TagMark } from './extensions/TagMark';
 import { useDocumentStore } from '../store/useDocumentStore';
@@ -31,16 +32,14 @@ interface TipTapMark {
   attrs?: Record<string, unknown>;
 }
 
-interface TipTapTextNode {
-  type: 'text';
-  text: string;
-  marks?: TipTapMark[];
-}
+type TipTapContentNode =
+  | { type: 'text'; text: string; marks?: TipTapMark[] }
+  | { type: 'image'; attrs: { src: string; alt?: string; title?: string } };
 
 interface TipTapParagraphNode {
   type: 'heading' | 'paragraph';
   attrs?: Record<string, unknown>;
-  content?: TipTapTextNode[];
+  content?: TipTapContentNode[];
 }
 
 interface TipTapDoc {
@@ -58,68 +57,86 @@ function docModelToTipTap(model: DocModel, tags: Tag[], categories: Category[]):
   }
 
   const content: TipTapParagraphNode[] = model.paragraphs.map((para) => {
-    const paraText = para.runs.map((r) => r.text).join('');
     const paraTags = (tagsByPara.get(para.index) ?? []).sort(
       (a, b) => a.startOffset - b.startOffset
     );
 
-    // Build text segments with optional tag mark
-    const textNodes: TipTapTextNode[] = [];
-    let cursor = 0;
+    const paraNodes: TipTapContentNode[] = [];
+    let globalCursor = 0; // Text offset in the paragraph
 
-    for (const tag of paraTags) {
-      const cat = categories.find((c) => c.id === tag.categoryId);
-      const color = cat?.color ?? '#3b82f6';
-      // Build human-readable label: "TEMA: Kategori"
-      const label = cat
-        ? `${cat.temaName}: ${cat.name}`
-        : tag.categoryId;
-
-      // Text before this tag
-      if (tag.startOffset > cursor) {
-        const slice = paraText.slice(cursor, tag.startOffset);
-        if (slice) textNodes.push({ type: 'text', text: slice });
+    for (const run of para.runs) {
+      if (run.isImage && run.imageUrl) {
+        paraNodes.push({ type: 'image', attrs: { src: run.imageUrl } });
+        continue;
       }
 
-      // Tagged text
-      const taggedSlice = paraText.slice(tag.startOffset, tag.endOffset);
-      if (taggedSlice) {
-        textNodes.push({
-          type: 'text',
-          text: taggedSlice,
-          marks: [
-            {
-              type: 'tagMark',
-              attrs: {
-                tagUuid: tag.uuid,
-                categoryId: tag.categoryId,
-                color,
-                label,
-              },
-            },
-          ],
-        });
-      }
-      cursor = tag.endOffset;
-    }
+      const runStart = globalCursor;
+      const runEnd = globalCursor + run.text.length;
+      const runText = run.text;
 
-    // Remaining text after last tag
-    if (cursor < paraText.length) {
-      const slice = paraText.slice(cursor);
-      if (slice) textNodes.push({ type: 'text', text: slice });
+      let localCursor = 0;
+
+      // Find tags that overlap with this run
+      const overlappingTags = paraTags.filter(t => t.startOffset < runEnd && t.endOffset > runStart);
+
+      for (const tag of overlappingTags) {
+        const cat = categories.find((c) => c.id === tag.categoryId);
+        const color = cat?.color ?? '#3b82f6';
+        const label = cat ? `${cat.temaName}: ${cat.name}` : tag.categoryId;
+
+        const tagStartInRun = Math.max(0, tag.startOffset - runStart);
+        const tagEndInRun = Math.min(runText.length, tag.endOffset - runStart);
+
+        // Untagged text before the tag
+        if (tagStartInRun > localCursor) {
+          const slice = runText.slice(localCursor, tagStartInRun);
+          if (slice) paraNodes.push({ type: 'text', text: slice });
+        }
+
+        // Tagged text
+        if (tagStartInRun >= localCursor) {
+          const slice = runText.slice(Math.max(localCursor, tagStartInRun), tagEndInRun);
+          if (slice) {
+            paraNodes.push({
+              type: 'text',
+              text: slice,
+              marks: [
+                {
+                  type: 'tagMark',
+                  attrs: {
+                    tagUuid: tag.uuid,
+                    categoryId: tag.categoryId,
+                    color,
+                    label,
+                  },
+                },
+              ],
+            });
+            localCursor = tagEndInRun;
+          }
+        }
+      }
+
+      // Remaining untagged text after all tags in this run
+      if (localCursor < runText.length) {
+        const slice = runText.slice(localCursor);
+        if (slice) paraNodes.push({ type: 'text', text: slice });
+      }
+
+      globalCursor = runEnd;
     }
 
     if (para.headingLevel > 0 && para.headingLevel <= 6) {
       return {
         type: 'heading',
         attrs: { level: para.headingLevel },
-        content: textNodes.length ? textNodes : [{ type: 'text', text: ' ' }],
+        content: paraNodes.length ? paraNodes : [{ type: 'text', text: ' ' }],
       };
     }
 
     return {
       type: 'paragraph',
-      content: textNodes.length ? textNodes : undefined,
+      content: paraNodes.length ? paraNodes : undefined,
     };
   });
 
@@ -154,6 +171,10 @@ export const DocViewer: React.FC<DocViewerProps> = ({ docModel, teman: _teman, c
         orderedList: false,
         horizontalRule: false,
         hardBreak: false,
+      }),
+      Image.configure({
+        inline: true,
+        allowBase64: true,
       }),
       TagMark,
     ],

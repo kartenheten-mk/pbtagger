@@ -90,6 +90,8 @@ export interface DocRun {
   fontSize?: number; // half-points as stored in OOXML
   color?: string;    // RRGGBB hex
   fontFamily?: string;
+  isImage?: boolean;
+  imageUrl?: string; // Base64 Data URI
 }
 
 export interface DocParagraph {

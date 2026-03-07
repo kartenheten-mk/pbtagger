@@ -19,6 +19,12 @@ export const NS = {
     'http://schemas.openxmlformats.org/package/2006/content-types',
   pkg:
     'http://schemas.microsoft.com/office/2006/xmlPackage',
+  a:
+    'http://schemas.openxmlformats.org/drawingml/2006/main',
+  pic:
+    'http://schemas.openxmlformats.org/drawingml/2006/picture',
+  v:
+    'urn:schemas-microsoft-com:vml',
 } as const;
 
 // ─── Parser / Serialiser ─────────────────────────────────────────────────────
