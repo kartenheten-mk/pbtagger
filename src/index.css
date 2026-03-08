@@ -42,6 +42,50 @@
   color: #1f2937;
 }
 
+.ProseMirror .pb-toc-item.pb-toc-page-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 0.75rem;
+  align-items: baseline;
+}
+
+.ProseMirror .pb-toc-main {
+  min-width: 0;
+}
+
+.ProseMirror .pb-toc-page {
+  white-space: nowrap;
+  text-align: right;
+  color: #334155;
+  font-variant-numeric: tabular-nums;
+}
+
+.ProseMirror .pb-tab-right-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 0.75rem;
+  align-items: baseline;
+}
+
+.ProseMirror .pb-tab-main {
+  min-width: 0;
+}
+
+.ProseMirror .pb-tab-separator {
+  width: 0;
+  overflow: hidden;
+  white-space: pre;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.ProseMirror .pb-tab-right {
+  white-space: nowrap;
+  text-align: right;
+  color: #334155;
+  font-variant-numeric: tabular-nums;
+}
+
 .ProseMirror .pb-list-item {
   position: relative;
   padding-left: calc((var(--pb-list-level, 0) + 1) * 1.45rem);

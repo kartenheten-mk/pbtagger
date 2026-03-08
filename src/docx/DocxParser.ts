@@ -324,15 +324,8 @@ function parseRun(runEl: Element, paraIndex: number, runIndex: number, zip: PizZ
     };
   }
 
-  // Get all w:t nodes
-  const tNodes = runEl.getElementsByTagNameNS(NS.w, 't');
-  if (tNodes.length === 0) return null;
-
-  let text = '';
-  for (let i = 0; i < tNodes.length; i++) {
-    text += tNodes[i].textContent ?? '';
-  }
-
+  // Collect visible run content (plain text + tab characters)
+  const text = extractRunTextWithTabs(runEl);
   if (text === '') return null;
 
   // Parse run properties
@@ -383,6 +376,49 @@ function parseRun(runEl: Element, paraIndex: number, runIndex: number, zip: PizZ
   };
 }
 
+function extractRunTextWithTabs(runEl: Element): string {
+  const chunks: string[] = [];
+
+  const visit = (node: Node): void => {
+    if (node.nodeType !== 1) return;
+
+    const el = node as Element;
+    if (el.namespaceURI !== NS.w) {
+      const children = el.childNodes;
+      for (let i = 0; i < children.length; i++) {
+        visit(children[i]);
+      }
+      return;
+    }
+
+    if (el.localName === 't') {
+      chunks.push(el.textContent ?? '');
+      return;
+    }
+
+    if (el.localName === 'tab') {
+      chunks.push('\t');
+      return;
+    }
+
+    // Skip binary/object content while parsing text runs.
+    if (el.localName === 'drawing' || el.localName === 'object') {
+      return;
+    }
+
+    const children = el.childNodes;
+    for (let i = 0; i < children.length; i++) {
+      visit(children[i]);
+    }
+  };
+
+  const children = runEl.childNodes;
+  for (let i = 0; i < children.length; i++) {
+    visit(children[i]);
+  }
+
+  return chunks.join('');
+}
 // ─── Paragraph text helpers (used by exporter for offset mapping) ─────────────
 
 /**
@@ -501,3 +537,4 @@ function normalizeTagTargetType(value: string | null): TagTargetType {
   }
   return 'text';
 }
+

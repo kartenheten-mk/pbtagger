@@ -60,7 +60,7 @@ export function collectRunElements(paraEl: Element): Element[] {
 
 /**
  * Collect runs that map to DocParser run indices (`p{para}_r{index}`):
- * text runs with non-empty <w:t>, image runs, and chart runs.
+ * text/tab runs with visible content, image runs, and chart runs.
  */
 export function collectTaggableRunElements(paraEl: Element): Element[] {
   const runs: Element[] = [];
@@ -153,13 +153,7 @@ export function injectBookmarkAroundRun(
 
 function isTaggableRunElement(runEl: Element): boolean {
   if (runHasImageOrGraph(runEl)) return true;
-
-  const tNodes = runEl.getElementsByTagNameNS(NS.w, 't');
-  if (tNodes.length === 0) return false;
-
-  let text = '';
-  for (let i = 0; i < tNodes.length; i++) text += tNodes[i].textContent ?? '';
-  return text !== '';
+  return getRunTextWithTabs(runEl) !== '';
 }
 
 function runHasImageOrGraph(runEl: Element): boolean {
@@ -196,6 +190,72 @@ function runHasImageOrGraph(runEl: Element): boolean {
   return false;
 }
 
+function getRunTextWithTabs(runEl: Element): string {
+  const chunks: string[] = [];
+
+  const visit = (node: Node): void => {
+    if (node.nodeType !== 1) return;
+
+    const el = node as Element;
+    if (el.namespaceURI !== NS.w) {
+      const children = el.childNodes;
+      for (let i = 0; i < children.length; i++) {
+        visit(children[i]);
+      }
+      return;
+    }
+
+    if (el.localName === 't') {
+      chunks.push(el.textContent ?? '');
+      return;
+    }
+
+    if (el.localName === 'tab') {
+      chunks.push('\t');
+      return;
+    }
+
+    if (el.localName === 'drawing' || el.localName === 'object') {
+      return;
+    }
+
+    const children = el.childNodes;
+    for (let i = 0; i < children.length; i++) {
+      visit(children[i]);
+    }
+  };
+
+  const children = runEl.childNodes;
+  for (let i = 0; i < children.length; i++) {
+    visit(children[i]);
+  }
+
+  return chunks.join('');
+}
+
+function appendRunTextWithTabs(doc: Document, runEl: Element, text: string): void {
+  if (text.length === 0) return;
+
+  const tokens = text.match(/\t+|[^\t]+/g);
+  if (!tokens) return;
+
+  for (const token of tokens) {
+    if (token.startsWith('\t')) {
+      for (let i = 0; i < token.length; i++) {
+        runEl.appendChild(doc.createElementNS(NS.w, 'w:tab'));
+      }
+      continue;
+    }
+
+    const t = doc.createElementNS(NS.w, 'w:t');
+    t.textContent = token;
+    if (token.startsWith(' ') || token.endsWith(' ')) {
+      t.setAttributeNS('http://www.w3.org/XML/1998/namespace', 'xml:space', 'preserve');
+    }
+    runEl.appendChild(t);
+  }
+}
+
 /**
  * Split a <w:r> run element at the given character offset into two runs.
  * Returns [beforeRun, afterRun]. Both are inserted into the DOM at the
@@ -208,10 +268,8 @@ export function splitRunElement(
 ): [Element, Element] {
   const parent = runEl.parentNode!;
 
-  // Get full text from <w:t> nodes
-  const tNodes = runEl.getElementsByTagNameNS(NS.w, 't');
-  let fullText = '';
-  for (let i = 0; i < tNodes.length; i++) fullText += tNodes[i].textContent ?? '';
+  // Get full run text, including tab characters.
+  const fullText = getRunTextWithTabs(runEl);
 
   const beforeText = fullText.slice(0, offset);
   const afterText = fullText.slice(offset);
@@ -233,34 +291,21 @@ export function splitRunElement(
   return [beforeRun, afterRun];
 }
 
-/** Update the text content of a <w:r>'s <w:t> node */
+/** Update the text content of a <w:r>, preserving tab characters as <w:tab/>. */
 export function setRunText(doc: Document, runEl: Element, text: string): void {
-  const tNodes = runEl.getElementsByTagNameNS(NS.w, 't');
-  if (tNodes.length === 0) {
-    // Create a <w:t> if missing
-    const t = doc.createElementNS(NS.w, 'w:t');
-    t.textContent = text;
-    if (text.startsWith(' ') || text.endsWith(' ')) {
-      t.setAttributeNS('http://www.w3.org/XML/1998/namespace', 'xml:space', 'preserve');
+  const children = Array.from(runEl.childNodes);
+  for (const child of children) {
+    if (
+      child.nodeType === 1 &&
+      (child as Element).namespaceURI === NS.w &&
+      (child as Element).localName === 'rPr'
+    ) {
+      continue;
     }
-    runEl.appendChild(t);
-    return;
+    runEl.removeChild(child);
   }
-  // Set first t node, remove extras
-  for (let i = 0; i < tNodes.length; i++) {
-    if (i === 0) {
-      tNodes[i].textContent = text;
-      if (text.startsWith(' ') || text.endsWith(' ')) {
-        (tNodes[i] as Element).setAttributeNS(
-          'http://www.w3.org/XML/1998/namespace',
-          'xml:space',
-          'preserve'
-        );
-      }
-    } else {
-      tNodes[i].parentNode?.removeChild(tNodes[i]);
-    }
-  }
+
+  appendRunTextWithTabs(doc, runEl, text);
 }
 
 /**
@@ -291,9 +336,7 @@ export function injectSdtIntoParagraph(
   const runMap: { domRun: Element; start: number; end: number }[] = [];
 
   for (const runEl of runElements) {
-    const tNodes = runEl.getElementsByTagNameNS(NS.w, 't');
-    let text = '';
-    for (let i = 0; i < tNodes.length; i++) text += tNodes[i].textContent ?? '';
+    const text = getRunTextWithTabs(runEl);
     if (text === '') continue;
     runMap.push({ domRun: runEl, start: cursor, end: cursor + text.length });
     cursor += text.length;
@@ -373,3 +416,4 @@ export function injectSdtIntoParagraph(
   // Keep signature aligned with existing caller; intentionally unused.
   void docPara;
 }
+

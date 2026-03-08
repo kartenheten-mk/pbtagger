@@ -449,7 +449,7 @@ export const DocViewer: React.FC<DocViewerProps> = ({ docModel, categories }) =>
       CSS.highlights.delete('pending-selection');
     };
   }, [pendingSelection]);
-  // ── Improve table-of-contents readability in canvas (visual-only classes) ──
+  // ── Improve ToC readability + align tabbed paragraphs (visual-only classes) ──
   useEffect(() => {
     if (!editorContainerRef.current) return;
 
@@ -463,9 +463,17 @@ export const DocViewer: React.FC<DocViewerProps> = ({ docModel, categories }) =>
     const tocDecorations = buildTocDecorations(docModel.paragraphs);
 
     allParaEls.forEach((el, index) => {
-      el.classList.remove('pb-toc-title', 'pb-toc-item', 'pb-list-item');
+      el.classList.remove(
+        'pb-toc-title',
+        'pb-toc-item',
+        'pb-list-item',
+        'pb-toc-page-layout',
+        'pb-tab-right-layout'
+      );
       el.removeAttribute('data-list-marker');
       el.style.removeProperty('--pb-list-level');
+
+      alignTabbedParagraph(el);
 
       if (tocDecorations.titleIndices.has(index)) {
         el.classList.add('pb-toc-title');
@@ -478,6 +486,11 @@ export const DocViewer: React.FC<DocViewerProps> = ({ docModel, categories }) =>
       el.classList.add('pb-toc-item', 'pb-list-item');
       el.style.setProperty('--pb-list-level', String(level));
       el.setAttribute('data-list-marker', marker);
+
+      // Fallback for ToC lines where a page number exists without an explicit tab run.
+      if (el.dataset.pbTabAligned !== '1') {
+        alignTocPageNumber(el, docModel.paragraphs[index]);
+      }
     });
   }, [docModel, tags, showTags, selectedTagUuid]);
 
@@ -904,6 +917,106 @@ function isTocTitle(value: string): boolean {
     normalized === 'contents'
   );
 }
+
+function alignTabbedParagraph(element: HTMLElement): void {
+  if (element.dataset.pbTabAligned === '1') {
+    element.classList.add('pb-tab-right-layout');
+    return;
+  }
+
+  // Keep tagged / interactive paragraphs untouched.
+  if (element.querySelector('.tag-mark, .tag-badge-widget, img, table')) {
+    return;
+  }
+
+  const paragraphText = getCleanTextContent(element);
+  const tabMatch = paragraphText.match(/^([\s\S]*?)(\t+)([^\t][\s\S]*)$/);
+  if (!tabMatch) return;
+
+  const leftText = tabMatch[1];
+  const separatorText = tabMatch[2];
+  const rightText = tabMatch[3];
+
+  if (!leftText.trim() || !rightText.trim()) return;
+
+  element.textContent = '';
+
+  const leftSpan = document.createElement('span');
+  leftSpan.className = 'pb-tab-main';
+  leftSpan.textContent = leftText;
+
+  const separatorSpan = document.createElement('span');
+  separatorSpan.className = 'pb-tab-separator';
+  separatorSpan.textContent = separatorText;
+
+  const rightSpan = document.createElement('span');
+  rightSpan.className = 'pb-tab-right';
+  rightSpan.textContent = rightText;
+
+  element.appendChild(leftSpan);
+  element.appendChild(separatorSpan);
+  element.appendChild(rightSpan);
+  element.classList.add('pb-tab-right-layout');
+  element.dataset.pbTabAligned = '1';
+}
+
+function alignTocPageNumber(element: HTMLElement, paragraph: DocParagraph | undefined): void {
+  if (!paragraph) return;
+
+  if (element.dataset.pbTocPageAligned === '1') {
+    element.classList.add('pb-toc-page-layout');
+    return;
+  }
+
+  // Keep tagged / interactive paragraphs untouched.
+  if (element.querySelector('.tag-mark, .tag-badge-widget, img, table')) {
+    return;
+  }
+
+  const nonEmptyRuns = paragraph.runs
+    .map((run) => run.text)
+    .filter((text) => text.length > 0);
+
+  if (nonEmptyRuns.length < 2) return;
+
+  const pageToken = nonEmptyRuns[nonEmptyRuns.length - 1].trim();
+  if (!isLikelyPageNumber(pageToken)) return;
+
+  const paragraphText = getCleanTextContent(element);
+  const splitRegex = new RegExp(`^([\\s\\S]*?)(${escapeRegex(pageToken)})(\\s*)$`);
+  const match = paragraphText.match(splitRegex);
+  if (!match) return;
+
+  const leftText = match[1];
+  const rightText = `${match[2]}${match[3]}`;
+
+  if (!leftText.trim()) return;
+
+  element.textContent = '';
+
+  const leftSpan = document.createElement('span');
+  leftSpan.className = 'pb-toc-main';
+  leftSpan.textContent = leftText;
+
+  const rightSpan = document.createElement('span');
+  rightSpan.className = 'pb-toc-page';
+  rightSpan.textContent = rightText;
+
+  element.appendChild(leftSpan);
+  element.appendChild(rightSpan);
+  element.classList.add('pb-toc-page-layout');
+  element.dataset.pbTocPageAligned = '1';
+}
+
+function isLikelyPageNumber(value: string): boolean {
+  if (!value) return false;
+  return /^\d{1,4}$/.test(value) || /^[IVXLCDMivxlcdm]{1,10}$/.test(value);
+}
+
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 function createGraphPlaceholderDataUri(): string {
   const svg = `
 <svg xmlns="http://www.w3.org/2000/svg" width="240" height="90" viewBox="0 0 240 90" role="img" aria-label="Diagram">
