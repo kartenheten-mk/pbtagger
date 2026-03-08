@@ -59,6 +59,144 @@ export function collectRunElements(paraEl: Element): Element[] {
 }
 
 /**
+ * Collect runs that map to DocParser run indices (`p{para}_r{index}`):
+ * text runs with non-empty <w:t>, image runs, and chart runs.
+ */
+export function collectTaggableRunElements(paraEl: Element): Element[] {
+  const runs: Element[] = [];
+
+  function visit(node: Element) {
+    const ns = node.namespaceURI;
+    const name = node.localName;
+
+    if (ns === NS.w && name === 'r') {
+      if (isTaggableRunElement(node)) runs.push(node);
+      return;
+    }
+
+    if (
+      ns === NS.w &&
+      (name === 'hyperlink' ||
+        name === 'sdt' ||
+        name === 'sdtContent' ||
+        name === 'ins' ||
+        name === 'del')
+    ) {
+      const children = node.childNodes;
+      for (let i = 0; i < children.length; i++) {
+        if (children[i].nodeType === 1) visit(children[i] as Element);
+      }
+      return;
+    }
+
+    // Keep behavior aligned with DocxParser fallback branch: only direct w:r children.
+    const children = node.childNodes;
+    for (let i = 0; i < children.length; i++) {
+      const child = children[i];
+      if (child.nodeType !== 1) continue;
+      const childEl = child as Element;
+      if (childEl.namespaceURI === NS.w && childEl.localName === 'r') {
+        if (isTaggableRunElement(childEl)) runs.push(childEl);
+      }
+    }
+  }
+
+  const children = paraEl.childNodes;
+  for (let i = 0; i < children.length; i++) {
+    const child = children[i];
+    if (child.nodeType !== 1) continue;
+    const childEl = child as Element;
+    if (childEl.namespaceURI === NS.w && childEl.localName === 'pPr') continue;
+    visit(childEl);
+  }
+
+  return runs;
+}
+
+/**
+ * Inject only bookmarkStart/bookmarkEnd around a specific parsed run index.
+ * Used for image/graph tags where we do not wrap with <w:sdt>.
+ */
+export function injectBookmarkAroundRun(
+  docDom: Document,
+  paraEl: Element,
+  runIndex: number,
+  tag: Tag,
+  bookmarkCounter: { value: number }
+): boolean {
+  const runs = collectTaggableRunElements(paraEl);
+  const targetRun = runs[runIndex];
+  if (!targetRun) return false;
+
+  const parent = targetRun.parentNode;
+  if (!parent) return false;
+
+  const bmId = bookmarkCounter.value++;
+  const bmName = generateBookmarkName(tag);
+
+  const bookmarkStart = docDom.createElementNS(NS.w, 'w:bookmarkStart');
+  bookmarkStart.setAttributeNS(NS.w, 'w:id', String(bmId));
+  bookmarkStart.setAttributeNS(NS.w, 'w:name', bmName);
+
+  const bookmarkEnd = docDom.createElementNS(NS.w, 'w:bookmarkEnd');
+  bookmarkEnd.setAttributeNS(NS.w, 'w:id', String(bmId));
+
+  parent.insertBefore(bookmarkStart, targetRun);
+  if (targetRun.nextSibling) {
+    parent.insertBefore(bookmarkEnd, targetRun.nextSibling);
+  } else {
+    parent.appendChild(bookmarkEnd);
+  }
+
+  return true;
+}
+
+function isTaggableRunElement(runEl: Element): boolean {
+  if (runHasImageOrGraph(runEl)) return true;
+
+  const tNodes = runEl.getElementsByTagNameNS(NS.w, 't');
+  if (tNodes.length === 0) return false;
+
+  let text = '';
+  for (let i = 0; i < tNodes.length; i++) text += tNodes[i].textContent ?? '';
+  return text !== '';
+}
+
+function runHasImageOrGraph(runEl: Element): boolean {
+  const drawings = runEl.getElementsByTagNameNS(NS.w, 'drawing');
+  for (let i = 0; i < drawings.length; i++) {
+    const drawing = drawings[i];
+    const blips = drawing.getElementsByTagNameNS(NS.a, 'blip');
+    for (let j = 0; j < blips.length; j++) {
+      const embedId =
+        blips[j].getAttributeNS(NS.r, 'embed') ?? blips[j].getAttribute('r:embed');
+      if (embedId) return true;
+    }
+
+    const charts = drawing.getElementsByTagNameNS(NS.c, 'chart');
+    for (let j = 0; j < charts.length; j++) {
+      const chartId =
+        charts[j].getAttributeNS(NS.r, 'id') ?? charts[j].getAttribute('r:id');
+      if (chartId) return true;
+    }
+  }
+
+  const objects = runEl.getElementsByTagNameNS(NS.w, 'object');
+  for (let i = 0; i < objects.length; i++) {
+    const descendants = objects[i].getElementsByTagName('*');
+    for (let j = 0; j < descendants.length; j++) {
+      if (descendants[j].localName !== 'imagedata') continue;
+      const imgId =
+        descendants[j].getAttributeNS(NS.r, 'id') ??
+        descendants[j].getAttribute('r:id');
+      if (imgId) return true;
+    }
+  }
+
+  return false;
+}
+
+/**
  * Split a <w:r> run element at the given character offset into two runs.
  * Returns [beforeRun, afterRun]. Both are inserted into the DOM at the
  * correct position (the original run is removed).
@@ -131,7 +269,7 @@ export function setRunText(doc: Document, runEl: Element, text: string): void {
  *
  * The resulting XML structure is:
  *   <w:bookmarkStart w:id="N" w:name="Category_uuid8"/>
- *   <w:sdt>…</w:sdt>
+ *   <w:sdt>...</w:sdt>
  *   <w:bookmarkEnd w:id="N"/>
  */
 export function injectSdtIntoParagraph(
@@ -147,7 +285,7 @@ export function injectSdtIntoParagraph(
 
   if (runElements.length === 0) return;
 
-  // Map DocRun index → DOM Element
+  // Map DocRun index -> DOM Element
   // We match runs by sequential text position
   let cursor = 0;
   const runMap: { domRun: Element; start: number; end: number }[] = [];
@@ -192,7 +330,7 @@ export function injectSdtIntoParagraph(
   // Build the <w:sdt> element
   const sdt = buildSdt(docDom, tag.uuid, [], storeId);
   // Find sdtContent as a direct child of the newly created sdt node.
-  // (Avoid using sdt.contains() — @xmldom/xmldom does not implement that method.)
+  // (Avoid using sdt.contains() - @xmldom/xmldom does not implement that method.)
   let sdtContentEl: Element | null = null;
   const sdtChildren = sdt.childNodes;
   for (let i = 0; i < sdtChildren.length; i++) {
@@ -209,7 +347,7 @@ export function injectSdtIntoParagraph(
   const parent = runsToWrap[0].parentNode;
   if (!parent) return;
 
-  // ── Bookmark ─────────────────────────────────────────────────────────────
+  // Bookmark
   const bmId = bookmarkCounter.value++;
   const bmName = generateBookmarkName(tag);
 
@@ -222,7 +360,7 @@ export function injectSdtIntoParagraph(
   const bookmarkEnd = docDom.createElementNS(NS.w, 'w:bookmarkEnd');
   bookmarkEnd.setAttributeNS(NS.w, 'w:id', String(bmId));
 
-  // Insert order: bookmarkStart → sdt → bookmarkEnd
+  // Insert order: bookmarkStart -> sdt -> bookmarkEnd
   parent.insertBefore(bookmarkStart, runsToWrap[0]);
   parent.insertBefore(sdt, runsToWrap[0]);
   parent.insertBefore(bookmarkEnd, runsToWrap[0]);
@@ -231,4 +369,7 @@ export function injectSdtIntoParagraph(
   for (const run of runsToWrap) {
     sdtContentEl.appendChild(run);
   }
+
+  // Keep signature aligned with existing caller; intentionally unused.
+  void docPara;
 }
