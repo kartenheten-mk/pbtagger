@@ -16,7 +16,7 @@ import Image from '@tiptap/extension-image';
 
 import { TagMark } from './extensions/TagMark';
 import { useDocumentStore } from '../store/useDocumentStore';
-import type { Category, DocModel, Tag, PendingSelection } from '../types';
+import type { Category, DocModel, DocParagraph, Tag, PendingSelection } from '../types';
 
 const OBJECT_ALT_PREFIX = '__pb_obj__';
 const GRAPH_PLACEHOLDER_SRC = createGraphPlaceholderDataUri();
@@ -449,6 +449,37 @@ export const DocViewer: React.FC<DocViewerProps> = ({ docModel, categories }) =>
       CSS.highlights.delete('pending-selection');
     };
   }, [pendingSelection]);
+  // ── Improve table-of-contents readability in canvas (visual-only classes) ──
+  useEffect(() => {
+    if (!editorContainerRef.current) return;
+
+    const proseMirrorEl = editorContainerRef.current.querySelector('.ProseMirror');
+    if (!proseMirrorEl) return;
+
+    const allParaEls = Array.from(
+      proseMirrorEl.querySelectorAll('p, h1, h2, h3, h4, h5, h6')
+    ) as HTMLElement[];
+
+    const tocDecorations = buildTocDecorations(docModel.paragraphs);
+
+    allParaEls.forEach((el, index) => {
+      el.classList.remove('pb-toc-title', 'pb-toc-item', 'pb-list-item');
+      el.removeAttribute('data-list-marker');
+      el.style.removeProperty('--pb-list-level');
+
+      if (tocDecorations.titleIndices.has(index)) {
+        el.classList.add('pb-toc-title');
+      }
+
+      const marker = tocDecorations.itemMarkers.get(index);
+      if (!marker) return;
+
+      const level = Math.max(0, docModel.paragraphs[index]?.listLevel ?? 0);
+      el.classList.add('pb-toc-item', 'pb-list-item');
+      el.style.setProperty('--pb-list-level', String(level));
+      el.setAttribute('data-list-marker', marker);
+    });
+  }, [docModel, tags, showTags, selectedTagUuid]);
 
   // ─── Handle text selection → store in Zustand (sidebar will pick up) ───────
   const handleMouseUp = useCallback(() => {
@@ -826,6 +857,53 @@ function hexToRgba(hex: string, alpha: number): string {
 
   return `rgba(${r},${g},${b},${alpha})`;
 }
+function buildTocDecorations(paragraphs: DocParagraph[]): {
+  titleIndices: Set<number>;
+  itemMarkers: Map<number, string>;
+} {
+  const titleIndices = new Set<number>();
+  const itemMarkers = new Map<number, string>();
+
+  for (let i = 0; i < paragraphs.length; i++) {
+    if (!isTocTitle(getParagraphText(paragraphs[i]))) continue;
+
+    titleIndices.add(i);
+
+    const counters: number[] = [];
+    let foundAnyItems = false;
+
+    for (let j = i + 1; j < paragraphs.length; j++) {
+      const para = paragraphs[j];
+      if (para.listLevel === undefined) {
+        if (foundAnyItems) break;
+        continue;
+      }
+
+      foundAnyItems = true;
+      const level = Math.max(0, para.listLevel);
+      counters[level] = (counters[level] ?? 0) + 1;
+      counters.length = level + 1;
+      const marker = counters.map((value) => value || 1).join('.') + '.';
+      itemMarkers.set(j, marker);
+    }
+  }
+
+  return { titleIndices, itemMarkers };
+}
+
+function getParagraphText(para: DocParagraph): string {
+  return para.runs.map((run) => run.text).join('').trim();
+}
+
+function isTocTitle(value: string): boolean {
+  const normalized = value.toLowerCase().replace(/\s+/g, ' ').trim();
+  return (
+    normalized === 'innehallsforteckning' ||
+    normalized === 'innehallsförteckning' ||
+    normalized === 'table of contents' ||
+    normalized === 'contents'
+  );
+}
 function createGraphPlaceholderDataUri(): string {
   const svg = `
 <svg xmlns="http://www.w3.org/2000/svg" width="240" height="90" viewBox="0 0 240 90" role="img" aria-label="Diagram">
@@ -837,27 +915,4 @@ function createGraphPlaceholderDataUri(): string {
 </svg>`;
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
