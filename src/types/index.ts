@@ -76,13 +76,47 @@ export interface Tag {
 
 export type GeometryType = 'point' | 'polygon' | 'line';
 
+/**
+ * Internal representation of a single geometry feature.
+ * Coordinates are stored in the original CRS from the source JSON
+ * (e.g. EPSG:3009) for lossless export. Reprojection happens at render time.
+ */
 export interface Geometry {
   uuid: string;
   name: string;
   type: GeometryType;
-  /** GeoJSON-style coordinate arrays */
-  coordinates: number[][];
+  /**
+   * Coordinates in original CRS (typically EPSG:3009 for Swedish detaljplan).
+   * - Point:   [x, y]
+   * - Line:    [[x1,y1], [x2,y2], ...]
+   * - Polygon: [[[x1,y1], ...], ...]  (outer ring only stored here)
+   */
+  coordinates: number[] | number[][] | number[][][];
+  /** EPSG code string, e.g. "EPSG:3009". Defaults to EPSG:4326 if absent. */
+  crs?: string;
+  /** feature:typ from the source JSON (e.g. "detaljplan", "användningsbestämmelse") */
+  featureType?: string;
+  /** UUID of the parent GeometryDoc this feature belongs to */
+  sourceDocId?: string;
+  /** Additional properties from the source JSON for display/export */
+  properties?: Record<string, unknown>;
   color?: string;
+}
+
+/**
+ * A raw geometry document imported from disk (e.g. a dp225-format JSON).
+ * The original JSON is stored verbatim for lossless export.
+ */
+export interface GeometryDoc {
+  /** The detaljplan UUID (objektidentitet of the first detaljplan feature) */
+  id: string;
+  /** Human-readable name, e.g. "DP225 GUTTORMSENPARKEN, ÄNDR" */
+  name: string;
+  /** Original file name */
+  fileName: string;
+  /** The verbatim parsed JSON object for lossless export */
+  rawJson: Record<string, unknown>;
+  createdAt: string;
 }
 
 // ─── Document Model (internal representation) ────────────────────────────────
@@ -161,4 +195,6 @@ export interface AppState {
   pendingSelection: PendingSelection[] | null;
   /** Whether to visually show tags in the document viewer */
   showTags: boolean;
+  /** UUID of the currently active geometry (detaljplan) document */
+  activeGeometryDocId: string | null;
 }

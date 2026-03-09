@@ -9,6 +9,14 @@ import {
   deleteDocument as dbDelete,
   type SavedDocument,
 } from '../db/documentDb';
+import {
+  saveGeometryDoc,
+  getGeometryDoc,
+  deleteGeometryDoc,
+} from '../geometry/geometryDb';
+import { parseDetaljplanJson } from '../geometry/detaljplanParser';
+import { exportGeometryDocAsString } from '../geometry/geoJsonConverter';
+import { saveAs } from 'file-saver';
 
 interface DocumentActions {
   // ─── Document lifecycle ─────────────────────────────────────────────────
@@ -36,6 +44,22 @@ interface DocumentActions {
   updateGeometry: (uuid: string, changes: Partial<Geometry>) => void;
   removeGeometry: (uuid: string) => void;
 
+  // ─── Geometry document import / export ──────────────────────────────────
+  /**
+   * Parse a raw detaljplan JSON object, persist it to IndexedDB,
+   * and load its features into the geometry store.
+   */
+  importGeometryJson: (rawJson: Record<string, unknown>, fileName: string) => Promise<void>;
+  /**
+   * Remove all geometries belonging to the active geometry document
+   * and delete the document from IndexedDB.
+   */
+  removeGeometryDoc: (docId: string) => Promise<void>;
+  /**
+   * Download the active geometry document back to disk in its original format.
+   */
+  exportGeometryJson: () => Promise<void>;
+
   // ─── Geometry linking ───────────────────────────────────────────────────
   startLinking: (tagUuid: string) => void;
   finishLinking: (tagUuid: string, geometryUuid: string) => void;
@@ -60,6 +84,7 @@ const initialState: AppState = {
   linkingTagUuid: null,
   pendingSelection: null,
   showTags: true,
+  activeGeometryDocId: null,
 };
 
 // ─── Debounced auto-save to IndexedDB ──────────────────────────────────────
@@ -124,6 +149,9 @@ export const useDocumentStore = create<AppState & DocumentActions>()(
         loadDocument: async (id: string) => {
           const doc = await dbGet(id);
           if (!doc) throw new Error(`Document ${id} not found in IndexedDB`);
+          // Restore activeGeometryDocId from the geometries that were saved
+          const restoredGeoDocId =
+            doc.geometries.find((g) => g.sourceDocId)?.sourceDocId ?? null;
           set({
             documentId: doc.id,
             zipBuffer: doc.zipBuffer,
@@ -135,6 +163,7 @@ export const useDocumentStore = create<AppState & DocumentActions>()(
             linkingTagUuid: null,
             pendingSelection: null,
             showTags: true,
+            activeGeometryDocId: restoredGeoDocId,
           });
           useDocumentStore.temporal.getState().clear();
         },
@@ -218,6 +247,56 @@ export const useDocumentStore = create<AppState & DocumentActions>()(
             debouncedSave({ ...state, ...next });
             return next;
           }),
+
+        // ─── Geometry document import / export ─────────────────────────────
+        importGeometryJson: async (rawJson, fileName) => {
+          const { geometryDoc, geometries } = parseDetaljplanJson(rawJson, fileName);
+
+          // Remove any existing geometries from a previously active doc
+          const prev = get().activeGeometryDocId;
+          if (prev) {
+            await deleteGeometryDoc(prev);
+            set((state) => ({
+              geometries: state.geometries.filter((g) => g.sourceDocId !== prev),
+              activeGeometryDocId: null,
+            }));
+          }
+
+          // Persist raw JSON to IndexedDB
+          await saveGeometryDoc(geometryDoc);
+
+          // Add parsed geometries to the store
+          set((state) => ({
+            geometries: [...state.geometries, ...geometries],
+            activeGeometryDocId: geometryDoc.id,
+          }));
+        },
+
+        removeGeometryDoc: async (docId) => {
+          await deleteGeometryDoc(docId);
+          set((state) => ({
+            geometries: state.geometries.filter((g) => g.sourceDocId !== docId),
+            // Unlink any tags that were linked to features of this doc
+            tags: state.tags.map((t) => {
+              const linkedGeo = state.geometries.find(
+                (g) => g.uuid === t.geometryId && g.sourceDocId === docId
+              );
+              return linkedGeo ? { ...t, geometryId: undefined } : t;
+            }),
+            activeGeometryDocId:
+              get().activeGeometryDocId === docId ? null : get().activeGeometryDocId,
+          }));
+        },
+
+        exportGeometryJson: async () => {
+          const docId = get().activeGeometryDocId;
+          if (!docId) return;
+          const doc = await getGeometryDoc(docId);
+          if (!doc) return;
+          const content = exportGeometryDocAsString(doc);
+          const blob = new Blob([content], { type: 'application/json' });
+          saveAs(blob, doc.fileName);
+        },
 
         // ─── Geometry linking ───────────────────────────────────────────────
         startLinking: (tagUuid) => set({ linkingTagUuid: tagUuid }),
