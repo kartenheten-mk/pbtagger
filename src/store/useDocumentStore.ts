@@ -250,39 +250,63 @@ export const useDocumentStore = create<AppState & DocumentActions>()(
 
         // ─── Geometry document import / export ─────────────────────────────
         importGeometryJson: async (rawJson, fileName) => {
-          const { geometryDoc, geometries } = parseDetaljplanJson(rawJson, fileName);
+          const { geometryDoc, geometries: newGeometries } = parseDetaljplanJson(rawJson, fileName);
 
-          // Remove any existing geometries from a previously active doc
           const prev = get().activeGeometryDocId;
-          if (prev) {
-            await deleteGeometryDoc(prev);
-            set((state) => ({
-              geometries: state.geometries.filter((g) => g.sourceDocId !== prev),
-              activeGeometryDocId: null,
-            }));
-          }
 
-          // Persist raw JSON to IndexedDB
+          // If swapping to a different plan doc, remove the old one from IndexedDB
+          if (prev && prev !== geometryDoc.id) {
+            await deleteGeometryDoc(prev);
+          }
+          // Persist new / updated raw JSON to IndexedDB
           await saveGeometryDoc(geometryDoc);
 
-          // Add parsed geometries to the store
-          set((state) => ({
-            geometries: [...state.geometries, ...geometries],
-            activeGeometryDocId: geometryDoc.id,
-          }));
+          // ── Smart merge: keep tag→geometry links for features whose id
+          //    appears in both the old and new JSON. Only unlink tags for
+          //    features that disappear entirely in the new upload.
+          const newUuidSet = new Set(newGeometries.map((g) => g.uuid));
+
+          set((state) => {
+            let updatedTags = state.tags;
+
+            if (prev) {
+              // UUIDs present in the old doc but absent from the new import
+              const removedUuids = new Set(
+                state.geometries
+                  .filter((g) => g.sourceDocId === prev && !newUuidSet.has(g.uuid))
+                  .map((g) => g.uuid)
+              );
+              // Unlink only the tags that referenced a now-deleted feature
+              if (removedUuids.size > 0) {
+                updatedTags = state.tags.map((t) =>
+                  t.geometryId && removedUuids.has(t.geometryId)
+                    ? { ...t, geometryId: undefined }
+                    : t
+                );
+              }
+            }
+
+            // Drop old doc's geometries; add all new ones (same UUIDs → links survive)
+            const keptGeometries = prev
+              ? state.geometries.filter((g) => g.sourceDocId !== prev)
+              : state.geometries;
+
+            const nextState = {
+              geometries: [...keptGeometries, ...newGeometries],
+              activeGeometryDocId: geometryDoc.id,
+              tags: updatedTags,
+            };
+            debouncedSave({ ...state, ...nextState });
+            return nextState;
+          });
         },
 
         removeGeometryDoc: async (docId) => {
           await deleteGeometryDoc(docId);
           set((state) => ({
             geometries: state.geometries.filter((g) => g.sourceDocId !== docId),
-            // Unlink any tags that were linked to features of this doc
-            tags: state.tags.map((t) => {
-              const linkedGeo = state.geometries.find(
-                (g) => g.uuid === t.geometryId && g.sourceDocId === docId
-              );
-              return linkedGeo ? { ...t, geometryId: undefined } : t;
-            }),
+            // Keep tag.geometryId references intact — they will automatically
+            // reconnect if the same JSON (same feature IDs) is re-imported later.
             activeGeometryDocId:
               get().activeGeometryDocId === docId ? null : get().activeGeometryDocId,
           }));
