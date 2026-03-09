@@ -56,6 +56,7 @@ export const GeometryPanel: React.FC = () => {
   } = useDocumentStore();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const geometryListRef = useRef<HTMLDivElement>(null);
   const [importError, setImportError] = useState<string | null>(null);
   const [isImporting, setIsImporting] = useState(false);
   const [expandedGeoUuid, setExpandedGeoUuid] = useState<string | null>(null);
@@ -109,11 +110,28 @@ export const GeometryPanel: React.FC = () => {
   // Effective selected geometry: tag-derived takes priority, otherwise list click
   const selectedGeometryUuid = tagDerivedGeoUuid ?? clickedGeoUuid;
 
-  // ── Auto-expand when a linked tag is selected ──────────────────────────────
+  // ── Auto-expand and scroll to linked geometry when a tag is selected ────────
   useEffect(() => {
     if (!selectedTagUuid) return;
     const tag = tags.find((t) => t.uuid === selectedTagUuid);
-    if (tag?.geometryId) setExpandedGeoUuid(tag.geometryId);
+    if (tag?.geometryId) {
+      // If active filters would hide this geometry, clear them so it becomes visible
+      const geo = geometries.find((g) => g.uuid === tag.geometryId);
+      if (geo && activeTypeFilters.size > 0 && !activeTypeFilters.has(geo.featureType ?? 'okänd')) {
+        setActiveTypeFilters(new Set());
+      }
+      setExpandedGeoUuid(tag.geometryId);
+      // Scroll the geometry list item into view (small delay lets the expand render first)
+      const timer = setTimeout(() => {
+        const el = geometryListRef.current?.querySelector<HTMLElement>(
+          `[data-geometry-uuid="${tag.geometryId}"]`
+        );
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+      }, 100);
+      return () => clearTimeout(timer);
+    }
     // Clear direct click selection when a tag-based selection takes over
     setClickedGeoUuid(null);
   }, [selectedTagUuid, tags]);
@@ -363,7 +381,7 @@ export const GeometryPanel: React.FC = () => {
       )}
 
       {/* ── Geometry list ────────────────────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto px-3 pb-3">
+      <div className="flex-1 overflow-y-auto px-3 pb-3" ref={geometryListRef}>
         {geometries.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-8 text-center">
             <div className="text-3xl mb-2">🗺</div>
@@ -389,7 +407,7 @@ export const GeometryPanel: React.FC = () => {
               const isExpanded = expandedGeoUuid === geo.uuid;
 
               return (
-                <li key={geo.uuid} className="group">
+                <li key={geo.uuid} className="group" data-geometry-uuid={geo.uuid}>
                   <div
                     onClick={() => handleListItemClick(geo.uuid)}
                     className={`flex items-start gap-2 px-3 py-2 rounded-lg border transition-all cursor-pointer ${
