@@ -60,6 +60,43 @@ export const GeometryPanel: React.FC = () => {
   const [isImporting, setIsImporting] = useState(false);
   const [expandedGeoUuid, setExpandedGeoUuid] = useState<string | null>(null);
   const [clickedGeoUuid, setClickedGeoUuid] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeTypeFilters, setActiveTypeFilters] = useState<Set<string>>(new Set());
+
+  // ── Derive unique feature types for filter chips ──────────────────────────
+  const allFeatureTypes = Array.from(
+    new Set(geometries.map((g) => g.featureType ?? 'okänd'))
+  );
+
+  // ── Toggle a type filter chip ─────────────────────────────────────────────
+  const toggleTypeFilter = (type: string) => {
+    setActiveTypeFilters((prev) => {
+      const next = new Set(prev);
+      if (next.has(type)) next.delete(type);
+      else next.add(type);
+      return next;
+    });
+  };
+
+  // ── Filtered geometries (used for both list and map) ──────────────────────
+  const filteredGeometries = geometries.filter((geo) => {
+    // Type filter: if no filters active, show all
+    if (activeTypeFilters.size > 0 && !activeTypeFilters.has(geo.featureType ?? 'okänd')) {
+      return false;
+    }
+    // Text search: match against name, featureType, and kategori
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      const name = geo.name.toLowerCase();
+      const type = (geo.featureType ?? '').toLowerCase();
+      const kategori = String(geo.properties?.['kategori'] ?? '').toLowerCase();
+      const bestammelse = String(geo.properties?.['bestammelseformulering'] ?? '').toLowerCase();
+      if (!name.includes(q) && !type.includes(q) && !kategori.includes(q) && !bestammelse.includes(q)) {
+        return false;
+      }
+    }
+    return true;
+  });
 
   const isLinking = !!linkingTagUuid;
   const linkingTag = tags.find((t) => t.uuid === linkingTagUuid);
@@ -239,7 +276,7 @@ export const GeometryPanel: React.FC = () => {
       {/* ── Map ─────────────────────────────────────────────────────────── */}
       <div className="px-3 pt-3 pb-2" style={{ height: '240px' }}>
         <MapView
-          geometries={geometries}
+          geometries={filteredGeometries}
           selectedGeometryUuid={selectedGeometryUuid}
           isLinking={isLinking}
           onFeatureClick={handleMapFeatureClick}
@@ -251,10 +288,77 @@ export const GeometryPanel: React.FC = () => {
         <div className="mx-3 mb-2 px-3 py-1.5 bg-gray-50 rounded-lg border border-gray-100 flex items-center gap-2">
           <span className="text-xs">🗺</span>
           <p className="text-xs text-gray-600 truncate flex-1">
-            {geometries.find((g) => g.sourceDocId === activeGeometryDocId)
-              ?.properties?.['beteckning'] as string
-              ?? 'Detaljplan inläst'}
+            {String(geometries.find((g) => g.sourceDocId === activeGeometryDocId)
+              ?.properties?.['beteckning'] ?? 'Detaljplan inläst')}
           </p>
+        </div>
+      )}
+
+      {/* ── Type filter chips ───────────────────────────────────────────── */}
+      {allFeatureTypes.length > 1 && (
+        <div className="px-3 pb-2 flex flex-wrap gap-1">
+          {allFeatureTypes.map((type) => {
+            const active = activeTypeFilters.has(type);
+            const color = featureColor(type);
+            const icon = featureIcon(type);
+            return (
+              <button
+                key={type}
+                onClick={() => toggleTypeFilter(type)}
+                className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border transition-all ${
+                  active
+                    ? 'text-white border-transparent'
+                    : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
+                }`}
+                style={active ? { backgroundColor: color, borderColor: color } : {}}
+                title={type}
+              >
+                <span>{icon}</span>
+                <span className="truncate max-w-[100px]">{type}</span>
+              </button>
+            );
+          })}
+          {activeTypeFilters.size > 0 && (
+            <button
+              onClick={() => setActiveTypeFilters(new Set())}
+              className="px-2 py-0.5 rounded-full text-xs border border-gray-200 text-gray-400 hover:text-gray-600 hover:border-gray-300 bg-white transition-all"
+              title="Rensa filter"
+            >
+              ✕ Rensa
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* ── Search input ────────────────────────────────────────────────── */}
+      {geometries.length > 0 && (
+        <div className="px-3 pb-2">
+          <div className="relative">
+            <svg
+              className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none"
+              fill="none" stroke="currentColor" viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Sök namn, typ, kategori…"
+              className="w-full pl-8 pr-7 py-1.5 text-xs rounded-lg border border-gray-200 bg-white focus:outline-none focus:border-blue-300 focus:ring-1 focus:ring-blue-200 placeholder-gray-300"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-500"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+          </div>
         </div>
       )}
 
@@ -268,9 +372,15 @@ export const GeometryPanel: React.FC = () => {
               Klicka på "+ JSON" för att importera en detaljplan
             </p>
           </div>
+        ) : filteredGeometries.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-8 text-center">
+            <div className="text-2xl mb-2">🔍</div>
+            <p className="text-xs text-gray-400 font-medium">Inga träffar</p>
+            <p className="text-xs text-gray-300 mt-1">Prova ett annat sökord eller filter</p>
+          </div>
         ) : (
           <ul className="space-y-1">
-            {geometries.map((geo) => {
+            {filteredGeometries.map((geo) => {
               const linkedTags = tags.filter((t) => t.geometryId === geo.uuid);
               const linkedCount = linkedTags.length;
               const color = featureColor(geo.featureType);
@@ -307,7 +417,7 @@ export const GeometryPanel: React.FC = () => {
                           <span className="ml-1 text-blue-500">· {linkedCount} tagg{linkedCount !== 1 ? 'ar' : ''}</span>
                         )}
                       </p>
-                      {geo.properties?.['kategori'] && (
+                      {!!geo.properties?.['kategori'] && (
                         <p className="text-xs text-gray-400 truncate italic">
                           {String(geo.properties['kategori'])}
                         </p>
