@@ -51,16 +51,18 @@ function makeStyle(
   selected: boolean,
   linking: boolean
 ): Style {
-  const alpha = selected ? 'cc' : '55';
-  const strokeWidth = selected ? 3 : linking ? 2 : 1.5;
-  const strokeColor = linking ? '#2563eb' : color;
+  // Selected: outline-only (transparent fill, thick bright stroke)
+  const fillAlpha = selected ? '10' : '15';
+  const strokeWidth = selected ? 4 : linking ? 2 : 1.5;
+  const strokeColor = selected ? '#facc15' : linking ? '#2563eb' : color;
 
   return new Style({
-    fill: new Fill({ color: color + alpha }),
+    zIndex: selected ? 100 : 0,
+    fill: new Fill({ color: color + fillAlpha }),
     stroke: new Stroke({ color: strokeColor, width: strokeWidth }),
     image: new CircleStyle({
       radius: selected ? 8 : 6,
-      fill: new Fill({ color: color + alpha }),
+      fill: new Fill({ color: color + fillAlpha }),
       stroke: new Stroke({ color: strokeColor, width: strokeWidth }),
     }),
   });
@@ -162,7 +164,7 @@ export const MapView: React.FC<MapViewProps> = ({
     source.addFeatures(features);
 
     // Fit map view to the extent of all features
-    const extent: Extent = source.getExtent();
+    const extent = source.getExtent() as Extent;
     if (!isEmpty(extent)) {
       mapRef.current?.getView().fit(extent, {
         padding: [40, 40, 40, 40],

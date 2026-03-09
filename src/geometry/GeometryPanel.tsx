@@ -21,13 +21,13 @@ import { MapView } from './MapView';
 const FEATURE_ICONS: Record<string, string> = {
   detaljplan: '🗺',
   'användningsbestämmelse': '🟩',
-  'egenskapsbestämmelse': '🟧',
+  'egenskapsbestämmelse': '🟣',
 };
 
 const FEATURE_COLORS: Record<string, string> = {
   detaljplan: '#3b82f6',
   'användningsbestämmelse': '#10b981',
-  'egenskapsbestämmelse': '#f59e0b',
+  'egenskapsbestämmelse': '#8b5cf6',
 };
 
 function featureIcon(featureType?: string): string {
@@ -59,20 +59,26 @@ export const GeometryPanel: React.FC = () => {
   const [importError, setImportError] = useState<string | null>(null);
   const [isImporting, setIsImporting] = useState(false);
   const [expandedGeoUuid, setExpandedGeoUuid] = useState<string | null>(null);
+  const [clickedGeoUuid, setClickedGeoUuid] = useState<string | null>(null);
 
   const isLinking = !!linkingTagUuid;
   const linkingTag = tags.find((t) => t.uuid === linkingTagUuid);
 
   // Derive which geometry UUID is "selected" from the selected tag's geometryId
-  const selectedGeometryUuid = selectedTagUuid
+  const tagDerivedGeoUuid = selectedTagUuid
     ? (tags.find((t) => t.uuid === selectedTagUuid)?.geometryId ?? null)
     : null;
+
+  // Effective selected geometry: tag-derived takes priority, otherwise list click
+  const selectedGeometryUuid = tagDerivedGeoUuid ?? clickedGeoUuid;
 
   // ── Auto-expand when a linked tag is selected ──────────────────────────────
   useEffect(() => {
     if (!selectedTagUuid) return;
     const tag = tags.find((t) => t.uuid === selectedTagUuid);
     if (tag?.geometryId) setExpandedGeoUuid(tag.geometryId);
+    // Clear direct click selection when a tag-based selection takes over
+    setClickedGeoUuid(null);
   }, [selectedTagUuid, tags]);
 
   // ── JSON file import ───────────────────────────────────────────────────────
@@ -123,6 +129,8 @@ export const GeometryPanel: React.FC = () => {
         finishLinking(linkingTagUuid, uuid);
         return;
       }
+      // Highlight the geometry on the map (toggle off if clicking same item)
+      setClickedGeoUuid((prev) => (prev === uuid ? null : uuid));
       setExpandedGeoUuid((prev) => (prev === uuid ? null : uuid));
     },
     [isLinking, linkingTagUuid, finishLinking]

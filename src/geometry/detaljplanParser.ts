@@ -36,7 +36,7 @@ function mapTyp(typ: string): GeometryType {
 const FEATURE_TYPE_COLORS: Record<string, string> = {
   detaljplan: '#3b82f6',               // blue  — plan outline
   'användningsbestämmelse': '#10b981', // green — land use
-  'egenskapsbestämmelse': '#f59e0b',   // amber — property rules
+  'egenskapsbestämmelse': '#8b5cf6',   // purple — property rules
 };
 
 function colorForFeatureType(featureType: string): string {
