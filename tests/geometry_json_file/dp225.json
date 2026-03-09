@@ -1,0 +1,1270 @@
+{
+  "feature:mediatyp": "application/vnd.lm.detaljplan.v4+json",
+  "type": "FeatureCollection",
+  "bbox": [
+    6765523.893,
+    124095.291,
+    6765589.056,
+    124170.161
+  ],
+  "crs": {
+    "properties": {
+      "name": "urn:ogc:def:crs:EPSG::3009"
+    },
+    "type": "name"
+  },
+  "features": [
+    {
+      "id": "6e3e2c91-7307-4b2b-bfbd-fe831ddc2472",
+      "geometry": null,
+      "properties": {
+        "objektidentitet": "6e3e2c91-7307-4b2b-bfbd-fe831ddc2472",
+        "versionGiltigFran": "2026-03-04T15:48:17.8578633+01:00",
+        "feature:typ": "detaljplan",
+        "kommun": "Mora",
+        "beteckning": "DP225",
+        "namn": "GUTTORMSENPARKEN, ÄNDR",
+        "syfte": "Syftet med planen är att tillskapa en tomt för social- och omsorgsförvaltningens verksamhet med gruppbostäder för psykiskt utvecklingsstörda. Gällande plan redovisar aktuell mark som grönområde. Omgivande mark i gällande plan redovisar områden för bostäder och grönområden, omgivande bostadsområden är utbyggda. ",
+        "status": "laga kraft",
+        "typ": "detaljplan",
+        "plangeometri": [
+          {
+            "geometri": {
+              "typ": "yta",
+              "position": {
+                "coordinates": [
+                  [
+                    [
+                      124158.811069,
+                      6765551.764262
+                    ],
+                    [
+                      124132.964,
+                      6765574.121
+                    ],
+                    [
+                      124116.235598,
+                      6765586.602325
+                    ],
+                    [
+                      124112.947,
+                      6765589.056
+                    ],
+                    [
+                      124095.291,
+                      6765564.22
+                    ],
+                    [
+                      124142.318,
+                      6765523.893
+                    ],
+                    [
+                      124149.507456,
+                      6765525.599153
+                    ],
+                    [
+                      124156.506,
+                      6765527.26
+                    ],
+                    [
+                      124170.161,
+                      6765541.947
+                    ],
+                    [
+                      124158.811069,
+                      6765551.764262
+                    ]
+                  ]
+                ],
+                "type": "Polygon"
+              },
+              "koordinatsystemPlan": "EPSG:3009",
+              "hojdsystem": "EPSG:5613",
+              "dimension": 2
+            },
+            "geometrimetadata": {
+              "tidpunktForLagesbestamning": "2026-02-26T00:00:00+01:00",
+              "lagesbestamningsmetodIPlan": {
+                "typ": "lägesplacering",
+                "variant": "befintligt objekt i digital karta"
+              }
+            }
+          }
+        ],
+        "beslutsinformation": [
+          {
+            "instansInomKommunen": "kommunfullmäktige",
+            "diarienummerKommun": "Dnr.kommun",
+            "beslutstyp": "antagande av ny detaljplan",
+            "beslutshandling": [
+              {
+                "innehall": [
+                  "plankarta"
+                ],
+                "dokument": {
+                  "namn": "DP225 Plankarta",
+                  "referens": [
+                    {
+                      "identitet": "fa89c741-300c-49ba-8630-9523e13e2507"
+                    }
+                  ],
+                  "specifikReferens": []
+                }
+              }
+            ],
+            "datumAntagande": "1992-08-31",
+            "datumLagakraft": [
+              "1992-09-28"
+            ],
+            "genomforandetid": 75,
+            "genomforandetidStartar": "1992-09-28",
+            "foregaendePlansBeteckning": []
+          }
+        ],
+        "kvalitetsbeskrivning": {
+          "korrigeradeGranser": true,
+          "kontrolleratPlaneringsunderlag": true,
+          "digitaliseringsniva": "komplett"
+        },
+        "planbeskrivning": {
+          "planbeskrivning": {
+            "namn": "DP225 Planbeskrivning",
+            "datum": {
+              "datum": "1992-09-28",
+              "handelse": "skapad"
+            },
+            "referens": [
+              {
+                "identitet": "c0dd44fe-d4d8-43ce-ac6f-aa5d45319e8f"
+              }
+            ]
+          }
+        },
+        "datumStatusforandring": "1992-09-28",
+        "planeringsunderlag": [
+          {
+            "huvudomrade": "annat",
+            "underlag": {
+              "namn": "Tolkningsbilaga",
+              "referens": [
+                {
+                  "identitet": "d887861d-6cef-481f-b5f5-e09859bf068f"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "type": "Feature"
+    },
+    {
+      "id": "7783c2be-87e3-4510-a7b7-fbe8443f3d14",
+      "geometry": null,
+      "properties": {
+        "feature:typ": "användningsbestämmelse",
+        "detaljplan": "6e3e2c91-7307-4b2b-bfbd-fe831ddc2472",
+        "objektidentitet": "7783c2be-87e3-4510-a7b7-fbe8443f3d14",
+        "planbestammelsekatalogreferens": "921cdc48-c602-4fde-b449-722653ffc36c",
+        "bestammelseformulering": "Gruppboende",
+        "ursprungligBestammelseformulering": "BOSTÄDER, GRUPPBOENDE",
+        "planbestammelsebeskrivning": {
+          "motiv": "Området är i gällande detaljplan redovisat som grönområde. Området är oårtngivet av äldre villabebyggelse samt ett nyligen färdigbyggt bostadsområde. Planändringen innebär att markanvändningen inom planområdet ändras till bebyggelseområde. Tomten föreslås för bostadsändamål med s.k. gruppboende för psykiskt utvecklingsstörda. Lokaliseringen betingas av omsorgsförvaltningens önskemål om utbyggnad av gruppbostäder. Gruppboendet är planerat i 4-6 lägenheter. Byggrätten föreslås i en våning med 500 m2 byggnadsyta."
+        },
+        "kvalitetsbeskrivning": {
+          "korrigeradeGranser": true,
+          "kontrolleratPlaneringsunderlag": true,
+          "digitaliseringsniva": "komplett"
+        },
+        "beskrivningAnvandbarhet": "Enligt boverket",
+        "anvandbarhet": "medel",
+        "bestammelsegeometri": [
+          {
+            "geometri": {
+              "typ": "yta",
+              "position": {
+                "coordinates": [
+                  [
+                    [
+                      124158.811069,
+                      6765551.764262
+                    ],
+                    [
+                      124132.964,
+                      6765574.121
+                    ],
+                    [
+                      124116.235598,
+                      6765586.602325
+                    ],
+                    [
+                      124112.947,
+                      6765589.056
+                    ],
+                    [
+                      124095.291,
+                      6765564.22
+                    ],
+                    [
+                      124142.318,
+                      6765523.893
+                    ],
+                    [
+                      124149.507456,
+                      6765525.599153
+                    ],
+                    [
+                      124156.506,
+                      6765527.26
+                    ],
+                    [
+                      124170.161,
+                      6765541.947
+                    ],
+                    [
+                      124158.811069,
+                      6765551.764262
+                    ]
+                  ]
+                ],
+                "type": "Polygon"
+              },
+              "koordinatsystemPlan": "EPSG:3009",
+              "dimension": 2
+            },
+            "geometrimetadata": {
+              "tidpunktForLagesbestamning": "2026-02-26T00:00:00+01:00",
+              "lagesbestamningsmetodIPlan": {
+                "typ": "lägesplacering",
+                "variant": "befintligt objekt i digital karta"
+              }
+            }
+          }
+        ],
+        "anvandningsform": "kvartersmark",
+        "kategori": "bostäder",
+        "bestammelsevarde": [
+          {
+            "datatyp": "text",
+            "variabelvarde": "Gruppboende",
+            "beskrivning": "användning"
+          }
+        ]
+      },
+      "type": "Feature",
+      "bbox": [
+        6765523.893,
+        124095.291,
+        6765589.056,
+        124170.161
+      ]
+    },
+    {
+      "id": "a8f651b3-4971-4b8f-b080-156ce6f8a41d",
+      "geometry": null,
+      "properties": {
+        "feature:typ": "egenskapsbestämmelse",
+        "detaljplan": "6e3e2c91-7307-4b2b-bfbd-fe831ddc2472",
+        "objektidentitet": "a8f651b3-4971-4b8f-b080-156ce6f8a41d",
+        "planbestammelsekatalogreferens": "623a21a0-5d27-4b55-889f-b0841409894d",
+        "bestammelseformulering": "Utfartsförbud",
+        "sekundarEgenskapsgrans": false,
+        "ursprungligBestammelseformulering": "UTFART FÅR INTE ANORDNAS",
+        "kvalitetsbeskrivning": {
+          "korrigeradeGranser": true,
+          "kontrolleratPlaneringsunderlag": true,
+          "digitaliseringsniva": "komplett"
+        },
+        "beskrivningAnvandbarhet": "Gruppbostaden skall ha sin infart med angöringsmöjlighet från Kvarnholsvägen. Parkering och angöring skall ske på kvartersmark. Utfartsförbud redovisas mot Spanskvägen.",
+        "anvandbarhet": "god",
+        "reglerarAnvandningsbestammelse": [
+          "7783c2be-87e3-4510-a7b7-fbe8443f3d14"
+        ],
+        "bestammelsegeometri": [
+          {
+            "geometri": {
+              "typ": "linje",
+              "position": {
+                "coordinates": [
+                  [
+                    124134.70558,
+                    6765530.420868
+                  ],
+                  [
+                    124142.318,
+                    6765523.893
+                  ],
+                  [
+                    124156.506,
+                    6765527.26
+                  ],
+                  [
+                    124170.161,
+                    6765541.947
+                  ]
+                ],
+                "type": "LineString"
+              },
+              "koordinatsystemPlan": "EPSG:3009",
+              "dimension": 2
+            },
+            "geometrimetadata": {
+              "tidpunktForLagesbestamning": "2026-02-13T00:00:00+01:00",
+              "lagesbestamningsmetodIPlan": {
+                "typ": "lägesplacering",
+                "variant": "befintligt objekt i digital karta"
+              }
+            }
+          }
+        ],
+        "anvandningsform": "kvartersmark",
+        "kategori": "stängsel, utfart och annan utgång",
+        "underkategori": "utfart"
+      },
+      "type": "Feature",
+      "bbox": [
+        6765523.893,
+        124132.10173922511,
+        6765544.6706323465,
+        124173.09047552332
+      ]
+    },
+    {
+      "id": "fcd938bf-9a36-4109-81dd-51dea2856ede",
+      "geometry": null,
+      "properties": {
+        "feature:typ": "egenskapsbestämmelse",
+        "detaljplan": "6e3e2c91-7307-4b2b-bfbd-fe831ddc2472",
+        "objektidentitet": "fcd938bf-9a36-4109-81dd-51dea2856ede",
+        "planbestammelsekatalogreferens": "2675891b-f791-463f-bf5e-5c778b702eb2",
+        "bestammelseformulering": "Marken får inte förses med byggnad, mur eller plank",
+        "sekundarEgenskapsgrans": false,
+        "ursprungligBestammelseformulering": "Marken får inte bebyggas",
+        "kvalitetsbeskrivning": {
+          "korrigeradeGranser": true,
+          "kontrolleratPlaneringsunderlag": true,
+          "digitaliseringsniva": "komplett"
+        },
+        "beskrivningAnvandbarhet": "Enligt boverket",
+        "anvandbarhet": "medel",
+        "reglerarAnvandningsbestammelse": [
+          "7783c2be-87e3-4510-a7b7-fbe8443f3d14"
+        ],
+        "bestammelsegeometri": [
+          {
+            "geometri": {
+              "typ": "yta",
+              "position": {
+                "coordinates": [
+                  [
+                    [
+                      124141.219412,
+                      6765532.58115
+                    ],
+                    [
+                      124101.574322,
+                      6765565.978885
+                    ],
+                    [
+                      124110.273089,
+                      6765578.215098
+                    ],
+                    [
+                      124116.235598,
+                      6765586.602325
+                    ],
+                    [
+                      124112.947,
+                      6765589.056
+                    ],
+                    [
+                      124095.291,
+                      6765564.22
+                    ],
+                    [
+                      124142.318,
+                      6765523.893
+                    ],
+                    [
+                      124149.507456,
+                      6765525.599153
+                    ],
+                    [
+                      124141.219412,
+                      6765532.58115
+                    ]
+                  ]
+                ],
+                "type": "Polygon"
+              },
+              "koordinatsystemPlan": "EPSG:3009",
+              "dimension": 2
+            },
+            "geometrimetadata": {
+              "tidpunktForLagesbestamning": "2026-02-26T00:00:00+01:00",
+              "lagesbestamningsmetodIPlan": {
+                "typ": "lägesplacering",
+                "variant": "befintligt objekt i digital karta"
+              }
+            }
+          }
+        ],
+        "anvandningsform": "kvartersmark",
+        "kategori": "begränsning av markens utnyttjande",
+        "underkategori": "marken får inte förses med byggnadsverk",
+        "bestammelsevarde": [
+          {
+            "datatyp": "text",
+            "variabelvarde": "byggnad, mur eller plank",
+            "beskrivning": "byggnadsverk"
+          }
+        ]
+      },
+      "type": "Feature",
+      "bbox": [
+        6765523.893,
+        124095.291,
+        6765589.056,
+        124149.50745602389
+      ]
+    },
+    {
+      "id": "a6269632-23f4-43e4-a5b9-52fae64ada2f",
+      "geometry": null,
+      "properties": {
+        "feature:typ": "egenskapsbestämmelse",
+        "detaljplan": "6e3e2c91-7307-4b2b-bfbd-fe831ddc2472",
+        "objektidentitet": "a6269632-23f4-43e4-a5b9-52fae64ada2f",
+        "planbestammelsekatalogreferens": "2675891b-f791-463f-bf5e-5c778b702eb2",
+        "bestammelseformulering": "Marken får inte förses med byggnad, mur eller plank",
+        "sekundarEgenskapsgrans": false,
+        "ursprungligBestammelseformulering": "Marken får inte bebyggas",
+        "kvalitetsbeskrivning": {
+          "korrigeradeGranser": true,
+          "kontrolleratPlaneringsunderlag": true,
+          "digitaliseringsniva": "komplett"
+        },
+        "beskrivningAnvandbarhet": "Enligt boverket",
+        "anvandbarhet": "medel",
+        "reglerarAnvandningsbestammelse": [
+          "7783c2be-87e3-4510-a7b7-fbe8443f3d14"
+        ],
+        "bestammelsegeometri": [
+          {
+            "geometri": {
+              "typ": "yta",
+              "position": {
+                "coordinates": [
+                  [
+                    [
+                      124141.219412,
+                      6765532.58115
+                    ],
+                    [
+                      124149.507456,
+                      6765525.599153
+                    ],
+                    [
+                      124156.506,
+                      6765527.26
+                    ],
+                    [
+                      124170.161,
+                      6765541.947
+                    ],
+                    [
+                      124158.811069,
+                      6765551.764262
+                    ],
+                    [
+                      124152.108368,
+                      6765544.455192
+                    ],
+                    [
+                      124141.219412,
+                      6765532.58115
+                    ]
+                  ]
+                ],
+                "type": "Polygon"
+              },
+              "koordinatsystemPlan": "EPSG:3009",
+              "dimension": 2
+            },
+            "geometrimetadata": {
+              "tidpunktForLagesbestamning": "2026-02-26T00:00:00+01:00",
+              "lagesbestamningsmetodIPlan": {
+                "typ": "lägesplacering",
+                "variant": "befintligt objekt i digital karta"
+              }
+            }
+          }
+        ],
+        "anvandningsform": "kvartersmark",
+        "kategori": "begränsning av markens utnyttjande",
+        "underkategori": "marken får inte förses med byggnadsverk",
+        "bestammelsevarde": [
+          {
+            "datatyp": "text",
+            "variabelvarde": "byggnad, mur eller plank",
+            "beskrivning": "byggnadsverk"
+          }
+        ]
+      },
+      "type": "Feature",
+      "bbox": [
+        6765525.599152977,
+        124141.21941169312,
+        6765551.764261937,
+        124170.161
+      ]
+    },
+    {
+      "id": "bb1c80f5-dc0d-4df6-8a0f-e9f1ed433b25",
+      "geometry": null,
+      "properties": {
+        "feature:typ": "egenskapsbestämmelse",
+        "detaljplan": "6e3e2c91-7307-4b2b-bfbd-fe831ddc2472",
+        "objektidentitet": "bb1c80f5-dc0d-4df6-8a0f-e9f1ed433b25",
+        "planbestammelsekatalogreferens": "2675891b-f791-463f-bf5e-5c778b702eb2",
+        "bestammelseformulering": "Marken får inte förses med byggnad, mur eller plank",
+        "sekundarEgenskapsgrans": false,
+        "ursprungligBestammelseformulering": "Marken får inte bebyggas",
+        "kvalitetsbeskrivning": {
+          "korrigeradeGranser": true,
+          "kontrolleratPlaneringsunderlag": true,
+          "digitaliseringsniva": "komplett"
+        },
+        "beskrivningAnvandbarhet": "Enligt boverket",
+        "anvandbarhet": "medel",
+        "reglerarAnvandningsbestammelse": [
+          "7783c2be-87e3-4510-a7b7-fbe8443f3d14"
+        ],
+        "bestammelsegeometri": [
+          {
+            "geometri": {
+              "typ": "yta",
+              "position": {
+                "coordinates": [
+                  [
+                    [
+                      124152.108368,
+                      6765544.455192
+                    ],
+                    [
+                      124158.811069,
+                      6765551.764262
+                    ],
+                    [
+                      124132.964,
+                      6765574.121
+                    ],
+                    [
+                      124116.235598,
+                      6765586.602325
+                    ],
+                    [
+                      124110.273089,
+                      6765578.215098
+                    ],
+                    [
+                      124126.694856,
+                      6765566.321774
+                    ],
+                    [
+                      124152.108368,
+                      6765544.455192
+                    ]
+                  ]
+                ],
+                "type": "Polygon"
+              },
+              "koordinatsystemPlan": "EPSG:3009",
+              "dimension": 2
+            },
+            "geometrimetadata": {
+              "tidpunktForLagesbestamning": "2026-02-26T00:00:00+01:00",
+              "lagesbestamningsmetodIPlan": {
+                "typ": "lägesplacering",
+                "variant": "befintligt objekt i digital karta"
+              }
+            }
+          }
+        ],
+        "anvandningsform": "kvartersmark",
+        "kategori": "begränsning av markens utnyttjande",
+        "underkategori": "marken får inte förses med byggnadsverk",
+        "bestammelsevarde": [
+          {
+            "datatyp": "text",
+            "variabelvarde": "byggnad, mur eller plank",
+            "beskrivning": "byggnadsverk"
+          }
+        ]
+      },
+      "type": "Feature",
+      "bbox": [
+        6765544.455191507,
+        124110.27308933677,
+        6765586.602324845,
+        124158.81106861835
+      ]
+    },
+    {
+      "id": "51a3e872-12c2-4dba-9623-83bd31873654",
+      "geometry": null,
+      "properties": {
+        "feature:typ": "egenskapsbestämmelse",
+        "detaljplan": "6e3e2c91-7307-4b2b-bfbd-fe831ddc2472",
+        "objektidentitet": "51a3e872-12c2-4dba-9623-83bd31873654",
+        "planbestammelsekatalogreferens": "f0cd5c5a-ae43-4ae7-8f21-f5dae7d73548",
+        "bestammelseformulering": "Genomförandetid är angivet som GENOMFÖRANDETIDEN SLUTAR DEN 31 DECEMBER 1998. Bestämmelsen har inte tolkats på grund av att motsvarande bestämmelseformulering inte rekommenderas idag",
+        "sekundarEgenskapsgrans": false,
+        "ursprungligBestammelseformulering": "GENOMFÖRANDETIDEN SLUTAR DEN 31 DECEMBER 1998.",
+        "planbestammelsebeskrivning": {
+          "motiv": "Planens genomförandetid slutar 1998-12-31."
+        },
+        "kvalitetsbeskrivning": {
+          "korrigeradeGranser": true,
+          "kontrolleratPlaneringsunderlag": true,
+          "digitaliseringsniva": "komplett"
+        },
+        "beskrivningAnvandbarhet": "Enligt boverket",
+        "anvandbarhet": "medel",
+        "reglerarAnvandningsbestammelse": [
+          "7783c2be-87e3-4510-a7b7-fbe8443f3d14"
+        ],
+        "bestammelsegeometri": [
+          {
+            "geometri": {
+              "typ": "yta",
+              "position": {
+                "coordinates": [
+                  [
+                    [
+                      124158.811069,
+                      6765551.764262
+                    ],
+                    [
+                      124132.964,
+                      6765574.121
+                    ],
+                    [
+                      124116.235598,
+                      6765586.602325
+                    ],
+                    [
+                      124112.947,
+                      6765589.056
+                    ],
+                    [
+                      124095.291,
+                      6765564.22
+                    ],
+                    [
+                      124142.318,
+                      6765523.893
+                    ],
+                    [
+                      124149.507456,
+                      6765525.599153
+                    ],
+                    [
+                      124156.506,
+                      6765527.26
+                    ],
+                    [
+                      124170.161,
+                      6765541.947
+                    ],
+                    [
+                      124158.811069,
+                      6765551.764262
+                    ]
+                  ]
+                ],
+                "type": "Polygon"
+              },
+              "koordinatsystemPlan": "EPSG:3009",
+              "dimension": 2
+            },
+            "geometrimetadata": {
+              "tidpunktForLagesbestamning": "2026-02-26T00:00:00+01:00",
+              "lagesbestamningsmetodIPlan": {
+                "typ": "lägesplacering",
+                "variant": "befintligt objekt i digital karta"
+              }
+            }
+          }
+        ],
+        "anvandningsform": "kvartersmark",
+        "kategori": "genomförandetid",
+        "underkategori": "genomförandetid",
+        "bestammelsevarde": [
+          {
+            "datatyp": "text",
+            "variabelvarde": "GENOMFÖRANDETIDEN SLUTAR DEN 31 DECEMBER 1998",
+            "beskrivning": "äldre bestämmelse"
+          },
+          {
+            "datatyp": "text",
+            "variabelvarde": "på grund av att motsvarande bestämmelseformulering inte rekommenderas idag",
+            "beskrivning": "orsak"
+          }
+        ]
+      },
+      "type": "Feature",
+      "bbox": [
+        6765523.893,
+        124095.291,
+        6765589.056,
+        124170.161
+      ]
+    },
+    {
+      "id": "0aa19dd4-506f-49ec-ac9f-4f0fc71cbb99",
+      "geometry": null,
+      "properties": {
+        "feature:typ": "egenskapsbestämmelse",
+        "detaljplan": "6e3e2c91-7307-4b2b-bfbd-fe831ddc2472",
+        "objektidentitet": "0aa19dd4-506f-49ec-ac9f-4f0fc71cbb99",
+        "planbestammelsekatalogreferens": "2bd7f01b-ac79-45b4-a24d-093620e7e2f2",
+        "bestammelseformulering": "Största byggnadsarea är 500 m².",
+        "sekundarEgenskapsgrans": false,
+        "ursprungligBestammelseformulering": "STÖRSTA BYGGNADSAREA I KVADRATMETER",
+        "planbestammelsebeskrivning": {
+          "motiv": "Byggrätten föreslås i en våning med 500 m2 byggnadsyta."
+        },
+        "kvalitetsbeskrivning": {
+          "korrigeradeGranser": true,
+          "kontrolleratPlaneringsunderlag": true,
+          "digitaliseringsniva": "komplett"
+        },
+        "beskrivningAnvandbarhet": "Direkt tolkning",
+        "anvandbarhet": "god",
+        "reglerarAnvandningsbestammelse": [
+          "7783c2be-87e3-4510-a7b7-fbe8443f3d14"
+        ],
+        "bestammelsegeometri": [
+          {
+            "geometri": {
+              "typ": "yta",
+              "position": {
+                "coordinates": [
+                  [
+                    [
+                      124152.108368,
+                      6765544.455192
+                    ],
+                    [
+                      124126.694856,
+                      6765566.321774
+                    ],
+                    [
+                      124110.273089,
+                      6765578.215098
+                    ],
+                    [
+                      124101.574322,
+                      6765565.978885
+                    ],
+                    [
+                      124141.219412,
+                      6765532.58115
+                    ],
+                    [
+                      124152.108368,
+                      6765544.455192
+                    ]
+                  ]
+                ],
+                "type": "Polygon"
+              },
+              "koordinatsystemPlan": "EPSG:3009",
+              "dimension": 2
+            },
+            "geometrimetadata": {
+              "tidpunktForLagesbestamning": "2026-02-26T00:00:00+01:00",
+              "lagesbestamningsmetodIPlan": {
+                "typ": "lägesplacering",
+                "variant": "befintligt objekt i digital karta"
+              }
+            }
+          }
+        ],
+        "anvandningsform": "kvartersmark",
+        "kategori": "utnyttjandegrad",
+        "underkategori": "största area i kvm",
+        "bestammelsevarde": [
+          {
+            "datatyp": "decimaltal",
+            "variabelvarde": "500",
+            "beskrivning": "exploatering",
+            "vardetyp": "max",
+            "enhet": "kvadratmeter"
+          }
+        ]
+      },
+      "type": "Feature",
+      "bbox": [
+        6765532.58115024,
+        124101.57432218915,
+        6765578.215098262,
+        124152.10836774895
+      ]
+    },
+    {
+      "id": "6f61f375-434a-44e0-80bb-8297f193cd4e",
+      "geometry": null,
+      "properties": {
+        "feature:typ": "egenskapsbestämmelse",
+        "detaljplan": "6e3e2c91-7307-4b2b-bfbd-fe831ddc2472",
+        "objektidentitet": "6f61f375-434a-44e0-80bb-8297f193cd4e",
+        "planbestammelsekatalogreferens": "e1423d9f-e4e6-4f2c-9df7-0e9970a119ad",
+        "bestammelseformulering": "Högsta byggnadshöjd är 3,9 meter",
+        "sekundarEgenskapsgrans": false,
+        "ursprungligBestammelseformulering": "HÖGSTA BYGGNADSHÖJD I METER",
+        "kvalitetsbeskrivning": {
+          "korrigeradeGranser": true,
+          "kontrolleratPlaneringsunderlag": true,
+          "digitaliseringsniva": "komplett"
+        },
+        "beskrivningAnvandbarhet": "Enligt boverket",
+        "anvandbarhet": "medel",
+        "reglerarAnvandningsbestammelse": [
+          "7783c2be-87e3-4510-a7b7-fbe8443f3d14"
+        ],
+        "bestammelsegeometri": [
+          {
+            "geometri": {
+              "typ": "yta",
+              "position": {
+                "coordinates": [
+                  [
+                    [
+                      124152.108368,
+                      6765544.455192
+                    ],
+                    [
+                      124126.694856,
+                      6765566.321774
+                    ],
+                    [
+                      124110.273089,
+                      6765578.215098
+                    ],
+                    [
+                      124101.574322,
+                      6765565.978885
+                    ],
+                    [
+                      124141.219412,
+                      6765532.58115
+                    ],
+                    [
+                      124152.108368,
+                      6765544.455192
+                    ]
+                  ]
+                ],
+                "type": "Polygon"
+              },
+              "koordinatsystemPlan": "EPSG:3009",
+              "dimension": 2
+            },
+            "geometrimetadata": {
+              "tidpunktForLagesbestamning": "2026-02-26T00:00:00+01:00",
+              "lagesbestamningsmetodIPlan": {
+                "typ": "lägesplacering",
+                "variant": "befintligt objekt i digital karta"
+              }
+            }
+          }
+        ],
+        "anvandningsform": "kvartersmark",
+        "kategori": "höjd på byggnadsverk",
+        "underkategori": "högsta höjd på byggnadsverk",
+        "bestammelsevarde": [
+          {
+            "datatyp": "text",
+            "variabelvarde": "Högsta byggnadshöjd är 3,9 meter",
+            "beskrivning": "högsta höjd på byggnadsverk"
+          }
+        ]
+      },
+      "type": "Feature",
+      "bbox": [
+        6765532.58115024,
+        124101.57432218915,
+        6765578.215098262,
+        124152.10836774895
+      ]
+    },
+    {
+      "id": "dfab7948-e0fb-4205-965a-b0d7536c6634",
+      "geometry": null,
+      "properties": {
+        "feature:typ": "egenskapsbestämmelse",
+        "detaljplan": "6e3e2c91-7307-4b2b-bfbd-fe831ddc2472",
+        "objektidentitet": "dfab7948-e0fb-4205-965a-b0d7536c6634",
+        "planbestammelsekatalogreferens": "3735cb5c-1353-43c7-af97-75f7a7c13422",
+        "bestammelseformulering": "Högsta antal våningar är angivet som 1. Bestämmelsen har digitaliserats för att möjliggöra analyser, men används inte idag.",
+        "sekundarEgenskapsgrans": false,
+        "ursprungligBestammelseformulering": "HÖGSTA ANTAL VÅNINGAR ",
+        "planbestammelsebeskrivning": {
+          "motiv": "Byggrätten föreslås i en våning med 500 m2 byggnadsyta."
+        },
+        "kvalitetsbeskrivning": {
+          "korrigeradeGranser": true,
+          "kontrolleratPlaneringsunderlag": true,
+          "digitaliseringsniva": "komplett"
+        },
+        "beskrivningAnvandbarhet": "Frångår boverkets rekommendation då senaste föreskrifter ej är tillgängliga för digitalisering",
+        "anvandbarhet": "medel",
+        "reglerarAnvandningsbestammelse": [
+          "7783c2be-87e3-4510-a7b7-fbe8443f3d14"
+        ],
+        "bestammelsegeometri": [
+          {
+            "geometri": {
+              "typ": "yta",
+              "position": {
+                "coordinates": [
+                  [
+                    [
+                      124152.108368,
+                      6765544.455192
+                    ],
+                    [
+                      124126.694856,
+                      6765566.321774
+                    ],
+                    [
+                      124110.273089,
+                      6765578.215098
+                    ],
+                    [
+                      124101.574322,
+                      6765565.978885
+                    ],
+                    [
+                      124141.219412,
+                      6765532.58115
+                    ],
+                    [
+                      124152.108368,
+                      6765544.455192
+                    ]
+                  ]
+                ],
+                "type": "Polygon"
+              },
+              "koordinatsystemPlan": "EPSG:3009",
+              "dimension": 2
+            },
+            "geometrimetadata": {
+              "tidpunktForLagesbestamning": "2026-02-26T00:00:00+01:00",
+              "lagesbestamningsmetodIPlan": {
+                "typ": "lägesplacering",
+                "variant": "befintligt objekt i digital karta"
+              }
+            }
+          }
+        ],
+        "anvandningsform": "kvartersmark",
+        "kategori": "höjd på byggnadsverk",
+        "bestammelsevarde": [
+          {
+            "datatyp": "decimaltal",
+            "variabelvarde": "1",
+            "beskrivning": "antal",
+            "vardetyp": "max",
+            "enhet": "antal"
+          }
+        ]
+      },
+      "type": "Feature",
+      "bbox": [
+        6765532.58115024,
+        124101.57432218915,
+        6765578.215098262,
+        124152.10836774895
+      ]
+    },
+    {
+      "id": "4bf121c7-22e8-41f4-a4aa-25c1cf590d10",
+      "geometry": null,
+      "properties": {
+        "feature:typ": "egenskapsbestämmelse",
+        "detaljplan": "6e3e2c91-7307-4b2b-bfbd-fe831ddc2472",
+        "objektidentitet": "4bf121c7-22e8-41f4-a4aa-25c1cf590d10",
+        "planbestammelsekatalogreferens": "fe532a2d-0638-44dd-acf5-590bf68c31fe",
+        "bestammelseformulering": "Befintliga tallar ska bevaras",
+        "sekundarEgenskapsgrans": false,
+        "ursprungligBestammelseformulering": "BEFINTLIGA TALLAR SKALL BEVARAS ",
+        "planbestammelsebeskrivning": {
+          "motiv": "Sluttningen norr om planområdet är vildvuxet med björk och busksly medan sydöstra delen innehåller en talldunge som avses bibehållas."
+        },
+        "kvalitetsbeskrivning": {
+          "korrigeradeGranser": true,
+          "kontrolleratPlaneringsunderlag": true,
+          "digitaliseringsniva": "komplett"
+        },
+        "beskrivningAnvandbarhet": "Enligt boverket",
+        "anvandbarhet": "god",
+        "reglerarAnvandningsbestammelse": [
+          "7783c2be-87e3-4510-a7b7-fbe8443f3d14"
+        ],
+        "bestammelsegeometri": [
+          {
+            "geometri": {
+              "typ": "yta",
+              "position": {
+                "coordinates": [
+                  [
+                    [
+                      124141.219412,
+                      6765532.58115
+                    ],
+                    [
+                      124149.507456,
+                      6765525.599153
+                    ],
+                    [
+                      124156.506,
+                      6765527.26
+                    ],
+                    [
+                      124170.161,
+                      6765541.947
+                    ],
+                    [
+                      124158.811069,
+                      6765551.764262
+                    ],
+                    [
+                      124152.108368,
+                      6765544.455192
+                    ],
+                    [
+                      124141.219412,
+                      6765532.58115
+                    ]
+                  ]
+                ],
+                "type": "Polygon"
+              },
+              "koordinatsystemPlan": "EPSG:3009",
+              "dimension": 2
+            },
+            "geometrimetadata": {
+              "tidpunktForLagesbestamning": "2026-02-26T00:00:00+01:00",
+              "lagesbestamningsmetodIPlan": {
+                "typ": "lägesplacering",
+                "variant": "befintligt objekt i digital karta"
+              }
+            }
+          }
+        ],
+        "anvandningsform": "kvartersmark",
+        "kategori": "markens anordnande och vegetation",
+        "underkategori": "vegetation",
+        "bestammelsevarde": [
+          {
+            "datatyp": "text",
+            "variabelvarde": "Befintliga tallar ska bevaras",
+            "beskrivning": "vegetation"
+          }
+        ]
+      },
+      "type": "Feature",
+      "bbox": [
+        6765525.599152977,
+        124141.21941169312,
+        6765551.764261937,
+        124170.161
+      ]
+    },
+    {
+      "id": "4dca8d37-4112-4603-90a8-8d52f17096de",
+      "geometry": null,
+      "properties": {
+        "feature:typ": "egenskapsbestämmelse",
+        "detaljplan": "6e3e2c91-7307-4b2b-bfbd-fe831ddc2472",
+        "objektidentitet": "4dca8d37-4112-4603-90a8-8d52f17096de",
+        "planbestammelsekatalogreferens": "77d26329-24c0-477b-a6cf-6a9ee5d18daf",
+        "bestammelseformulering": "Vind får inte inredas",
+        "sekundarEgenskapsgrans": false,
+        "ursprungligBestammelseformulering": "VIND FÅR INTE INREDAS",
+        "kvalitetsbeskrivning": {
+          "korrigeradeGranser": true,
+          "kontrolleratPlaneringsunderlag": true,
+          "digitaliseringsniva": "komplett"
+        },
+        "beskrivningAnvandbarhet": "Enligt boverket",
+        "anvandbarhet": "medel",
+        "reglerarAnvandningsbestammelse": [
+          "7783c2be-87e3-4510-a7b7-fbe8443f3d14"
+        ],
+        "bestammelsegeometri": [
+          {
+            "geometri": {
+              "typ": "yta",
+              "position": {
+                "coordinates": [
+                  [
+                    [
+                      124152.108368,
+                      6765544.455192
+                    ],
+                    [
+                      124126.694856,
+                      6765566.321774
+                    ],
+                    [
+                      124110.273089,
+                      6765578.215098
+                    ],
+                    [
+                      124101.574322,
+                      6765565.978885
+                    ],
+                    [
+                      124141.219412,
+                      6765532.58115
+                    ],
+                    [
+                      124152.108368,
+                      6765544.455192
+                    ]
+                  ]
+                ],
+                "type": "Polygon"
+              },
+              "koordinatsystemPlan": "EPSG:3009",
+              "dimension": 2
+            },
+            "geometrimetadata": {
+              "tidpunktForLagesbestamning": "2026-02-26T00:00:00+01:00",
+              "lagesbestamningsmetodIPlan": {
+                "typ": "lägesplacering",
+                "variant": "befintligt objekt i digital karta"
+              }
+            }
+          }
+        ],
+        "anvandningsform": "kvartersmark",
+        "kategori": "byggnaders användning",
+        "underkategori": "byggnaders användning",
+        "bestammelsevarde": [
+          {
+            "datatyp": "text",
+            "variabelvarde": "Vind får inte inredas",
+            "beskrivning": "byggnaders användning"
+          }
+        ]
+      },
+      "type": "Feature",
+      "bbox": [
+        6765532.58115024,
+        124101.57432218915,
+        6765578.215098262,
+        124152.10836774895
+      ]
+    },
+    {
+      "id": "c9431ad2-0797-4e4a-8e35-a45ed74088f2",
+      "geometry": null,
+      "properties": {
+        "feature:typ": "egenskapsbestämmelse",
+        "detaljplan": "6e3e2c91-7307-4b2b-bfbd-fe831ddc2472",
+        "objektidentitet": "c9431ad2-0797-4e4a-8e35-a45ed74088f2",
+        "planbestammelsekatalogreferens": "70624619-17b1-44f8-97ba-67e1dc726fc3",
+        "bestammelseformulering": "Markreservat för allmännyttiga underjordiska ledningar.",
+        "sekundarEgenskapsgrans": false,
+        "ursprungligBestammelseformulering": "MARKEN SKALL VARA TILLGÄNGLIG FÖR ALLMÄNNA UNDERJORDISKA LEDNINGAR",
+        "planbestammelsebeskrivning": {
+          "motiv": "Va-ledningar genomkorsar idag planområdet. Ledningarna skall flyttas och placeras längs den nya tomtens nordvästra och sydvästra gräns."
+        },
+        "kvalitetsbeskrivning": {
+          "korrigeradeGranser": true,
+          "kontrolleratPlaneringsunderlag": true,
+          "digitaliseringsniva": "komplett"
+        },
+        "beskrivningAnvandbarhet": "Enligt boverket",
+        "anvandbarhet": "god",
+        "reglerarAnvandningsbestammelse": [
+          "7783c2be-87e3-4510-a7b7-fbe8443f3d14"
+        ],
+        "bestammelsegeometri": [
+          {
+            "geometri": {
+              "typ": "yta",
+              "position": {
+                "coordinates": [
+                  [
+                    [
+                      124141.219412,
+                      6765532.58115
+                    ],
+                    [
+                      124101.574322,
+                      6765565.978885
+                    ],
+                    [
+                      124110.273089,
+                      6765578.215098
+                    ],
+                    [
+                      124116.235598,
+                      6765586.602325
+                    ],
+                    [
+                      124112.947,
+                      6765589.056
+                    ],
+                    [
+                      124095.291,
+                      6765564.22
+                    ],
+                    [
+                      124142.318,
+                      6765523.893
+                    ],
+                    [
+                      124149.507456,
+                      6765525.599153
+                    ],
+                    [
+                      124141.219412,
+                      6765532.58115
+                    ]
+                  ]
+                ],
+                "type": "Polygon"
+              },
+              "koordinatsystemPlan": "EPSG:3009",
+              "dimension": 2
+            },
+            "geometrimetadata": {
+              "tidpunktForLagesbestamning": "2026-02-26T00:00:00+01:00",
+              "lagesbestamningsmetodIPlan": {
+                "typ": "lägesplacering",
+                "variant": "befintligt objekt i digital karta"
+              }
+            }
+          }
+        ],
+        "anvandningsform": "kvartersmark",
+        "kategori": "markreservat för allmännyttiga ändamål",
+        "underkategori": "underjordiska ledningar"
+      },
+      "type": "Feature",
+      "bbox": [
+        6765523.893,
+        124095.291,
+        6765589.056,
+        124149.50745602389
+      ]
+    }
+  ]
+}
