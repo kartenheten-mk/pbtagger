@@ -307,6 +307,11 @@ export const GeometryPanel: React.FC = () => {
                           <span className="ml-1 text-blue-500">· {linkedCount} tagg{linkedCount !== 1 ? 'ar' : ''}</span>
                         )}
                       </p>
+                      {geo.properties?.['kategori'] && (
+                        <p className="text-xs text-gray-400 truncate italic">
+                          {String(geo.properties['kategori'])}
+                        </p>
+                      )}
                     </div>
 
                     {/* Expand chevron */}
