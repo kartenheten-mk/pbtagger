@@ -30,6 +30,7 @@ export interface SavedDocumentMeta {
     id: string;
     fileName: string;
     tagCount: number;
+    geometryCount: number;
     createdAt: string;
     updatedAt: string;
 }
@@ -80,6 +81,7 @@ export async function getAllDocuments(): Promise<SavedDocumentMeta[]> {
             id: doc.id,
             fileName: doc.fileName,
             tagCount: doc.tags.length,
+            geometryCount: doc.geometries?.length || 0,
             createdAt: doc.createdAt,
             updatedAt: doc.updatedAt,
         }))
