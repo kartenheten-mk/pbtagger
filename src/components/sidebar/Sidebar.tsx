@@ -81,7 +81,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ teman, categories }) => {
     id ? geometries.find((g) => g.uuid === id) : undefined;
 
   return (
-    <aside className="w-72 bg-white border-r border-gray-200 flex flex-col h-full overflow-hidden">
+    <aside className="w-full bg-white flex flex-col h-full overflow-hidden">
       {/* ── Mode toggle ─────────────────────────────────────────────────── */}
       <div className="flex border-b border-gray-200 bg-gray-50">
         <button

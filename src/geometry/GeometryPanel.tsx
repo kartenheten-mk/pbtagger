@@ -207,7 +207,7 @@ export const GeometryPanel: React.FC = () => {
   }, [activeGeometryDocId, removeGeometryDoc]);
 
   return (
-    <div className="w-80 bg-white border-l border-gray-200 flex flex-col h-full overflow-hidden">
+    <div className="w-full bg-white flex flex-col h-full overflow-hidden">
 
       {/* ── Header ──────────────────────────────────────────────────────── */}
       <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between gap-2">
