@@ -134,7 +134,20 @@ export const MapView: React.FC<MapViewProps> = ({
       map.getTargetElement().style.cursor = hit ? 'pointer' : '';
     });
 
+    const resizeObserver = new ResizeObserver(() => {
+      if (mapRef.current) {
+        mapRef.current.updateSize();
+      }
+    });
+    const currentContainer = mapContainerRef.current;
+    if (currentContainer) {
+      resizeObserver.observe(currentContainer);
+    }
+
     return () => {
+      if (currentContainer) {
+        resizeObserver.unobserve(currentContainer);
+      }
       map.setTarget(undefined);
       mapRef.current = null;
     };

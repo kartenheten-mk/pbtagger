@@ -22,6 +22,7 @@ import { Sidebar } from './components/Sidebar';
 import { DocumentList } from './components/DocumentList';
 import { DocViewer } from './editor/DocViewer';
 import { GeometryPanel } from './geometry/GeometryPanel';
+import { ResizablePanel } from './components/ResizablePanel';
 import { useDocumentStore } from './store/useDocumentStore';
 import { parseDocx } from './docx/DocxParser';
 import type { Category, Tema } from './types';
@@ -93,15 +94,27 @@ export default function App() {
       {/* Three-panel body */}
       <div className="flex flex-1 overflow-hidden">
         {/* Left sidebar: tag list */}
-        <Sidebar teman={teman} categories={categories} />
+        <ResizablePanel
+          side="left"
+          defaultWidth={288} // w-72 equivalent
+          storageKey="sidebar_width"
+        >
+          <Sidebar teman={teman} categories={categories} />
+        </ResizablePanel>
 
         {/* Centre: document viewer */}
-        <main className="flex-1 overflow-y-auto bg-white">
+        <main className="flex-1 overflow-y-auto bg-white border-l border-r border-gray-200">
           <DocViewer docModel={docModel} categories={categories} />
         </main>
 
         {/* Right: geometry panel */}
-        <GeometryPanel />
+        <ResizablePanel
+          side="right"
+          defaultWidth={320} // w-80 equivalent
+          storageKey="geometry_panel_width"
+        >
+          <GeometryPanel />
+        </ResizablePanel>
       </div>
     </div>
   );
