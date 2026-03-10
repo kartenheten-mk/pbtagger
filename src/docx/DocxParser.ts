@@ -1,3 +1,4 @@
+import { getBookmarkSuffix, guessCategoryIdFromBookmarkName } from './bookmarkUtils';
 /**
  * DocxParser.ts
  *
@@ -68,10 +69,16 @@ export async function parseDocx(buffer: ArrayBuffer): Promise<ParseResult> {
   }
   const body = bodyElements[0] as Element;
 
-  const paragraphs = extractParagraphs(body, zip, relsMap);
+  const extractedBookmarks: ExtractedBookmark[] = [];
+  const activeBookmarks: Record<string, Partial<ExtractedBookmark>> = {};
+
+  const paragraphs = extractParagraphs(body, zip, relsMap, extractedBookmarks, activeBookmarks);
 
   // Extract any embedded tags from a previously exported file
-  const tags = extractTagsFromCustomXml(zip);
+  let tags = extractTagsFromCustomXml(zip);
+
+  // Reconcile tags using extracted bookmarks
+  tags = reconcileTagsWithBookmarks(tags, extractedBookmarks, paragraphs);
 
   return {
     zip,
@@ -88,18 +95,27 @@ interface TableContext {
   firstParagraphSeen: boolean;
 }
 
+export interface ExtractedBookmark {
+  id: string;
+  name: string;
+  paragraphIndex: number;
+  startOffset?: number;
+  endOffset?: number;
+  runId?: string; // used for object bookmarks
+}
+
 /**
  * Walk all top-level <w:p> elements in the body, including those inside
  * tables (<w:tbl> → <w:tr> → <w:tc> → <w:p>).
  */
-function extractParagraphs(body: Element, zip: PizZip, relsMap: Record<string, string>): DocParagraph[] {
+function extractParagraphs(body: Element, zip: PizZip, relsMap: Record<string, string>, extractedBookmarks: ExtractedBookmark[], activeBookmarks: Record<string, Partial<ExtractedBookmark>>): DocParagraph[] {
   const result: DocParagraph[] = [];
   let index = 0;
   let tableCounter = 0;
 
   function walkNode(node: Element, tableCtx?: TableContext) {
     if (node.namespaceURI === NS.w && node.localName === 'p') {
-      const para = parseParagraph(node, index, zip, relsMap, tableCtx);
+      const para = parseParagraph(node, index, zip, relsMap, tableCtx, extractedBookmarks, activeBookmarks);
       result.push(para);
       index++;
       if (tableCtx) {
@@ -154,12 +170,14 @@ function parseParagraph(
   index: number,
   zip: PizZip,
   relsMap: Record<string, string>,
-  tableCtx?: TableContext
+  tableCtx?: TableContext,
+  extractedBookmarks?: ExtractedBookmark[],
+  activeBookmarks?: Record<string, Partial<ExtractedBookmark>>
 ): DocParagraph {
   const headingLevel = getHeadingLevel(para);
   const alignment = getParagraphAlignment(para);
   const listLevel = getListLevel(para);
-  const runs = extractRuns(para, index, zip, relsMap);
+  const runs = extractRuns(para, index, zip, relsMap, extractedBookmarks, activeBookmarks);
 
   const paragraph: DocParagraph = {
     index,
@@ -182,18 +200,63 @@ function parseParagraph(
  * Extract <w:r> runs from a paragraph.
  * Also handles <w:hyperlink> and <w:sdt> (content controls already in the doc).
  */
-function extractRuns(para: Element, paraIndex: number, zip: PizZip, relsMap: Record<string, string>): DocRun[] {
+function extractRuns(para: Element, paraIndex: number, zip: PizZip, relsMap: Record<string, string>, extractedBookmarks?: ExtractedBookmark[], activeBookmarks?: Record<string, Partial<ExtractedBookmark>>): DocRun[] {
   const runs: DocRun[] = [];
   let runIndex = 0;
+  let textOffset = 0;
 
   function visitNode(node: Element) {
     const localName = node.localName;
     const nsURI = node.namespaceURI;
 
+    if (nsURI === NS.w && localName === 'bookmarkStart' && activeBookmarks) {
+      const id = node.getAttributeNS(NS.w, 'id') || node.getAttribute('w:id');
+      const name = node.getAttributeNS(NS.w, 'name') || node.getAttribute('w:name');
+      if (id && name && name.includes('_')) { // Only care about tags with suffix
+        activeBookmarks[id] = { id, name, paragraphIndex: paraIndex, startOffset: textOffset, runId: `p${paraIndex}_r${runIndex}` };
+      }
+      return;
+    }
+
+    if (nsURI === NS.w && localName === 'bookmarkEnd' && activeBookmarks && extractedBookmarks) {
+      const id = node.getAttributeNS(NS.w, 'id') || node.getAttribute('w:id');
+      if (id && activeBookmarks[id]) {
+        const bm = activeBookmarks[id];
+        if (bm.name && bm.paragraphIndex !== undefined && bm.startOffset !== undefined) {
+          // If the bookmark ends in a different paragraph than it started, cap the endOffset
+          // to the end of the starting paragraph (or rather, the textOffset we reached at the end of the start para).
+          // But since we are processing Para B now, we don't know the exact length of Para A.
+          // Wait, if it's a different paragraph, we can just say endOffset = undefined and handle it later,
+          // or we can set a flag.
+          // Let's just store the endParagraphIndex too.
+          let finalEndOffset = textOffset;
+          if (bm.paragraphIndex !== paraIndex) {
+              // Spans multiple paragraphs. Tag model doesn't support this well.
+              // Just use the start paragraph and set endOffset to something large, or leave it.
+              // Actually, if it spans, the text inside it might be huge.
+              // We'll mark it as a multi-paragraph bookmark. For simplicity, we can set endOffset to the text length of the start paragraph later.
+              finalEndOffset = 999999; // We will clamp this in reconcileTagsWithBookmarks
+          }
+
+          extractedBookmarks.push({
+            id: bm.id as string,
+            name: bm.name,
+            paragraphIndex: bm.paragraphIndex,
+            startOffset: bm.startOffset,
+            endOffset: finalEndOffset,
+            runId: bm.runId,
+          });
+        }
+        delete activeBookmarks[id];
+      }
+      return;
+    }
+
     if (nsURI === NS.w && localName === 'r') {
       const run = parseRun(node, paraIndex, runIndex, zip, relsMap);
       if (run !== null) {
         runs.push(run);
+        textOffset += run.text.length;
         runIndex++;
       }
       return;
@@ -222,14 +285,7 @@ function extractRuns(para: Element, paraIndex: number, zip: PizZip, relsMap: Rec
     for (let i = 0; i < children.length; i++) {
       const child = children[i];
       if (child.nodeType === 1) {
-        const childEl = child as Element;
-        if (childEl.namespaceURI === NS.w && childEl.localName === 'r') {
-          const run = parseRun(childEl, paraIndex, runIndex, zip, relsMap);
-          if (run !== null) {
-            runs.push(run);
-            runIndex++;
-          }
-        }
+        visitNode(child as Element);
       }
     }
   }
@@ -538,3 +594,121 @@ function normalizeTagTargetType(value: string | null): TagTargetType {
   return 'text';
 }
 
+
+
+function reconcileTagsWithBookmarks(
+  tags: Tag[],
+  extractedBookmarks: ExtractedBookmark[],
+  paragraphs: DocParagraph[]
+): Tag[] {
+  // Create a map from UUID suffix to Tag for easy lookup
+  const tagBySuffix = new Map<string, Tag>();
+  for (const tag of tags) {
+    const suffix = tag.uuid.replace(/-/g, '').slice(0, 8).toLowerCase();
+    tagBySuffix.set(suffix, tag);
+  }
+
+  const processedSuffixes = new Set<string>();
+
+  // 1. Reconcile existing tags with bookmarks
+  for (const bm of extractedBookmarks) {
+    const suffix = getBookmarkSuffix(bm.name);
+    if (!suffix) continue;
+
+    processedSuffixes.add(suffix);
+    const tag = tagBySuffix.get(suffix);
+
+    if (tag) {
+      // Update the tag's position based on the bookmark
+      tag.paragraphIndex = bm.paragraphIndex;
+
+      if (tag.targetType === 'image' || tag.targetType === 'graph') {
+        // Object tags use runId
+        if (bm.runId) {
+          tag.runId = bm.runId;
+        }
+      } else {
+        // Text tags use offsets
+        if (bm.startOffset !== undefined && bm.endOffset !== undefined) {
+          tag.startOffset = bm.startOffset;
+          tag.endOffset = bm.endOffset;
+
+          // Re-extract the text to ensure it matches the new offsets
+          const para = paragraphs[tag.paragraphIndex];
+          if (para) {
+            const paraText = getParagraphText(para);
+            // Clamp endOffset if it was a multi-paragraph bookmark
+            if (tag.endOffset > paraText.length) {
+                tag.endOffset = paraText.length;
+            }
+            tag.text = paraText.slice(tag.startOffset, tag.endOffset);
+          }
+        }
+      }
+    }
+  }
+
+  // 2. Remove tags that were present in customXml but have no corresponding bookmark.
+  // This indicates the user deleted the tagged content or the bookmark in Word.
+  // Alternatively, maybe we just leave them alone if the text is still there?
+  // Usually, bookmarks are the source of truth if the document was edited in Word.
+  // Actually, wait, let's keep all tags for now, as maybe the customXml is accurate
+  // and bookmarks were just lost for some reason. But actually we want the tags to reflect bookmarks!
+  // If the user deleted the bookmark in Word, the tag should be gone.
+  // Wait, what if the document *wasn't* exported by us, and just has no bookmarks?
+  // Let's filter out tags that have *no* matching bookmark ONLY IF we found at least one of our bookmarks.
+  // Because if we found 0 bookmarks, maybe they exported without tags or something, though customXml exists.
+  // Actually, if customXml exists, it was exported by us. If a tag is missing its bookmark, it was deleted.
+
+  if (extractedBookmarks.some(bm => getBookmarkSuffix(bm.name) !== null)) {
+    tags = tags.filter(tag => {
+      const suffix = tag.uuid.replace(/-/g, '').slice(0, 8).toLowerCase();
+      return processedSuffixes.has(suffix);
+    });
+  }
+
+  // 3. Create new tags from unmatched bookmarks
+  for (const bm of extractedBookmarks) {
+    const suffix = getBookmarkSuffix(bm.name);
+    if (!suffix) continue;
+
+    if (!processedSuffixes.has(suffix)) {
+      // It's a validly named bookmark but missing from customXml
+      const guessedCategoryId = guessCategoryIdFromBookmarkName(bm.name);
+
+      if (guessedCategoryId) {
+        // Use a real UUID, starting with the suffix if possible, or just generate new
+        // e.g. suffix + '-0000-0000-0000-000000000000'
+        const newUuid = suffix + '-0000-0000-0000-000000000000';
+
+        const newTag: Tag = {
+          uuid: newUuid,
+          categoryId: guessedCategoryId,
+          targetType: bm.runId ? 'image' : 'text', // Heuristic: runId presence -> object tag
+          paragraphIndex: bm.paragraphIndex,
+          startOffset: bm.startOffset || 0,
+          endOffset: bm.endOffset || 0,
+          runId: bm.runId,
+          text: '',
+          createdAt: new Date().toISOString(),
+        };
+
+        if (newTag.targetType === 'text') {
+           const para = paragraphs[newTag.paragraphIndex];
+           if (para) {
+             const paraText = getParagraphText(para);
+             // Clamp endOffset if it was a multi-paragraph bookmark
+             if (newTag.endOffset > paraText.length) {
+                 newTag.endOffset = paraText.length;
+             }
+             newTag.text = paraText.slice(newTag.startOffset, newTag.endOffset);
+           }
+        }
+
+        tags.push(newTag);
+      }
+    }
+  }
+
+  return tags;
+}

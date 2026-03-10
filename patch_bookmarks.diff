@@ -1,0 +1,154 @@
+--- src/docx/DocxParser.ts
++++ src/docx/DocxParser.ts
+@@ -69,11 +69,17 @@
+   }
+   const body = bodyElements[0] as Element;
+
+-  const paragraphs = extractParagraphs(body, zip, relsMap);
++  const extractedBookmarks: ExtractedBookmark[] = [];
++  const activeBookmarks: Record<string, Partial<ExtractedBookmark>> = {};
++
++  const paragraphs = extractParagraphs(body, zip, relsMap, extractedBookmarks, activeBookmarks);
+
+   // Extract any embedded tags from a previously exported file
+-  const tags = extractTagsFromCustomXml(zip);
++  let tags = extractTagsFromCustomXml(zip);
++
++  // Reconcile tags using extracted bookmarks
++  tags = reconcileTagsWithBookmarks(tags, extractedBookmarks, paragraphs);
+
+   return {
+     zip,
+@@ -87,11 +93,26 @@
+   firstParagraphSeen: boolean;
+ }
+
++export interface ExtractedBookmark {
++  id: string;
++  name: string;
++  paragraphIndex: number;
++  startOffset?: number;
++  endOffset?: number;
++  runId?: string; // used for object bookmarks
++}
++
+ /**
+  * Walk all top-level <w:p> elements in the body, including those inside
+  * tables (<w:tbl> → <w:tr> → <w:tc> → <w:p>).
+  */
+-function extractParagraphs(body: Element, zip: PizZip, relsMap: Record<string, string>): DocParagraph[] {
++function extractParagraphs(
++  body: Element,
++  zip: PizZip,
++  relsMap: Record<string, string>,
++  extractedBookmarks: ExtractedBookmark[],
++  activeBookmarks: Record<string, Partial<ExtractedBookmark>>
++): DocParagraph[] {
+   const result: DocParagraph[] = [];
+   let index = 0;
+   let tableCounter = 0;
+@@ -99,7 +120,7 @@
+   function walkNode(node: Element, tableCtx?: TableContext) {
+     if (node.namespaceURI === NS.w && node.localName === 'p') {
+-      const para = parseParagraph(node, index, zip, relsMap, tableCtx);
++      const para = parseParagraph(node, index, zip, relsMap, tableCtx, extractedBookmarks, activeBookmarks);
+       result.push(para);
+       index++;
+@@ -142,12 +163,14 @@
+   index: number,
+   zip: PizZip,
+   relsMap: Record<string, string>,
+-  tableCtx?: TableContext
++  tableCtx?: TableContext,
++  extractedBookmarks?: ExtractedBookmark[],
++  activeBookmarks?: Record<string, Partial<ExtractedBookmark>>
+ ): DocParagraph {
+   const headingLevel = getHeadingLevel(para);
+   const alignment = getParagraphAlignment(para);
+   const listLevel = getListLevel(para);
+-  const runs = extractRuns(para, index, zip, relsMap);
++  const runs = extractRuns(para, index, zip, relsMap, extractedBookmarks, activeBookmarks);
+
+   const paragraph: DocParagraph = {
+@@ -169,16 +192,49 @@
+  * Extract <w:r> runs from a paragraph.
+  * Also handles <w:hyperlink> and <w:sdt> (content controls already in the doc).
+  */
+-function extractRuns(para: Element, paraIndex: number, zip: PizZip, relsMap: Record<string, string>): DocRun[] {
++function extractRuns(
++  para: Element,
++  paraIndex: number,
++  zip: PizZip,
++  relsMap: Record<string, string>,
++  extractedBookmarks?: ExtractedBookmark[],
++  activeBookmarks?: Record<string, Partial<ExtractedBookmark>>
++): DocRun[] {
+   const runs: DocRun[] = [];
+   let runIndex = 0;
++  let textOffset = 0;
+
+   function visitNode(node: Element) {
+     const localName = node.localName;
+     const nsURI = node.namespaceURI;
+
++    if (nsURI === NS.w && localName === 'bookmarkStart' && activeBookmarks) {
++      const id = node.getAttributeNS(NS.w, 'id') || node.getAttribute('w:id');
++      const name = node.getAttributeNS(NS.w, 'name') || node.getAttribute('w:name');
++      if (id && name && name.includes('_')) { // Only care about tags with suffix
++        activeBookmarks[id] = { id, name, paragraphIndex: paraIndex, startOffset: textOffset, runId: `p${paraIndex}_r${runIndex}` };
++      }
++      return;
++    }
++
++    if (nsURI === NS.w && localName === 'bookmarkEnd' && activeBookmarks && extractedBookmarks) {
++      const id = node.getAttributeNS(NS.w, 'id') || node.getAttribute('w:id');
++      if (id && activeBookmarks[id]) {
++        const bm = activeBookmarks[id];
++        if (bm.name && bm.paragraphIndex !== undefined && bm.startOffset !== undefined) {
++          extractedBookmarks.push({
++            id: bm.id as string,
++            name: bm.name,
++            paragraphIndex: bm.paragraphIndex,
++            startOffset: bm.startOffset,
++            endOffset: textOffset,
++            runId: bm.runId, // Useful if the bookmark immediately precedes an object run
++          });
++        }
++        delete activeBookmarks[id];
++      }
++      return;
++    }
++
+     if (nsURI === NS.w && localName === 'r') {
+       const run = parseRun(node, paraIndex, runIndex, zip, relsMap);
+       if (run !== null) {
+         runs.push(run);
++        textOffset += run.text.length;
+         runIndex++;
+       }
+@@ -212,12 +268,7 @@
+     for (let i = 0; i < children.length; i++) {
+       const child = children[i];
+       if (child.nodeType === 1) {
+-        const childEl = child as Element;
+-        if (childEl.namespaceURI === NS.w && childEl.localName === 'r') {
+-          const run = parseRun(childEl, paraIndex, runIndex, zip, relsMap);
+-          if (run !== null) {
+-            runs.push(run);
+-            runIndex++;
+-          }
+-        }
++        visitNode(child as Element);
+       }
+     }
+@@ -539,3 +590,11 @@
+   return 'text';
+ }
++
++function reconcileTagsWithBookmarks(
++  tags: Tag[],
++  extractedBookmarks: ExtractedBookmark[],
++  paragraphs: DocParagraph[]
++): Tag[] {
++  return tags;
++}
