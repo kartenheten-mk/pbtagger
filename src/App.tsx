@@ -119,9 +119,7 @@ export default function App() {
   );
 
   const handleClearDocument = useCallback(() => {
-    if (window.confirm('Discard all tags and open a new file?')) {
-      clearDocument();
-    }
+    clearDocument();
   }, [clearDocument]);
 
   // ── Start Page View ────────────────────────────────────────────────────────
