@@ -14,6 +14,7 @@
  */
 
 import React, { useRef, useEffect, useCallback, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { Tag } from '../types';
 import { useDocumentStore } from '../store/useDocumentStore';
 import { MapView } from './MapView';
@@ -63,6 +64,16 @@ export const GeometryPanel: React.FC = () => {
   const [clickedGeoUuid, setClickedGeoUuid] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTypeFilters, setActiveTypeFilters] = useState<Set<string>>(new Set());
+
+  // ── Map maximize state ────────────────────────────────────────────────────
+  const [isMapMaximized, setIsMapMaximized] = useState(false);
+  /** Ref to the modal map wrapper — used for modal picker positioning */
+  const modalMapWrapperRef = useRef<HTMLDivElement>(null);
+  const [modalPicker, setModalPicker] = useState<{
+    items: PickerItem[];
+    x: number;
+    y: number;
+  } | null>(null);
 
   // ── Disambiguation picker state (renders outside overflow-hidden map div) ─
   const [picker, setPicker] = useState<{
@@ -267,6 +278,18 @@ export const GeometryPanel: React.FC = () => {
             setPicker({ items, x: pixelX + 12, y: pixelY + 12 });
           }}
         />
+
+        {/* Maximize button */}
+        <button
+          onClick={() => setIsMapMaximized(true)}
+          className="absolute top-5 right-5 z-10 w-7 h-7 flex items-center justify-center rounded-lg bg-white/90 border border-gray-200 shadow-sm text-gray-500 hover:text-gray-700 hover:bg-white hover:shadow-md transition-all"
+          title="Maximera karta"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+              d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+          </svg>
+        </button>
 
         {/* Picker popup — rendered here, OUTSIDE the overflow-hidden map div */}
         {picker && (() => {
@@ -615,6 +638,167 @@ export const GeometryPanel: React.FC = () => {
             OpenLayers · OSM · EPSG:3009→4326
           </p>
         </div>
+      )}
+
+      {/* ── Maximized map modal ──────────────────────────────────────────── */}
+      {isMapMaximized && createPortal(
+        <div className="fixed inset-0 z-[1000] flex flex-col bg-black/60 backdrop-blur-sm">
+          {/* Modal panel */}
+          <div className="flex flex-col m-4 rounded-2xl overflow-hidden shadow-2xl bg-white flex-1 min-h-0">
+
+            {/* Modal header */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-white flex-shrink-0">
+              <div className="flex items-center gap-2">
+                <span className="text-base">🗺</span>
+                <div>
+                  <h2 className="text-sm font-semibold text-gray-700">Karta</h2>
+                  <p className="text-xs text-gray-400">{filteredGeometries.length} geometrier visade</p>
+                </div>
+              </div>
+              {isLinking && (
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-xl">
+                  <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse flex-shrink-0" />
+                  <p className="text-xs text-blue-700 font-medium">
+                    Väljer geometrier · <span className="italic">"{linkingTag?.text?.slice(0, 30)}…"</span>
+                  </p>
+                </div>
+              )}
+              <button
+                onClick={() => { setIsMapMaximized(false); setModalPicker(null); }}
+                className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-all"
+                title="Stäng"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Modal map */}
+            <div
+              ref={modalMapWrapperRef}
+              className="flex-1 min-h-0 relative p-3"
+            >
+              <MapView
+                geometries={filteredGeometries}
+                selectedGeometryUuids={selectedGeometryUuids}
+                pendingGeometryUuids={pendingGeometryUuids}
+                isLinking={isLinking}
+                onFeatureClick={handleMapFeatureClick}
+                onMultiFeatureClick={(items, pixelX, pixelY) => {
+                  setModalPicker({ items, x: pixelX + 12, y: pixelY + 12 });
+                }}
+              />
+
+              {/* Modal disambiguation picker */}
+              {modalPicker && (() => {
+                const POPUP_W = 200;
+                const ITEM_H = 32;
+                const HEADER_H = 30;
+                const MAX_VISIBLE = 8;
+                const listH = Math.min(modalPicker.items.length, MAX_VISIBLE) * ITEM_H;
+                const POPUP_H = HEADER_H + listH;
+                const wrapperW = modalMapWrapperRef.current?.clientWidth ?? 800;
+                const wrapperH = modalMapWrapperRef.current?.clientHeight ?? 600;
+                const left = Math.min(modalPicker.x + 6, wrapperW - POPUP_W - 4);
+                const top = modalPicker.y + POPUP_H > wrapperH
+                  ? modalPicker.y - POPUP_H - 4
+                  : modalPicker.y + 4;
+
+                return (
+                  <>
+                    <div className="absolute inset-0 z-40" onClick={() => setModalPicker(null)} />
+                    <div
+                      className="absolute z-50 bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden"
+                      style={{ left, top, width: POPUP_W }}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div className="px-3 py-1.5 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
+                        <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">
+                          {modalPicker.items.length} geometrier
+                        </span>
+                        <button
+                          onClick={() => setModalPicker(null)}
+                          className="text-gray-300 hover:text-gray-500 transition-colors"
+                        >
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                      <ul style={{ maxHeight: MAX_VISIBLE * ITEM_H, overflowY: 'auto' }}>
+                        {modalPicker.items.map((item) => (
+                          <li key={item.uuid}>
+                            <button
+                              className={`w-full flex items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-gray-50 ${item.isChecked ? 'bg-blue-50' : ''}`}
+                              style={{ height: ITEM_H }}
+                              onClick={() => {
+                                handleMapFeatureClick(item.uuid);
+                                setModalPicker(null);
+                              }}
+                            >
+                              <span
+                                className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                                style={{ backgroundColor: item.color }}
+                              />
+                              <span className="text-sm flex-shrink-0">{featureIcon(item.featureType)}</span>
+                              <span
+                                className="text-xs font-medium truncate flex-1"
+                                style={{ color: item.isChecked ? '#1d4ed8' : '#374151' }}
+                              >
+                                {item.name}
+                              </span>
+                              {item.isChecked && (
+                                <svg className="w-3.5 h-3.5 text-blue-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                                </svg>
+                              )}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+
+            {/* Modal footer / linking action bar */}
+            {isLinking ? (
+              <div className="px-4 py-3 border-t border-gray-100 bg-white flex-shrink-0">
+                <div className="flex items-center gap-3 px-4 py-2.5 bg-gray-50 rounded-xl border border-gray-200">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-gray-700">
+                      {stagedUuids.size === 0
+                        ? 'Ingen geometri vald'
+                        : `${stagedUuids.size} geometri${stagedUuids.size !== 1 ? 'er' : ''} vald${stagedUuids.size !== 1 ? 'a' : ''}`}
+                    </p>
+                    <p className="text-[10px] text-gray-400 mt-0.5">Klicka på geometrier i kartan för att markera</p>
+                  </div>
+                  <button
+                    onClick={cancelLinking}
+                    className="px-3 py-1.5 text-xs text-gray-500 bg-white border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors font-medium"
+                  >
+                    Avbryt
+                  </button>
+                  <button
+                    onClick={handleConfirmBatch}
+                    className="px-3 py-1.5 text-xs text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors font-semibold shadow-sm"
+                  >
+                    Länka
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="px-4 py-2 border-t border-gray-100 bg-gray-50 flex-shrink-0">
+                <p className="text-xs text-gray-400 text-center">
+                  OpenLayers · OSM · EPSG:3009→4326
+                </p>
+              </div>
+            )}
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );
