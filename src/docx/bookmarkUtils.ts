@@ -8,6 +8,17 @@ const _allCategories = flattenCategories(
 );
 const CATEGORY_MAP = new Map(_allCategories.map((c) => [c.id, c]));
 
+function hashString(str: string): string {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = (hash << 5) - hash + str.charCodeAt(i);
+    hash |= 0; // Convert to 32bit integer
+  }
+  return (hash >>> 0).toString(16).padStart(8, '0');
+}
+
+const HASH_TO_CATEGORY = new Map(_allCategories.map((c) => [hashString(c.id), c.id]));
+
 /**
  * Scan the document for the highest existing <w:bookmarkStart w:id="..."/>
  * so our new bookmarks start above it and never collide.
@@ -59,14 +70,16 @@ export function generateBookmarkName(tag: Tag): string {
     base = 'Tag_' + base;
   }
 
+  const catHash = hashString(tag.categoryId);
+
   // Short suffix from UUID (first 8 hex chars, no dashes)
   const shortId = tag.uuid.replace(/-/g, '').slice(0, 8);
 
-  // Truncate base so total length ≤ 40 (base + '_' + 8-char suffix)
-  const maxBase = 40 - 1 - shortId.length;
+  // Truncate base so total length ≤ 40 (base + '_' + 8-char hash + '_' + 8-char suffix)
+  const maxBase = 40 - 1 - catHash.length - 1 - shortId.length;
   base = base.slice(0, maxBase);
 
-  return `${base}_${shortId}`;
+  return `${base}_${catHash}_${shortId}`;
 }
 
 /**
@@ -83,6 +96,17 @@ export function getBookmarkSuffix(bookmarkName: string): string | null {
  * Returns the matched categoryId or a fallback.
  */
 export function guessCategoryIdFromBookmarkName(bookmarkName: string): string | null {
+  // First check the new format: _<catHash>_<shortId>
+  const hashMatch = bookmarkName.match(/_([0-9a-fA-F]{8})_[0-9a-fA-F]{8}$/i);
+  if (hashMatch) {
+    const catHash = hashMatch[1].toLowerCase();
+    const exactMatch = HASH_TO_CATEGORY.get(catHash);
+    if (exactMatch) {
+      return exactMatch;
+    }
+  }
+
+  // Fallback to legacy format: <prefix>_<shortId>
   const match = bookmarkName.match(/^(.*)_[0-9a-fA-F]{8}$/);
   if (!match) return null;
   const prefix = match[1].toLowerCase();
