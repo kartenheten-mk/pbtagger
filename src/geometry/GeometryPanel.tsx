@@ -50,15 +50,9 @@ export const GeometryPanel: React.FC = () => {
     cancelLinking,
     selectTag,
     unlinkGeometry,
-    importGeometryJson,
-    removeGeometryDoc,
-    exportGeometryJson,
   } = useDocumentStore();
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const geometryListRef = useRef<HTMLDivElement>(null);
-  const [importError, setImportError] = useState<string | null>(null);
-  const [isImporting, setIsImporting] = useState(false);
   const [expandedGeoUuid, setExpandedGeoUuid] = useState<string | null>(null);
   const [clickedGeoUuid, setClickedGeoUuid] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -136,30 +130,6 @@ export const GeometryPanel: React.FC = () => {
     setClickedGeoUuid(null);
   }, [selectedTagUuid, tags, activeTypeFilters, geometries]);
 
-  // ── JSON file import ───────────────────────────────────────────────────────
-  const handleFileChange = useCallback(
-    async (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-      setImportError(null);
-      setIsImporting(true);
-      try {
-        const text = await file.text();
-        const rawJson = JSON.parse(text) as Record<string, unknown>;
-        await importGeometryJson(rawJson, file.name);
-      } catch (err) {
-        setImportError(
-          err instanceof Error ? err.message : 'Kunde inte importera filen.'
-        );
-      } finally {
-        setIsImporting(false);
-        // Reset so the same file can be re-imported if needed
-        if (fileInputRef.current) fileInputRef.current.value = '';
-      }
-    },
-    [importGeometryJson]
-  );
-
   // ── Map feature click ──────────────────────────────────────────────────────
   const handleMapFeatureClick = useCallback(
     (uuid: string) => {
@@ -199,77 +169,18 @@ export const GeometryPanel: React.FC = () => {
     [selectTag]
   );
 
-  // ── Remove the loaded geometry document ────────────────────────────────────
-  const handleRemoveDoc = useCallback(async () => {
-    if (!activeGeometryDocId) return;
-    if (!window.confirm('Ta bort inläst detaljplan och avlänka alla kopplingar?')) return;
-    await removeGeometryDoc(activeGeometryDocId);
-  }, [activeGeometryDocId, removeGeometryDoc]);
-
   return (
     <div className="w-full bg-white flex flex-col h-full overflow-hidden">
 
       {/* ── Header ──────────────────────────────────────────────────────── */}
-      <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between gap-2">
+      <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2">
         <div className="min-w-0">
           <h2 className="text-sm font-semibold text-gray-700 truncate">Karta</h2>
           <p className="text-xs text-gray-400 mt-0.5">
             {geometries.length} geometrier
           </p>
         </div>
-
-        <div className="flex items-center gap-1 flex-shrink-0">
-          {/* Export button (only shown when a doc is loaded) */}
-          {activeGeometryDocId && (
-            <button
-              onClick={exportGeometryJson}
-              className="px-2 py-1 text-xs rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-600 transition-colors"
-              title="Exportera JSON"
-            >
-              ↓
-            </button>
-          )}
-
-          {/* Remove doc button */}
-          {activeGeometryDocId && (
-            <button
-              onClick={handleRemoveDoc}
-              className="px-2 py-1 text-xs rounded-lg border border-gray-200 hover:bg-red-50 text-red-400 transition-colors"
-              title="Ta bort inläst detaljplan"
-            >
-              ✕
-            </button>
-          )}
-
-          {/* Import JSON button */}
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={isImporting}
-            className="px-2 py-1 text-xs rounded-lg border border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-700 transition-colors disabled:opacity-50"
-            title="Importera detaljplan-JSON"
-          >
-            {isImporting ? '…' : '＋ JSON'}
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".json,application/json"
-            className="hidden"
-            onChange={handleFileChange}
-          />
-        </div>
       </div>
-
-      {/* ── Import error ─────────────────────────────────────────────────── */}
-      {importError && (
-        <div className="mx-3 mt-2 px-3 py-2 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700">
-          <span className="font-medium">Fel: </span>{importError}
-          <button
-            onClick={() => setImportError(null)}
-            className="ml-2 text-red-400 hover:text-red-600"
-          >✕</button>
-        </div>
-      )}
 
       {/* ── Linking mode banner ──────────────────────────────────────────── */}
       {isLinking && (
@@ -387,7 +298,7 @@ export const GeometryPanel: React.FC = () => {
             <div className="text-3xl mb-2">🗺</div>
             <p className="text-xs text-gray-400 font-medium">Ingen geometri inläst</p>
             <p className="text-xs text-gray-300 mt-1">
-              Klicka på "+ JSON" för att importera en detaljplan
+              Använd Data-menyn för att importera en detaljplan
             </p>
           </div>
         ) : filteredGeometries.length === 0 ? (

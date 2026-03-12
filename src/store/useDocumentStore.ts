@@ -26,6 +26,17 @@ interface DocumentActions {
     fileName: string,
     initialTags?: Tag[]
   ) => void;
+  /**
+   * Replace the document content (zip + parsed model) inside the *current*
+   * project without resetting the documentId, geometries or geometry links.
+   * Use this when the user wants to swap out the .docx file mid-session.
+   */
+  replaceDocument: (
+    zipBuffer: ArrayBuffer,
+    docModel: DocModel,
+    fileName: string,
+    tags: Tag[]
+  ) => void;
   clearDocument: () => void;
 
   // ─── IndexedDB persistence ────────────────────────────────────────────
@@ -188,6 +199,31 @@ export const useDocumentStore = create<AppState & DocumentActions>()(
             geometries: [],
             createdAt: now,
             updatedAt: now,
+          });
+        },
+
+        replaceDocument: (zipBuffer, docModel, fileName, tags) => {
+          // Keep the same documentId, geometries and geometry links —
+          // only swap out the document content.
+          const state = get();
+          const documentId = state.documentId;
+          if (!documentId) return;
+          const now = new Date().toISOString();
+          set({ zipBuffer, docModel, fileName, tags });
+          // Clear undo history since the document structure changed
+          useDocumentStore.temporal.getState().clear();
+          // Persist to IndexedDB under the same ID
+          dbGet(documentId).then((existing) => {
+            dbSave({
+              id: documentId,
+              fileName,
+              zipBuffer,
+              docModel,
+              tags,
+              geometries: get().geometries,
+              createdAt: existing?.createdAt ?? now,
+              updatedAt: now,
+            });
           });
         },
 
