@@ -31,6 +31,15 @@ interface DocumentActions {
   // ─── IndexedDB persistence ────────────────────────────────────────────
   loadDocument: (id: string) => Promise<void>;
   deleteDocument: (id: string) => Promise<void>;
+  restoreProject: (
+    zipBuffer: ArrayBuffer,
+    docModel: DocModel,
+    fileName: string,
+    tags: Tag[],
+    geometries: Geometry[],
+    activeGeometryDocId: string | null,
+    geometryDoc: import('../types').GeometryDoc | null
+  ) => Promise<void>;
 
   // ─── Tag management ─────────────────────────────────────────────────────
   addTag: (tag: Tag) => void;
@@ -120,6 +129,48 @@ export const useDocumentStore = create<AppState & DocumentActions>()(
         ...initialState,
 
         // ─── Document lifecycle ─────────────────────────────────────────────
+        restoreProject: async (
+          zipBuffer,
+          docModel,
+          fileName,
+          tags,
+          geometries,
+          activeGeometryDocId,
+          geometryDoc
+        ) => {
+          const documentId = uuidv4();
+          const now = new Date().toISOString();
+
+          if (geometryDoc) {
+             await saveGeometryDoc(geometryDoc);
+          }
+
+          set({
+            documentId,
+            zipBuffer,
+            docModel,
+            fileName,
+            tags,
+            geometries,
+            pendingSelection: null,
+            showTags: true,
+            activeGeometryDocId,
+          });
+
+          useDocumentStore.temporal.getState().clear();
+
+          await dbSave({
+            id: documentId,
+            fileName,
+            zipBuffer,
+            docModel,
+            tags,
+            geometries,
+            createdAt: now,
+            updatedAt: now,
+          });
+        },
+
         setDocument: (zipBuffer, docModel, fileName, initialTags) => {
           const documentId = uuidv4();
           const now = new Date().toISOString();
