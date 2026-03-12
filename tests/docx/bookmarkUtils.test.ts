@@ -44,6 +44,7 @@ describe('bookmarkUtils', () => {
   });
 
   it('guessCategoryIdFromBookmarkName works for all categories without collisions', () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const cats = flattenCategories((rawCategories as any).teman);
     let failed = 0;
 

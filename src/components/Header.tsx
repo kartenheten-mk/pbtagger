@@ -10,13 +10,14 @@ import { useDocumentStore } from '../store/useDocumentStore';
 import { useStoreWithEqualityFn } from 'zustand/traditional';
 import { exportDocx } from '../docx/DocxExporter';
 import PizZip from 'pizzip';
+import { exportProject } from '../project/ProjectManager';
 
 interface HeaderProps {
   onClearDocument: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({ onClearDocument }) => {
-  const { fileName, tags, zipBuffer, docModel, showTags, toggleShowTags } = useDocumentStore();
+  const { fileName, tags, zipBuffer, docModel, showTags, toggleShowTags, geometries, activeGeometryDocId } = useDocumentStore();
   const [isExporting, setIsExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
 
@@ -52,7 +53,7 @@ export const Header: React.FC<HeaderProps> = ({ onClearDocument }) => {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [handleUndo, handleRedo]);
 
-  const handleExport = async () => {
+  const handleExportDocx = async () => {
     if (!zipBuffer || !docModel) return;
     setIsExporting(true);
     setExportError(null);
@@ -61,6 +62,22 @@ export const Header: React.FC<HeaderProps> = ({ onClearDocument }) => {
       await exportDocx(zip, docModel, tags, fileName);
     } catch (err) {
       setExportError('Export failed. Please try again.');
+      console.error(err);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleExportProject = async () => {
+    if (!zipBuffer) return;
+    setIsExporting(true);
+    setExportError(null);
+    try {
+      // Create a copy of the zip buffer so we don't mutate the one in memory
+      const bufferCopy = zipBuffer.slice(0);
+      await exportProject(fileName, bufferCopy, tags, geometries, activeGeometryDocId);
+    } catch (err) {
+      setExportError('Project export failed. Please try again.');
       console.error(err);
     } finally {
       setIsExporting(false);
@@ -154,9 +171,31 @@ export const Header: React.FC<HeaderProps> = ({ onClearDocument }) => {
         <span className="text-xs text-red-500">{exportError}</span>
       )}
 
-      {/* Export button */}
+      {/* Export project button */}
       <button
-        onClick={handleExport}
+        onClick={handleExportProject}
+        disabled={isExporting}
+        className="flex items-center gap-2 px-4 py-2 bg-gray-600 hover:bg-gray-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors"
+        title="Export full project"
+      >
+        {isExporting ? (
+          <>
+            <div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+            <span>Exporting…</span>
+          </>
+        ) : (
+          <>
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+            <span>Export Project</span>
+          </>
+        )}
+      </button>
+
+      {/* Export .docx button */}
+      <button
+        onClick={handleExportDocx}
         disabled={isExporting || tags.length === 0}
         className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors"
         title={tags.length === 0 ? 'Add at least one tag to export' : 'Export tagged .docx'}

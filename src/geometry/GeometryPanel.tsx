@@ -134,7 +134,7 @@ export const GeometryPanel: React.FC = () => {
     }
     // Clear direct click selection when a tag-based selection takes over
     setClickedGeoUuid(null);
-  }, [selectedTagUuid, tags]);
+  }, [selectedTagUuid, tags, activeTypeFilters, geometries]);
 
   // ── JSON file import ───────────────────────────────────────────────────────
   const handleFileChange = useCallback(

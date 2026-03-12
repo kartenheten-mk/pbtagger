@@ -25,6 +25,7 @@ import { GeometryPanel } from './geometry/GeometryPanel';
 import { ResizablePanel } from './components/ResizablePanel';
 import { useDocumentStore } from './store/useDocumentStore';
 import { parseDocx } from './docx/DocxParser';
+import { importProject } from './project/ProjectManager';
 import type { Category, Tema } from './types';
 import { flattenCategories } from './data/categoryUtils';
 
@@ -35,10 +36,42 @@ const teman: Tema[] = (categoriesData as { teman: Tema[] }).teman;
 const categories: Category[] = flattenCategories(teman);
 
 export default function App() {
-  const { docModel, setDocument, clearDocument, importGeometryJson } = useDocumentStore();
+  const { docModel, setDocument, clearDocument, importGeometryJson, restoreProject } = useDocumentStore();
   const [isLoading, setIsLoading] = useState(false);
   const [parseError, setParseError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  const handleImportProject = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsLoading(true);
+    setParseError(null);
+
+    try {
+      const imported = await importProject(file);
+      await restoreProject(
+        imported.zipBuffer,
+        imported.docModel,
+        imported.fileName,
+        imported.tags,
+        imported.geometries,
+        imported.activeGeometryDocId,
+        imported.geometryDoc
+      );
+    } catch (err) {
+      console.error('Failed to import project:', err);
+      setParseError(err instanceof Error ? err.message : 'Failed to import the project.');
+    } finally {
+      setIsLoading(false);
+      // reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  }, [restoreProject]);
 
   const handleCreateProject = useCallback(
     async (projectName: string, docxFile: File, jsonFile: File | null) => {
@@ -111,21 +144,56 @@ export default function App() {
                 </p>
             </div>
 
-            {/* Create Project Button */}
-            <button
-                onClick={() => setIsModalOpen(true)}
-                className="group relative flex flex-col items-center justify-center w-full max-w-sm bg-white border-2 border-dashed border-gray-300 rounded-2xl p-8 hover:border-blue-400 hover:bg-blue-50/50 transition-all focus:outline-none focus:ring-4 focus:ring-blue-500/20"
-            >
-                <div className="w-16 h-16 bg-blue-50 text-blue-500 rounded-full flex items-center justify-center mb-4 group-hover:bg-blue-100 transition-colors shadow-sm">
-                    <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                    </svg>
+            {/* Action Buttons */}
+            <div className="flex flex-col sm:flex-row gap-6 w-full max-w-2xl justify-center">
+                {/* Create Project Button */}
+                <button
+                    onClick={() => setIsModalOpen(true)}
+                    className="flex-1 group relative flex flex-col items-center justify-center bg-white border-2 border-dashed border-gray-300 rounded-2xl p-8 hover:border-blue-400 hover:bg-blue-50/50 transition-all focus:outline-none focus:ring-4 focus:ring-blue-500/20"
+                >
+                    <div className="w-16 h-16 bg-blue-50 text-blue-500 rounded-full flex items-center justify-center mb-4 group-hover:bg-blue-100 transition-colors shadow-sm">
+                        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                        </svg>
+                    </div>
+                    <h2 className="text-xl font-semibold text-gray-800 group-hover:text-blue-700 transition-colors">Create New Project</h2>
+                    <p className="text-sm text-gray-500 mt-2 text-center">
+                        Upload your .docx file to get started
+                    </p>
+                </button>
+
+                {/* Import Project Button */}
+                <div className="flex-1 flex">
+                    <input
+                        type="file"
+                        accept=".pbproject"
+                        className="hidden"
+                        ref={fileInputRef}
+                        onChange={handleImportProject}
+                    />
+                    <button
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={isLoading}
+                        className="w-full group relative flex flex-col items-center justify-center bg-white border-2 border-dashed border-gray-300 rounded-2xl p-8 hover:border-green-400 hover:bg-green-50/50 transition-all focus:outline-none focus:ring-4 focus:ring-green-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        {isLoading ? (
+                            <div className="w-16 h-16 rounded-full flex items-center justify-center mb-4">
+                                <div className="w-8 h-8 border-4 border-green-500/30 border-t-green-500 rounded-full animate-spin" />
+                            </div>
+                        ) : (
+                            <div className="w-16 h-16 bg-green-50 text-green-500 rounded-full flex items-center justify-center mb-4 group-hover:bg-green-100 transition-colors shadow-sm">
+                                <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                                </svg>
+                            </div>
+                        )}
+                        <h2 className="text-xl font-semibold text-gray-800 group-hover:text-green-700 transition-colors">Import Project</h2>
+                        <p className="text-sm text-gray-500 mt-2 text-center">
+                            Load a previously saved .pbproject file
+                        </p>
+                    </button>
                 </div>
-                <h2 className="text-xl font-semibold text-gray-800 group-hover:text-blue-700 transition-colors">Create New Project</h2>
-                <p className="text-sm text-gray-500 mt-2 text-center">
-                    Upload your .docx file to get started
-                </p>
-            </button>
+            </div>
 
             <div className="w-full mt-12 border-t border-gray-200 pt-8">
                 <DocumentList />
