@@ -5,16 +5,19 @@
  *  - An OpenLayers map (OSM background + detaljplan vector features)
  *  - JSON file upload button to import a detaljplan JSON
  *  - Export button to save the current geometry doc back to JSON
- *  - A list of geometry features with tag-linking support
+ *  - A list of geometry features with tag-linking support (multi-select batch mode)
  *
- * When `linkingTagUuid` is set in the store, clicking a map feature or a list
- * item completes the geometry → tag link.
+ * When `linkingTagUuid` is set in the store the panel enters multi-select mode:
+ *   • Checkboxes appear on each geometry item (pre-checked = already linked)
+ *   • The user can toggle as many items as desired
+ *   • A floating action bar at the bottom confirms or cancels the batch
  */
 
 import React, { useRef, useEffect, useCallback, useState } from 'react';
 import type { Tag } from '../types';
 import { useDocumentStore } from '../store/useDocumentStore';
 import { MapView } from './MapView';
+import type { PickerItem } from './MapView';
 
 // ─── Feature type icons / colours ─────────────────────────────────────────────
 
@@ -47,16 +50,46 @@ export const GeometryPanel: React.FC = () => {
     selectedTagUuid,
     activeGeometryDocId,
     finishLinking,
+    batchLinkGeometries,
     cancelLinking,
     selectTag,
     unlinkGeometry,
   } = useDocumentStore();
 
   const geometryListRef = useRef<HTMLDivElement>(null);
+  /** Ref to the map wrapper div — used for picker positioning */
+  const mapWrapperRef = useRef<HTMLDivElement>(null);
   const [expandedGeoUuid, setExpandedGeoUuid] = useState<string | null>(null);
   const [clickedGeoUuid, setClickedGeoUuid] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTypeFilters, setActiveTypeFilters] = useState<Set<string>>(new Set());
+
+  // ── Disambiguation picker state (renders outside overflow-hidden map div) ─
+  const [picker, setPicker] = useState<{
+    items: PickerItem[];
+    x: number;
+    y: number;
+  } | null>(null);
+
+  // ── Multi-select state for batch linking ──────────────────────────────────
+  // When in linking mode, staged is the working set of selected UUIDs.
+  // Initialised from the current tag's geometryIds when linking starts.
+  const [stagedUuids, setStagedUuids] = useState<Set<string>>(new Set());
+
+  const isLinking = !!linkingTagUuid;
+  const linkingTag = tags.find((t) => t.uuid === linkingTagUuid);
+
+  // ── Initialise staged set when linking starts ─────────────────────────────
+  useEffect(() => {
+    if (linkingTagUuid) {
+      const tag = tags.find((t) => t.uuid === linkingTagUuid);
+      setStagedUuids(new Set(tag?.geometryIds ?? []));
+    } else {
+      setStagedUuids(new Set());
+    }
+    // Only run when linkingTagUuid changes (not every tag update)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [linkingTagUuid]);
 
   // ── Derive unique feature types for filter chips ──────────────────────────
   const allFeatureTypes = Array.from(
@@ -75,11 +108,9 @@ export const GeometryPanel: React.FC = () => {
 
   // ── Filtered geometries (used for both list and map) ──────────────────────
   const filteredGeometries = geometries.filter((geo) => {
-    // Type filter: if no filters active, show all
     if (activeTypeFilters.size > 0 && !activeTypeFilters.has(geo.featureType ?? 'okänd')) {
       return false;
     }
-    // Text search: match against name, featureType, and kategori
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       const name = geo.name.toLowerCase();
@@ -93,72 +124,86 @@ export const GeometryPanel: React.FC = () => {
     return true;
   });
 
-  const isLinking = !!linkingTagUuid;
-  const linkingTag = tags.find((t) => t.uuid === linkingTagUuid);
+  // ── Derive which geometry UUIDs are "selected" from the selected tag ──────
+  const tagDerivedGeoUuids: string[] = selectedTagUuid
+    ? (tags.find((t) => t.uuid === selectedTagUuid)?.geometryIds ?? [])
+    : [];
 
-  // Derive which geometry UUID is "selected" from the selected tag's geometryId
-  const tagDerivedGeoUuid = selectedTagUuid
-    ? (tags.find((t) => t.uuid === selectedTagUuid)?.geometryId ?? null)
-    : null;
+  // In normal mode: highlight tag-derived + user-clicked geometry
+  // In linking mode: highlight staged (pending) geometries in green
+  const selectedGeometryUuids = isLinking ? [] : [
+    ...tagDerivedGeoUuids,
+    ...(clickedGeoUuid && !tagDerivedGeoUuids.includes(clickedGeoUuid) ? [clickedGeoUuid] : []),
+  ];
+  const pendingGeometryUuids = isLinking ? Array.from(stagedUuids) : [];
 
-  // Effective selected geometry: tag-derived takes priority, otherwise list click
-  const selectedGeometryUuid = tagDerivedGeoUuid ?? clickedGeoUuid;
-
-  // ── Auto-expand and scroll to linked geometry when a tag is selected ────────
+  // ── Auto-expand and scroll to linked geometry when a tag is selected ───────
   useEffect(() => {
-    if (!selectedTagUuid) return;
+    if (!selectedTagUuid || isLinking) return;
     const tag = tags.find((t) => t.uuid === selectedTagUuid);
-    if (tag?.geometryId) {
-      // If active filters would hide this geometry, clear them so it becomes visible
-      const geo = geometries.find((g) => g.uuid === tag.geometryId);
+    const firstGeoId = tag?.geometryIds?.[0];
+    if (firstGeoId) {
+      const geo = geometries.find((g) => g.uuid === firstGeoId);
       if (geo && activeTypeFilters.size > 0 && !activeTypeFilters.has(geo.featureType ?? 'okänd')) {
         setActiveTypeFilters(new Set());
       }
-      setExpandedGeoUuid(tag.geometryId);
-      // Scroll the geometry list item into view (small delay lets the expand render first)
+      setExpandedGeoUuid(firstGeoId);
       const timer = setTimeout(() => {
         const el = geometryListRef.current?.querySelector<HTMLElement>(
-          `[data-geometry-uuid="${tag.geometryId}"]`
+          `[data-geometry-uuid="${firstGeoId}"]`
         );
-        if (el) {
-          el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        }
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       }, 100);
       return () => clearTimeout(timer);
     }
-    // Clear direct click selection when a tag-based selection takes over
     setClickedGeoUuid(null);
-  }, [selectedTagUuid, tags, activeTypeFilters, geometries]);
+  }, [selectedTagUuid, tags, activeTypeFilters, geometries, isLinking]);
+
+  // ── Toggle a geometry in the staged set (multi-select mode) ──────────────
+  const toggleStaged = useCallback((uuid: string) => {
+    setStagedUuids((prev) => {
+      const next = new Set(prev);
+      if (next.has(uuid)) next.delete(uuid);
+      else next.add(uuid);
+      return next;
+    });
+    // Also keep the store in sync so map reflects changes immediately
+    finishLinking(linkingTagUuid!, uuid);
+  }, [finishLinking, linkingTagUuid]);
+
+  // ── Confirm batch link ────────────────────────────────────────────────────
+  const handleConfirmBatch = useCallback(() => {
+    if (!linkingTagUuid) return;
+    batchLinkGeometries(linkingTagUuid, Array.from(stagedUuids));
+  }, [linkingTagUuid, batchLinkGeometries, stagedUuids]);
 
   // ── Map feature click ──────────────────────────────────────────────────────
   const handleMapFeatureClick = useCallback(
     (uuid: string) => {
-      if (isLinking && linkingTagUuid) {
-        finishLinking(linkingTagUuid, uuid);
+      if (isLinking) {
+        toggleStaged(uuid);
         return;
       }
-      // Pan to this geometry by selecting the first linked tag
-      const linkedTags = tags.filter((t) => t.geometryId === uuid);
+      const linkedTags = tags.filter((t) => t.geometryIds?.includes(uuid));
       if (linkedTags.length > 0) {
         selectTag(linkedTags[0].uuid);
       }
       setExpandedGeoUuid((prev) => (prev === uuid ? null : uuid));
     },
-    [isLinking, linkingTagUuid, finishLinking, tags, selectTag]
+    [isLinking, toggleStaged, tags, selectTag]
   );
 
   // ── List item click ────────────────────────────────────────────────────────
   const handleListItemClick = useCallback(
     (uuid: string) => {
-      if (isLinking && linkingTagUuid) {
-        finishLinking(linkingTagUuid, uuid);
+      if (isLinking) {
+        toggleStaged(uuid);
         return;
       }
-      // Highlight the geometry on the map (toggle off if clicking same item)
       setClickedGeoUuid((prev) => (prev === uuid ? null : uuid));
       setExpandedGeoUuid((prev) => (prev === uuid ? null : uuid));
     },
-    [isLinking, linkingTagUuid, finishLinking]
+    [isLinking, toggleStaged]
   );
 
   const handleTagSubClick = useCallback(
@@ -188,12 +233,13 @@ export const GeometryPanel: React.FC = () => {
           <div className="flex items-center gap-2 min-w-0">
             <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse flex-shrink-0" />
             <p className="text-xs text-blue-700 font-medium truncate">
-              Klicka på ett område för att länka "{linkingTag?.text?.slice(0, 25)}…"
+              Väljer geometrier för: <span className="italic">"{linkingTag?.text?.slice(0, 20)}…"</span>
             </p>
           </div>
           <button
             onClick={cancelLinking}
             className="text-blue-400 hover:text-blue-600 flex-shrink-0"
+            title="Avbryt"
           >
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -202,14 +248,100 @@ export const GeometryPanel: React.FC = () => {
         </div>
       )}
 
-      {/* ── Map ─────────────────────────────────────────────────────────── */}
-      <div className="px-3 pt-3 pb-2" style={{ height: '240px' }}>
+      {/* ── Map + disambiguation picker ──────────────────────────────────── */}
+      {/* The wrapper is `relative` so the picker popup can escape the map's
+          `overflow-hidden` constraint and still be positioned correctly. */}
+      <div
+        ref={mapWrapperRef}
+        className="px-3 pt-3 pb-2 relative"
+        style={{ height: '240px' }}
+      >
         <MapView
           geometries={filteredGeometries}
-          selectedGeometryUuid={selectedGeometryUuid}
+          selectedGeometryUuids={selectedGeometryUuids}
+          pendingGeometryUuids={pendingGeometryUuids}
           isLinking={isLinking}
           onFeatureClick={handleMapFeatureClick}
+          onMultiFeatureClick={(items, pixelX, pixelY) => {
+            // pixelX/Y are relative to the inner map div (inside 12px padding)
+            setPicker({ items, x: pixelX + 12, y: pixelY + 12 });
+          }}
         />
+
+        {/* Picker popup — rendered here, OUTSIDE the overflow-hidden map div */}
+        {picker && (() => {
+          const POPUP_W = 180;
+          const ITEM_H = 28;
+          const HEADER_H = 26;
+          const MAX_VISIBLE = 5;
+          const listH = Math.min(picker.items.length, MAX_VISIBLE) * ITEM_H;
+          const POPUP_H = HEADER_H + listH;
+          const wrapperW = mapWrapperRef.current?.clientWidth ?? 260;
+          const wrapperH = mapWrapperRef.current?.clientHeight ?? 240;
+          const left = Math.min(picker.x + 6, wrapperW - POPUP_W - 4);
+          const top = picker.y + POPUP_H > wrapperH
+            ? picker.y - POPUP_H - 4
+            : picker.y + 4;
+
+          return (
+            <>
+              {/* Backdrop */}
+              <div className="absolute inset-0 z-40" onClick={() => setPicker(null)} />
+              <div
+                className="absolute z-50 bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden"
+                style={{ left, top, width: POPUP_W }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Header */}
+                <div className="px-2.5 py-1 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
+                  <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide">
+                    {picker.items.length} geometrier
+                  </span>
+                  <button
+                    onClick={() => setPicker(null)}
+                    className="text-gray-300 hover:text-gray-500 transition-colors"
+                  >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+                {/* Scrollable list */}
+                <ul style={{ maxHeight: MAX_VISIBLE * ITEM_H, overflowY: 'auto' }}>
+                  {picker.items.map((item) => (
+                    <li key={item.uuid}>
+                      <button
+                        className={`w-full flex items-center gap-1.5 px-2.5 py-1.5 text-left transition-colors hover:bg-gray-50 ${item.isChecked ? 'bg-blue-50' : ''}`}
+                        style={{ height: ITEM_H }}
+                        onClick={() => {
+                          handleMapFeatureClick(item.uuid);
+                          setPicker(null);
+                        }}
+                      >
+                        <span
+                          className="w-2 h-2 rounded-full flex-shrink-0"
+                          style={{ backgroundColor: item.color }}
+                        />
+                        <span className="text-sm flex-shrink-0">{featureIcon(item.featureType)}</span>
+                        <span
+                          className="text-xs font-medium truncate flex-1"
+                          style={{ color: item.isChecked ? '#1d4ed8' : '#374151' }}
+                        >
+                          {item.name}
+                        </span>
+                        {item.isChecked && (
+                          <svg className="w-3 h-3 text-blue-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                          </svg>
+                        )}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </>
+          );
+        })()}
       </div>
 
       {/* ── Active geometry doc info ─────────────────────────────────────── */}
@@ -292,7 +424,11 @@ export const GeometryPanel: React.FC = () => {
       )}
 
       {/* ── Geometry list ────────────────────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto px-3 pb-3" ref={geometryListRef}>
+      <div
+        className="overflow-y-auto px-3 pb-3"
+        style={{ flex: isLinking ? '1 1 0' : '1 1 0' }}
+        ref={geometryListRef}
+      >
         {geometries.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-8 text-center">
             <div className="text-3xl mb-2">🗺</div>
@@ -310,11 +446,18 @@ export const GeometryPanel: React.FC = () => {
         ) : (
           <ul className="space-y-1">
             {filteredGeometries.map((geo) => {
-              const linkedTags = tags.filter((t) => t.geometryId === geo.uuid);
+              const linkedTags = tags.filter((t) => t.geometryIds?.includes(geo.uuid));
               const linkedCount = linkedTags.length;
               const color = featureColor(geo.featureType);
               const icon = featureIcon(geo.featureType);
-              const isSelected = selectedGeometryUuid === geo.uuid;
+
+              // In normal mode: highlight if tag or click-selected
+              const isSelected = !isLinking && (
+                tagDerivedGeoUuids.includes(geo.uuid) ||
+                clickedGeoUuid === geo.uuid
+              );
+              // In linking mode: checked means staged
+              const isChecked = isLinking && stagedUuids.has(geo.uuid);
               const isExpanded = expandedGeoUuid === geo.uuid;
 
               return (
@@ -323,27 +466,51 @@ export const GeometryPanel: React.FC = () => {
                     onClick={() => handleListItemClick(geo.uuid)}
                     className={`flex items-start gap-2 px-3 py-2 rounded-lg border transition-all cursor-pointer ${
                       isLinking
-                        ? 'border-blue-200 hover:border-blue-400 hover:bg-blue-50'
+                        ? isChecked
+                          ? 'bg-emerald-50 border-emerald-300 ring-1 ring-emerald-400'
+                          : 'border-gray-200 hover:border-blue-300 hover:bg-blue-50'
                         : isSelected
                           ? 'bg-blue-50 border-blue-300 ring-1 ring-blue-400'
                           : 'border-transparent hover:bg-gray-50'
                     }`}
                   >
-                    {/* Feature type icon */}
-                    <span className="text-sm flex-shrink-0 mt-0.5">{icon}</span>
+                    {/* Checkbox (linking mode) or feature icon (normal mode) */}
+                    {isLinking ? (
+                      <div
+                        className={`w-4 h-4 rounded flex-shrink-0 mt-0.5 flex items-center justify-center border-2 transition-all ${
+                          isChecked
+                            ? 'bg-emerald-500 border-emerald-500'
+                            : 'border-gray-300 bg-white'
+                        }`}
+                      >
+                        {isChecked && (
+                          <svg className="w-2.5 h-2.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                          </svg>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-sm flex-shrink-0 mt-0.5">{icon}</span>
+                    )}
 
                     {/* Name & meta */}
                     <div className="flex-1 min-w-0">
                       <p
                         className="text-xs font-medium truncate"
-                        style={{ color: isSelected ? '#1d4ed8' : '#374151' }}
+                        style={{
+                          color: isLinking
+                            ? isChecked ? '#065f46' : '#374151'
+                            : isSelected ? '#1d4ed8' : '#374151'
+                        }}
                       >
                         {geo.name}
                       </p>
                       <p className="text-xs text-gray-400 truncate">
                         {geo.featureType ?? geo.type}
                         {linkedCount > 0 && (
-                          <span className="ml-1 text-blue-500">· {linkedCount} tagg{linkedCount !== 1 ? 'ar' : ''}</span>
+                          <span className="ml-1 text-blue-500">
+                            · {linkedCount} tagg{linkedCount !== 1 ? 'ar' : ''}
+                          </span>
                         )}
                       </p>
                       {!!geo.properties?.['kategori'] && (
@@ -353,8 +520,8 @@ export const GeometryPanel: React.FC = () => {
                       )}
                     </div>
 
-                    {/* Expand chevron */}
-                    {linkedCount > 0 && (
+                    {/* Expand chevron (normal mode only) */}
+                    {!isLinking && linkedCount > 0 && (
                       <svg
                         className={`w-3.5 h-3.5 text-gray-400 transition-transform flex-shrink-0 mt-0.5 ${isExpanded ? 'rotate-180' : ''}`}
                         fill="none" stroke="currentColor" viewBox="0 0 24 24"
@@ -370,8 +537,8 @@ export const GeometryPanel: React.FC = () => {
                     />
                   </div>
 
-                  {/* ── Linked tags sub-list ──────────────────────────────── */}
-                  {isExpanded && linkedTags.length > 0 && (
+                  {/* ── Linked tags sub-list (normal mode) ───────────────── */}
+                  {!isLinking && isExpanded && linkedTags.length > 0 && (
                     <ul className="mt-1 ml-6 mr-2 space-y-0.5 border-l-2 border-gray-100 pl-3 pb-1">
                       {linkedTags.map((tag) => (
                         <li
@@ -393,7 +560,7 @@ export const GeometryPanel: React.FC = () => {
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              unlinkGeometry(tag.uuid);
+                              unlinkGeometry(tag.uuid, geo.uuid);
                             }}
                             className="text-gray-300 hover:text-red-400 transition-colors flex-shrink-0 ml-auto"
                             title="Avlänka"
@@ -413,12 +580,42 @@ export const GeometryPanel: React.FC = () => {
         )}
       </div>
 
-      {/* ── Footer ──────────────────────────────────────────────────────── */}
-      <div className="px-4 py-2 border-t border-gray-100 bg-gray-50">
-        <p className="text-xs text-gray-400 text-center">
-          OpenLayers · OSM · EPSG:3009→4326
-        </p>
-      </div>
+      {/* ── Batch-link action bar (shown in linking mode) ────────────────── */}
+      {isLinking && (
+        <div className="px-3 pb-3 pt-1 border-t border-gray-100 bg-white">
+          <div className="flex items-center gap-2 px-3 py-2.5 bg-gray-50 rounded-xl border border-gray-200">
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-semibold text-gray-700">
+                {stagedUuids.size === 0
+                  ? 'Ingen geometri vald'
+                  : `${stagedUuids.size} geometri${stagedUuids.size !== 1 ? 'er' : ''} vald${stagedUuids.size !== 1 ? 'a' : ''}`}
+              </p>
+              <p className="text-[10px] text-gray-400 mt-0.5">Kryssa i geometrier i listan eller kartan</p>
+            </div>
+            <button
+              onClick={cancelLinking}
+              className="px-3 py-1.5 text-xs text-gray-500 bg-white border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors font-medium"
+            >
+              Avbryt
+            </button>
+            <button
+              onClick={handleConfirmBatch}
+              className="px-3 py-1.5 text-xs text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors font-semibold shadow-sm"
+            >
+              Länka
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Footer (normal mode) ────────────────────────────────────────── */}
+      {!isLinking && (
+        <div className="px-4 py-2 border-t border-gray-100 bg-gray-50">
+          <p className="text-xs text-gray-400 text-center">
+            OpenLayers · OSM · EPSG:3009→4326
+          </p>
+        </div>
+      )}
     </div>
   );
 };

@@ -552,7 +552,14 @@ function extractTagsFromCustomXml(zip: PizZip): Tag[] {
       const startOffset = parseInt(el.getAttribute('startOffset') ?? '0', 10);
       const endOffset = parseInt(el.getAttribute('endOffset') ?? '0', 10);
       const createdAt = el.getAttribute('createdAt') ?? new Date().toISOString();
-      const geometryId = el.getAttribute('geometryId') || undefined;
+      // Parse geometryIds (new: comma-separated list) with backward compat for old geometryId
+      const geometryIdsRaw = el.getAttribute('geometryIds') || undefined;
+      const legacyGeometryId = el.getAttribute('geometryId') || undefined;
+      const geometryIds: string[] | undefined = geometryIdsRaw
+        ? geometryIdsRaw.split(',').map((s) => s.trim()).filter(Boolean)
+        : legacyGeometryId
+          ? [legacyGeometryId]
+          : undefined;
       const note = el.getAttribute('note') || undefined;
       const runId = el.getAttribute('runId') || undefined;
       const tableId = el.getAttribute('tableId') || undefined;
@@ -574,7 +581,7 @@ function extractTagsFromCustomXml(zip: PizZip): Tag[] {
         endOffset,
         runId,
         tableId,
-        geometryId,
+        geometryIds,
         note,
         createdAt,
       });

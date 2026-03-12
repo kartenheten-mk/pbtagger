@@ -7,22 +7,23 @@ export interface ViewTagsPanelProps {
   teman: Tema[];
   tags: Tag[];
   categories: Category[];
+  geometries: Geometry[];
   selectedTagUuid: string | null;
   getCategoryById: (id: string) => Category | undefined;
-  getGeometryById: (id?: string) => Geometry | undefined;
   onSelectTag: (uuid: string) => void;
   onRemoveTag: (uuid: string) => void;
   onLinkGeometry: (tagUuid: string) => void;
-  onUnlinkGeometry: (tagUuid: string) => void;
+  /** Unlink a specific geometry UUID from a tag */
+  onUnlinkGeometry: (tagUuid: string, geometryUuid: string) => void;
 }
 
 export const ViewTagsPanel: React.FC<ViewTagsPanelProps> = ({
   teman,
   tags,
   categories,
+  geometries,
   selectedTagUuid,
   getCategoryById,
-  getGeometryById,
   onSelectTag,
   onRemoveTag,
   onLinkGeometry,
@@ -169,19 +170,24 @@ export const ViewTagsPanel: React.FC<ViewTagsPanelProps> = ({
           </div>
         ) : (
           <ul className="divide-y divide-gray-50 py-1">
-            {filteredTags.map((tag) => (
-              <TagListItem
-                key={tag.uuid}
-                tag={tag}
-                category={getCategoryById(tag.categoryId)}
-                geometry={getGeometryById(tag.geometryId)}
-                isSelected={selectedTagUuid === tag.uuid}
-                onSelect={() => onSelectTag(tag.uuid)}
-                onRemove={() => onRemoveTag(tag.uuid)}
-                onLinkGeometry={() => onLinkGeometry(tag.uuid)}
-                onUnlinkGeometry={() => onUnlinkGeometry(tag.uuid)}
-              />
-            ))}
+            {filteredTags.map((tag) => {
+              const linkedGeometries = (tag.geometryIds ?? [])
+                .map((gid) => geometries.find((g) => g.uuid === gid))
+                .filter(Boolean) as import('../../types').Geometry[];
+              return (
+                <TagListItem
+                  key={tag.uuid}
+                  tag={tag}
+                  category={getCategoryById(tag.categoryId)}
+                  linkedGeometries={linkedGeometries}
+                  isSelected={selectedTagUuid === tag.uuid}
+                  onSelect={() => onSelectTag(tag.uuid)}
+                  onRemove={() => onRemoveTag(tag.uuid)}
+                  onLinkGeometry={() => onLinkGeometry(tag.uuid)}
+                  onUnlinkGeometry={(geoUuid) => onUnlinkGeometry(tag.uuid, geoUuid)}
+                />
+              );
+            })}
           </ul>
         )}
       </div>

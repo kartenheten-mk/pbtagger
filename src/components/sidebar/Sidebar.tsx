@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import type { Category, Tag, Geometry, Tema } from '../../types';
+import type { Category, Tag, Tema } from '../../types';
 import { useDocumentStore } from '../../store/useDocumentStore';
 import { AssignTagPanel } from './AssignTagPanel';
 import { ViewTagsPanel } from './ViewTagsPanel';
@@ -77,9 +77,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ teman, categories }) => {
   const getCategoryById = (id: string): Category | undefined =>
     categories.find((c) => c.id === id);
 
-  const getGeometryById = (id?: string): Geometry | undefined =>
-    id ? geometries.find((g) => g.uuid === id) : undefined;
-
   return (
     <aside className="w-full bg-white flex flex-col h-full overflow-hidden">
       {/* ── Mode toggle ─────────────────────────────────────────────────── */}
@@ -134,9 +131,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ teman, categories }) => {
           teman={teman}
           tags={tags}
           categories={categories}
+          geometries={geometries}
           selectedTagUuid={selectedTagUuid}
           getCategoryById={getCategoryById}
-          getGeometryById={getGeometryById}
           onSelectTag={(uuid) => selectTag(uuid === selectedTagUuid ? null : uuid)}
           onRemoveTag={removeTag}
           onLinkGeometry={startLinking}

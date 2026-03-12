@@ -6,12 +6,14 @@ import { getCategoryLabel } from '../../data/categoryUtils';
 export interface TagListItemProps {
   tag: Tag;
   category?: Category;
-  geometry?: Geometry;
+  /** All geometries linked to this tag */
+  linkedGeometries: Geometry[];
   isSelected: boolean;
   onSelect: () => void;
   onRemove: () => void;
   onLinkGeometry: () => void;
-  onUnlinkGeometry: () => void;
+  /** Unlink a specific geometry from this tag */
+  onUnlinkGeometry: (geometryUuid: string) => void;
 }
 
 const TARGET_LABEL: Record<'text' | 'image' | 'graph' | 'table', string> = {
@@ -24,7 +26,7 @@ const TARGET_LABEL: Record<'text' | 'image' | 'graph' | 'table', string> = {
 export const TagListItem: React.FC<TagListItemProps> = ({
   tag,
   category,
-  geometry,
+  linkedGeometries,
   isSelected,
   onSelect,
   onRemove,
@@ -32,11 +34,17 @@ export const TagListItem: React.FC<TagListItemProps> = ({
   onUnlinkGeometry,
 }) => {
   const targetType = tag.targetType ?? 'text';
+  const hasGeometries = linkedGeometries.length > 0;
+
+  // Show first 2 chips inline, rest collapsed
+  const visibleGeos = linkedGeometries.slice(0, 2);
+  const hiddenCount = linkedGeometries.length - visibleGeos.length;
 
   return (
     <li
-      className={`px-3 py-2.5 cursor-pointer transition-colors ${isSelected ? 'bg-blue-50' : 'hover:bg-gray-50'
-        }`}
+      className={`px-3 py-2.5 cursor-pointer transition-colors ${
+        isSelected ? 'bg-blue-50' : 'hover:bg-gray-50'
+      }`}
       onClick={onSelect}
       data-tag-uuid={tag.uuid}
     >
@@ -90,23 +98,59 @@ export const TagListItem: React.FC<TagListItemProps> = ({
         <p className="text-xs text-gray-400 italic mt-1 line-clamp-1">{tag.note}</p>
       )}
 
-      {/* Geometry link */}
-      <div className="mt-2 flex items-center gap-1.5">
-        {geometry ? (
-          <div className="flex items-center gap-1 flex-1 min-w-0">
-            <span className="w-1.5 h-1.5 rounded-full bg-green-400 flex-shrink-0" />
-            <span className="text-xs text-green-600 truncate font-medium">{geometry.name}</span>
+      {/* Geometry links */}
+      <div className="mt-2">
+        {hasGeometries ? (
+          <div className="space-y-1">
+            {/* Linked geometry chips */}
+            <div className="flex flex-wrap gap-1">
+              {visibleGeos.map((geo) => (
+                <div
+                  key={geo.uuid}
+                  className="flex items-center gap-1 px-2 py-0.5 bg-green-50 border border-green-200 rounded-full max-w-full"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-400 flex-shrink-0" />
+                  <span className="text-xs text-green-700 font-medium truncate max-w-[120px]">
+                    {geo.name}
+                  </span>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onUnlinkGeometry(geo.uuid);
+                    }}
+                    className="text-green-300 hover:text-red-400 transition-colors flex-shrink-0 ml-0.5"
+                    title={`Avlänka ${geo.name}`}
+                  >
+                    <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              ))}
+              {hiddenCount > 0 && (
+                <div className="flex items-center px-2 py-0.5 bg-gray-100 border border-gray-200 rounded-full">
+                  <span className="text-xs text-gray-500 font-medium">+{hiddenCount}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Edit geometry links button */}
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                onUnlinkGeometry();
+                onLinkGeometry();
               }}
-              className="text-gray-300 hover:text-gray-500 ml-auto flex-shrink-0"
-              title="Avlänka geometri"
+              className="flex items-center gap-1 text-xs text-blue-500 hover:text-blue-700 transition-colors mt-0.5"
             >
               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                />
               </svg>
+              Ändra geometrier
             </button>
           </div>
         ) : (
@@ -125,7 +169,7 @@ export const TagListItem: React.FC<TagListItemProps> = ({
                 d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"
               />
             </svg>
-            Länka till geometri
+            Länka till geometrier
           </button>
         )}
       </div>

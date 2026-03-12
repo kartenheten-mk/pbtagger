@@ -81,7 +81,7 @@ export async function exportDocx(
       endOffset: t.endOffset,
       runId: t.runId,
       tableId: t.tableId,
-      geometryId: t.geometryId,
+      geometryIds: t.geometryIds,
       note: t.note,
       createdAt: t.createdAt,
     }))

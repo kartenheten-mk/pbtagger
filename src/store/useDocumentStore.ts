@@ -83,9 +83,15 @@ interface DocumentActions {
 
   // ─── Geometry linking ───────────────────────────────────────────────────
   startLinking: (tagUuid: string) => void;
+  /** Append a single geometry UUID to the tag's geometryIds array */
   finishLinking: (tagUuid: string, geometryUuid: string) => void;
+  /** Replace the tag's geometryIds with a full new set (batch assignment) */
+  batchLinkGeometries: (tagUuid: string, geometryUuids: string[]) => void;
   cancelLinking: () => void;
-  unlinkGeometry: (tagUuid: string) => void;
+  /** Remove a specific geometry UUID from the tag's geometryIds array */
+  unlinkGeometry: (tagUuid: string, geometryUuid: string) => void;
+  /** Remove all geometry links from a tag */
+  unlinkAllGeometries: (tagUuid: string) => void;
 
   // ─── Pending selection (text selected in editor, awaiting tag) ──────────
   setPendingSelection: (selection: PendingSelection[] | null) => void;
@@ -132,6 +138,20 @@ function debouncedSave(state: AppState) {
       dbSave(doc);
     });
   }, 500);
+}
+
+/**
+ * Migrate tags that have the old single `geometryId` field to the new
+ * `geometryIds` array format. Safe to run on already-migrated data.
+ */
+function migrateTagsGeometryIds(tags: Tag[]): Tag[] {
+  return tags.map((t) => {
+    const legacy = (t as unknown as Record<string, unknown>)['geometryId'] as string | undefined;
+    if (legacy && !t.geometryIds) {
+      return { ...t, geometryIds: [legacy] };
+    }
+    return t;
+  });
 }
 
 export const useDocumentStore = create<AppState & DocumentActions>()(
@@ -245,7 +265,7 @@ export const useDocumentStore = create<AppState & DocumentActions>()(
             zipBuffer: doc.zipBuffer,
             docModel: doc.docModel,
             fileName: doc.fileName,
-            tags: doc.tags,
+            tags: migrateTagsGeometryIds(doc.tags),
             geometries: doc.geometries,
             selectedTagUuid: null,
             linkingTagUuid: null,
@@ -334,10 +354,12 @@ export const useDocumentStore = create<AppState & DocumentActions>()(
           set((state) => {
             const next = {
               geometries: state.geometries.filter((g) => g.uuid !== uuid),
-              // Also unlink any tags referencing this geometry
-              tags: state.tags.map((t) =>
-                t.geometryId === uuid ? { ...t, geometryId: undefined } : t
-              ),
+              // Remove the geometry UUID from any tag that references it
+              tags: state.tags.map((t) => {
+                if (!t.geometryIds?.includes(uuid)) return t;
+                const remaining = t.geometryIds.filter((id) => id !== uuid);
+                return { ...t, geometryIds: remaining.length > 0 ? remaining : undefined };
+              }),
             };
             debouncedSave({ ...state, ...next });
             return next;
@@ -373,11 +395,11 @@ export const useDocumentStore = create<AppState & DocumentActions>()(
               );
               // Unlink only the tags that referenced a now-deleted feature
               if (removedUuids.size > 0) {
-                updatedTags = state.tags.map((t) =>
-                  t.geometryId && removedUuids.has(t.geometryId)
-                    ? { ...t, geometryId: undefined }
-                    : t
-                );
+                updatedTags = state.tags.map((t) => {
+                  if (!t.geometryIds || !t.geometryIds.some((id) => removedUuids.has(id))) return t;
+                  const remaining = t.geometryIds.filter((id) => !removedUuids.has(id));
+                  return { ...t, geometryIds: remaining.length > 0 ? remaining : undefined };
+                });
               }
             }
 
@@ -420,12 +442,37 @@ export const useDocumentStore = create<AppState & DocumentActions>()(
         // ─── Geometry linking ───────────────────────────────────────────────
         startLinking: (tagUuid) => set({ linkingTagUuid: tagUuid }),
 
+        /** Toggle-append a single geometry UUID into the tag's geometryIds array */
         finishLinking: (tagUuid, geometryUuid) =>
+          set((state) => {
+            const next = {
+              // Do NOT close linkingTagUuid here — multi-select stays open
+              // (GeometryPanel handles closing via batchLinkGeometries / cancelLinking)
+              tags: state.tags.map((t) => {
+                if (t.uuid !== tagUuid) return t;
+                const existing = t.geometryIds ?? [];
+                const already = existing.includes(geometryUuid);
+                return {
+                  ...t,
+                  geometryIds: already
+                    ? existing.filter((id) => id !== geometryUuid) // toggle off
+                    : [...existing, geometryUuid],                  // toggle on
+                };
+              }),
+            };
+            debouncedSave({ ...state, ...next });
+            return next;
+          }),
+
+        /** Replace the tag's geometryIds with a full new set and exit linking mode */
+        batchLinkGeometries: (tagUuid, geometryUuids) =>
           set((state) => {
             const next = {
               linkingTagUuid: null,
               tags: state.tags.map((t) =>
-                t.uuid === tagUuid ? { ...t, geometryId: geometryUuid } : t
+                t.uuid === tagUuid
+                  ? { ...t, geometryIds: geometryUuids.length > 0 ? geometryUuids : undefined }
+                  : t
               ),
             };
             debouncedSave({ ...state, ...next });
@@ -434,11 +481,26 @@ export const useDocumentStore = create<AppState & DocumentActions>()(
 
         cancelLinking: () => set({ linkingTagUuid: null }),
 
-        unlinkGeometry: (tagUuid) =>
+        /** Remove a specific geometry UUID from the tag's geometryIds array */
+        unlinkGeometry: (tagUuid, geometryUuid) =>
+          set((state) => {
+            const next = {
+              tags: state.tags.map((t) => {
+                if (t.uuid !== tagUuid) return t;
+                const remaining = (t.geometryIds ?? []).filter((id) => id !== geometryUuid);
+                return { ...t, geometryIds: remaining.length > 0 ? remaining : undefined };
+              }),
+            };
+            debouncedSave({ ...state, ...next });
+            return next;
+          }),
+
+        /** Remove ALL geometry links from a tag */
+        unlinkAllGeometries: (tagUuid) =>
           set((state) => {
             const next = {
               tags: state.tags.map((t) =>
-                t.uuid === tagUuid ? { ...t, geometryId: undefined } : t
+                t.uuid === tagUuid ? { ...t, geometryIds: undefined } : t
               ),
             };
             debouncedSave({ ...state, ...next });

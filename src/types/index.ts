@@ -65,8 +65,8 @@ export interface Tag {
   runId?: string;
   /** Table id anchor for table tags */
   tableId?: string;
-  /** UUID of the linked geometry, if any */
-  geometryId?: string;
+  /** UUIDs of linked geometries (supports multiple) */
+  geometryIds?: string[];
   /** Human readable note */
   note?: string;
   createdAt: string; // ISO timestamp

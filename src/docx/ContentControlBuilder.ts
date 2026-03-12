@@ -105,7 +105,8 @@ export interface TagMetadata {
   endOffset: number;
   runId?: string;
   tableId?: string;
-  geometryId?: string;
+  /** UUIDs of linked geometries (stored as comma-separated string in XML) */
+  geometryIds?: string[];
   note?: string;
   createdAt: string;
 }
@@ -114,7 +115,11 @@ export function buildCustomXmlItem(tags: TagMetadata[]): string {
   const tagElements = tags
     .map((t) => {
       const targetType = t.targetType ?? 'text';
-      return `  <pb:tag uuid="${escXml(t.uuid)}" categoryId="${escXml(t.categoryId)}" targetType="${escXml(targetType)}" paragraphIndex="${t.paragraphIndex}" startOffset="${t.startOffset}" endOffset="${t.endOffset}" createdAt="${escXml(t.createdAt)}"${t.runId ? ` runId="${escXml(t.runId)}"` : ''}${t.tableId ? ` tableId="${escXml(t.tableId)}"` : ''}${t.geometryId ? ` geometryId="${escXml(t.geometryId)}"` : ''}${t.note ? ` note="${escXml(t.note)}"` : ''}>
+      const geometryIdsAttr =
+        t.geometryIds && t.geometryIds.length > 0
+          ? ` geometryIds="${escXml(t.geometryIds.join(','))}"`
+          : '';
+      return `  <pb:tag uuid="${escXml(t.uuid)}" categoryId="${escXml(t.categoryId)}" targetType="${escXml(targetType)}" paragraphIndex="${t.paragraphIndex}" startOffset="${t.startOffset}" endOffset="${t.endOffset}" createdAt="${escXml(t.createdAt)}"${t.runId ? ` runId="${escXml(t.runId)}"` : ''}${t.tableId ? ` tableId="${escXml(t.tableId)}"` : ''}${geometryIdsAttr}${t.note ? ` note="${escXml(t.note)}"` : ''}>
     <pb:text>${escXml(t.text)}</pb:text>
   </pb:tag>`;
     })
