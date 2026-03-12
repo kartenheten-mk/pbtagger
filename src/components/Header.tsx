@@ -5,17 +5,88 @@
  * and the Export button.
  */
 
-import React, { useEffect, useCallback } from 'react';
+import React, { useEffect, useCallback, useState, useRef } from 'react';
 import { useDocumentStore } from '../store/useDocumentStore';
 import { useStoreWithEqualityFn } from 'zustand/traditional';
 import { DataMenu } from './DataMenu';
+import { getAllDocuments } from '../db/documentDb';
 
 interface HeaderProps {
   onClearDocument: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({ onClearDocument }) => {
-  const { fileName, tags, showTags, toggleShowTags } = useDocumentStore();
+  const { fileName, tags, showTags, toggleShowTags, documentId, setFileName } = useDocumentStore();
+
+  // ─── Inline rename state ───────────────────────────────────────────────
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  const [nameError, setNameError] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const startEdit = () => {
+    setDraft(fileName);
+    setNameError(null);
+    setEditing(true);
+  };
+
+  useEffect(() => {
+    if (editing) {
+      inputRef.current?.select();
+    }
+  }, [editing]);
+
+  const commitEdit = useCallback(async () => {
+    const trimmed = draft.trim();
+
+    if (!trimmed) {
+      setNameError('Name cannot be empty.');
+      inputRef.current?.focus();
+      return;
+    }
+
+    if (trimmed === fileName) {
+      // No change
+      setEditing(false);
+      setNameError(null);
+      return;
+    }
+
+    // Check uniqueness across other projects
+    try {
+      const all = await getAllDocuments();
+      const conflict = all.some(
+        (doc) => doc.fileName === trimmed && doc.id !== documentId
+      );
+      if (conflict) {
+        setNameError(`"${trimmed}" is already used by another project.`);
+        inputRef.current?.focus();
+        return;
+      }
+    } catch {
+      // If we can't check, allow the rename
+    }
+
+    setFileName(trimmed);
+    setEditing(false);
+    setNameError(null);
+  }, [draft, fileName, documentId, setFileName]);
+
+  const cancelEdit = useCallback(() => {
+    setEditing(false);
+    setDraft('');
+    setNameError(null);
+  }, []);
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      commitEdit();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      cancelEdit();
+    }
+  };
 
   // ─── Undo / Redo via zundo temporal store ─────────────────────────────
   const { undo, redo, pastStates, futureStates } = useStoreWithEqualityFn(
@@ -67,13 +138,41 @@ export const Header: React.FC<HeaderProps> = ({ onClearDocument }) => {
       {/* Divider */}
       <div className="w-px h-6 bg-gray-200" />
 
-      {/* File name */}
+      {/* File name — click to rename */}
       <div className="flex items-center gap-2 min-w-0 flex-1">
         <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
             d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
         </svg>
-        <span className="text-sm font-medium text-gray-700 truncate">{fileName}</span>
+
+        {editing ? (
+          <div className="flex flex-col min-w-0 flex-1">
+            <input
+              ref={inputRef}
+              value={draft}
+              onChange={(e) => { setDraft(e.target.value); setNameError(null); }}
+              onBlur={commitEdit}
+              onKeyDown={handleKeyDown}
+              className={`text-sm font-medium text-gray-700 bg-white border rounded px-1 py-0.5 min-w-0 w-full focus:outline-none focus:ring-2 ${
+                nameError
+                  ? 'border-red-400 focus:ring-red-300'
+                  : 'border-blue-400 focus:ring-blue-300'
+              }`}
+              aria-label="Rename project"
+            />
+            {nameError && (
+              <span className="text-xs text-red-500 mt-0.5 leading-tight">{nameError}</span>
+            )}
+          </div>
+        ) : (
+          <button
+            onClick={startEdit}
+            title="Click to rename project"
+            className="text-sm font-medium text-gray-700 truncate hover:text-blue-600 hover:underline cursor-text text-left min-w-0"
+          >
+            {fileName}
+          </button>
+        )}
       </div>
 
       {/* Tag count */}

@@ -20,6 +20,7 @@ import { saveAs } from 'file-saver';
 
 interface DocumentActions {
   // ─── Document lifecycle ─────────────────────────────────────────────────
+  setFileName: (name: string) => void;
   setDocument: (
     zipBuffer: ArrayBuffer,
     docModel: DocModel,
@@ -262,6 +263,13 @@ export const useDocumentStore = create<AppState & DocumentActions>()(
             set(initialState);
             useDocumentStore.temporal.getState().clear();
           }
+        },
+
+        setFileName: (name: string) => {
+          const state = get();
+          if (!state.documentId) return;
+          set({ fileName: name });
+          debouncedSave({ ...state, fileName: name });
         },
 
         // ─── Tag management ─────────────────────────────────────────────────
