@@ -1,7 +1,7 @@
 import type { Tag } from '../types';
 import { NS } from './XmlHelpers';
-import { buildSdt } from './ContentControlBuilder';
-import { generateBookmarkName } from './bookmarkUtils';
+import { buildSdt, CUSTOM_XML_NS } from './ContentControlBuilder';
+import { generateBookmarkName, getBookmarkSuffix } from './bookmarkUtils';
 
 /**
  * Collect all <w:p> elements in document body order, mirroring the
@@ -417,3 +417,57 @@ export function injectSdtIntoParagraph(
   void docPara;
 }
 
+
+
+/**
+ * Removes existing custom tag <w:sdt> elements and their associated bookmarks
+ * from the document to prevent nesting when we inject new ones.
+ */
+export function cleanExistingTagAnchors(docDom: Document): void {
+  // 1. Unwrap all custom <w:sdt> elements
+  const sdts = Array.from(docDom.getElementsByTagNameNS(NS.w, 'sdt'));
+  for (const sdt of sdts) {
+    const sdtPr = sdt.getElementsByTagNameNS(NS.w, 'sdtPr')[0];
+    if (!sdtPr) continue;
+
+    const dataBinding = sdtPr.getElementsByTagNameNS(NS.w, 'dataBinding')[0];
+    if (!dataBinding) continue;
+
+    const prefixMappings = dataBinding.getAttributeNS(NS.w, 'prefixMappings') || dataBinding.getAttribute('w:prefixMappings') || '';
+    if (!prefixMappings.includes(CUSTOM_XML_NS)) continue;
+
+    // This is one of our custom SDTs. Unwrap it.
+    const sdtContent = sdt.getElementsByTagNameNS(NS.w, 'sdtContent')[0];
+    const parent = sdt.parentNode;
+    if (!parent) continue;
+
+    if (sdtContent) {
+      // Move all children of sdtContent to the parent, before the sdt
+      while (sdtContent.firstChild) {
+        parent.insertBefore(sdtContent.firstChild, sdt);
+      }
+    }
+    // Remove the sdt element
+    parent.removeChild(sdt);
+  }
+
+  // 2. Remove associated bookmarkStart and bookmarkEnd
+  const activeIds = new Set<string>();
+  const starts = Array.from(docDom.getElementsByTagNameNS(NS.w, 'bookmarkStart'));
+  for (const start of starts) {
+    const name = start.getAttributeNS(NS.w, 'name') || start.getAttribute('w:name');
+    if (name && getBookmarkSuffix(name)) {
+      const id = start.getAttributeNS(NS.w, 'id') || start.getAttribute('w:id');
+      if (id) activeIds.add(id);
+      start.parentNode?.removeChild(start);
+    }
+  }
+
+  const ends = Array.from(docDom.getElementsByTagNameNS(NS.w, 'bookmarkEnd'));
+  for (const end of ends) {
+    const id = end.getAttributeNS(NS.w, 'id') || end.getAttribute('w:id');
+    if (id && activeIds.has(id)) {
+      end.parentNode?.removeChild(end);
+    }
+  }
+}

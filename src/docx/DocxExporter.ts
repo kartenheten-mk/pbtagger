@@ -32,6 +32,7 @@ import {
   collectParagraphsInOrder,
   injectBookmarkAroundRun,
   injectSdtIntoParagraph,
+  cleanExistingTagAnchors,
 } from './domUtils';
 
 // Fixed store item ID for our custom XML part (GUID without braces used in file)
@@ -58,7 +59,9 @@ export async function exportDocx(
   const docXmlString = docXmlFile.asText();
   const docDom = parseXml(docXmlString);
 
-  // 3. Inject anchors for text and object tags
+  // 3. Clean any existing custom tag anchors to prevent nesting, then inject new ones
+  cleanExistingTagAnchors(docDom);
+
   const textTags = tags.filter(isTextTag);
   const objectBookmarkTags = tags.filter(isObjectBookmarkTag);
   if (textTags.length > 0 || objectBookmarkTags.length > 0) {
