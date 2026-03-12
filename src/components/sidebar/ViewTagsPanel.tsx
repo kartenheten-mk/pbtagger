@@ -60,13 +60,14 @@ export const ViewTagsPanel: React.FC<ViewTagsPanelProps> = ({
     }
   }, [selectedTagUuid, tags, categories, filterTemaId]);
 
-  const filteredTags =
+  const filteredTags = (
     filterTemaId === 'all'
       ? tags
       : tags.filter((t) => {
         const cat = categories.find((c) => c.id === t.categoryId);
         return cat?.temaId === filterTemaId;
-      });
+      })
+  ).slice().sort((a, b) => a.paragraphIndex - b.paragraphIndex || a.startOffset - b.startOffset);
 
   const countForTema = (temaId: string) =>
     tags.filter((t) => {
