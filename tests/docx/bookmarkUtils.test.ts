@@ -1,8 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { generateBookmarkName } from '../../src/docx/bookmarkUtils';
+import { generateBookmarkName, guessCategoryIdFromBookmarkName } from '../../src/docx/bookmarkUtils';
 import type { Tag } from '../../src/types';
+import rawCategories from '../../src/data/categories.json';
+import { flattenCategories } from '../../src/data/categoryUtils';
 
-describe('generateBookmarkName', () => {
+describe('bookmarkUtils', () => {
   it('generates a clean bookmark name for a given tag', () => {
     const tag: Tag = {
       uuid: '550e8400-e29b-41d4-a716-446655440000',
@@ -39,5 +41,30 @@ describe('generateBookmarkName', () => {
     expect(name).not.toContain('!');
     expect(name).not.toContain('@');
     expect(name).toMatch(/^[a-zA-Z0-9_]+$/);
+  });
+
+  it('guessCategoryIdFromBookmarkName works for all categories without collisions', () => {
+    const cats = flattenCategories((rawCategories as any).teman);
+    let failed = 0;
+
+    for (const cat of cats) {
+        const tag: Tag = {
+        uuid: '550e8400-e29b-41d4-a716-446655440000',
+        categoryId: cat.id,
+        text: 'Sample text',
+        paragraphIndex: 1,
+        startOffset: 0,
+        endOffset: 5,
+        createdAt: new Date().toISOString()
+        };
+
+        const name = generateBookmarkName(tag);
+        const id = guessCategoryIdFromBookmarkName(name);
+        if (id !== tag.categoryId) {
+            console.log("FAILED for", cat.id, "name:", name, "id:", id);
+            failed++;
+        }
+    }
+    expect(failed).toBe(0);
   });
 });
