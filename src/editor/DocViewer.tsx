@@ -533,10 +533,10 @@ export const DocViewer: React.FC<DocViewerProps> = ({ docModel, categories }) =>
     // Current match (bright highlight)
     CSS.highlights.set('search-current', new Highlight(ranges[clampedIndex]));
 
-    // Scroll current match into view
+    // Scroll current match into view (scoped to the document panel only)
     const currentRange = ranges[clampedIndex];
     const el = currentRange.startContainer.parentElement;
-    el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (el) scrollMatchIntoView(el);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchOpen, searchQuery, docModel, tags, showTags]);
 
@@ -550,7 +550,7 @@ export const DocViewer: React.FC<DocViewerProps> = ({ docModel, categories }) =>
       setSearchCurrentIndex(wrapped);
       CSS.highlights.set('search-current', new Highlight(ranges[wrapped]));
       const el = ranges[wrapped].startContainer.parentElement;
-      el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      if (el) scrollMatchIntoView(el);
     },
     []
   );
@@ -703,7 +703,7 @@ export const DocViewer: React.FC<DocViewerProps> = ({ docModel, categories }) =>
   if (!editor) return null;
 
   return (
-    <div className="relative h-full" ref={editorContainerRef}>
+    <div className="relative min-h-full" ref={editorContainerRef}>
       {/* Sticky top bar: hint + optional search bar */}
       <div className="sticky top-0 z-10 bg-blue-50 border-b border-blue-100 px-4 py-2 flex items-center gap-3">
         {/* Info hint — shrinks when search bar is open */}
@@ -1183,6 +1183,44 @@ function isLikelyPageNumber(value: string): boolean {
 
 function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Scroll a matched element into view **within its scrollable panel only**.
+ *
+ * Using the native `element.scrollIntoView()` can cause the outer viewport
+ * to scroll as well (moving the sticky header or the whole page). Instead,
+ * we find the nearest scrollable ancestor and adjust only its `scrollTop`.
+ */
+function scrollMatchIntoView(el: HTMLElement): void {
+  // Walk up to find the first scrollable ancestor
+  let container: HTMLElement | null = el.parentElement;
+  while (container) {
+    const style = window.getComputedStyle(container);
+    const overflow = style.overflowY;
+    if ((overflow === 'auto' || overflow === 'scroll') && container.scrollHeight > container.clientHeight) {
+      break;
+    }
+    container = container.parentElement;
+  }
+
+  if (!container) {
+    // Fallback: native scroll but constrained to nearest
+    el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    return;
+  }
+
+  const containerRect = container.getBoundingClientRect();
+  const elRect = el.getBoundingClientRect();
+
+  // Target: vertically centre the element within the container
+  const targetScrollTop =
+    container.scrollTop +
+    (elRect.top - containerRect.top) -
+    container.clientHeight / 2 +
+    elRect.height / 2;
+
+  container.scrollTo({ top: Math.max(0, targetScrollTop), behavior: 'smooth' });
 }
 
 function createGraphPlaceholderDataUri(): string {
