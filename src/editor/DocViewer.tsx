@@ -682,6 +682,12 @@ export const DocViewer: React.FC<DocViewerProps> = ({ docModel, categories }) =>
       }
 
       if (startOffset < endOffset) {
+        // Snap selection boundaries: if only 1-2 characters are missed at either
+        // edge before/after a natural word/sentence boundary, extend automatically.
+        const snapped = snapSelectionBoundaries(paraText, startOffset, endOffset);
+        startOffset = snapped.start;
+        endOffset = snapped.end;
+
         const textSlice = paraText.slice(startOffset, endOffset);
         if (textSlice.trim()) {
           pendingSelections.push({
@@ -946,6 +952,51 @@ function findDomNodeForOffset(
     current = walker.nextNode();
   }
   return null;
+}
+
+/**
+ * Snap selection boundaries outward to avoid cutting off 1–2 characters at
+ * the edge of a word or sentence.
+ *
+ * Rules (applied independently for each edge):
+ *  - **End**: if there are 1–2 non-whitespace, non-boundary characters between
+ *    `endOffset` and the next boundary (punctuation `.!?,;:` · whitespace ·
+ *    end-of-text), extend `endOffset` forward to include them.
+ *  - **Start**: if there are 1–2 non-whitespace, non-boundary characters
+ *    between the previous boundary (or start-of-text) and `startOffset`, pull
+ *    `startOffset` back to include them.
+ *
+ * "Boundary characters" are: . ! ? , ; : and any whitespace.
+ * This regex intentionally avoids `\w` so that Swedish letters (å ä ö) are
+ * treated as word characters.
+ */
+function snapSelectionBoundaries(
+  text: string,
+  start: number,
+  end: number
+): { start: number; end: number } {
+  // Characters that mark the edge of a word / sentence
+  const isBoundary = (ch: string) => /[.!?,;:\s]/.test(ch);
+
+  // ── Snap end forward ────────────────────────────────────────────────────
+  // If the selection ends in the middle of a word (next char is not a
+  // boundary), extend to the end of that word unconditionally.
+  if (end < text.length && !isBoundary(text[end])) {
+    while (end < text.length && !isBoundary(text[end])) {
+      end++;
+    }
+  }
+
+  // ── Snap start backward ─────────────────────────────────────────────────
+  // If the selection starts in the middle of a word (preceding char is not a
+  // boundary), pull back to the start of that word unconditionally.
+  if (start > 0 && !isBoundary(text[start - 1])) {
+    while (start > 0 && !isBoundary(text[start - 1])) {
+      start--;
+    }
+  }
+
+  return { start, end };
 }
 
 function buildObjectKey(type: 'image' | 'graph', paragraphIndex: number, runId: string): string {
