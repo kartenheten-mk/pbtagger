@@ -9,12 +9,13 @@
  *  - Apply TagMark decorations for existing text tags
  */
 
-import React, { useEffect, useRef, useCallback } from 'react';
+import React, { useEffect, useRef, useCallback, useState } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Image from '@tiptap/extension-image';
 
 import { TagMark } from './extensions/TagMark';
+import { SearchBar } from './SearchBar';
 import { useDocumentStore } from '../store/useDocumentStore';
 import type { Category, DocModel, DocParagraph, Tag, PendingSelection } from '../types';
 
@@ -181,6 +182,14 @@ export const DocViewer: React.FC<DocViewerProps> = ({ docModel, categories }) =>
 
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const lastUpdateRef = useRef({ tags, docModel, showTags, selectedTagUuid });
+
+  // ── Search state ─────────────────────────────────────────────────────────
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchMatchCount, setSearchMatchCount] = useState(0);
+  const [searchCurrentIndex, setSearchCurrentIndex] = useState(0);
+  // Stable ref to match ranges so navigation callbacks don't need to be recreated
+  const searchRangesRef = useRef<Range[]>([]);
 
   // ── Build TipTap initial content ─────────────────────────────────────────
   const visibleTags = showTags ? tags : tags.filter((t) => t.uuid === selectedTagUuid);
@@ -449,6 +458,129 @@ export const DocViewer: React.FC<DocViewerProps> = ({ docModel, categories }) =>
       CSS.highlights.delete('pending-selection');
     };
   }, [pendingSelection]);
+  // ── Ctrl+F → open search bar ─────────────────────────────────────────────
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+        e.preventDefault();
+        setSearchOpen(true);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
+
+  // ── Compute search matches and apply CSS Highlight API ────────────────────
+  useEffect(() => {
+    if (typeof CSS === 'undefined' || !CSS.highlights) return;
+
+    // Always clean up both highlight layers first
+    CSS.highlights.delete('search-matches');
+    CSS.highlights.delete('search-current');
+    searchRangesRef.current = [];
+
+    if (!searchOpen || !searchQuery.trim() || !editorContainerRef.current) {
+      setSearchMatchCount(0);
+      setSearchCurrentIndex(0);
+      return;
+    }
+
+    const proseMirrorEl = editorContainerRef.current.querySelector('.ProseMirror');
+    if (!proseMirrorEl) return;
+
+    const needle = searchQuery.toLowerCase();
+    const ranges: Range[] = [];
+
+    // Walk every text node inside ProseMirror (skip badge widgets)
+    const walker = document.createTreeWalker(
+      proseMirrorEl,
+      NodeFilter.SHOW_TEXT,
+      noBadgeFilter
+    );
+
+    let node = walker.nextNode() as Text | null;
+    while (node) {
+      const text = node.textContent ?? '';
+      const lower = text.toLowerCase();
+      let pos = 0;
+      while ((pos = lower.indexOf(needle, pos)) !== -1) {
+        try {
+          const range = document.createRange();
+          range.setStart(node, pos);
+          range.setEnd(node, pos + needle.length);
+          ranges.push(range);
+        } catch {
+          // skip malformed ranges
+        }
+        pos += needle.length;
+      }
+      node = walker.nextNode() as Text | null;
+    }
+
+    searchRangesRef.current = ranges;
+    const count = ranges.length;
+    setSearchMatchCount(count);
+
+    // Clamp currentIndex in case query changed
+    const clampedIndex = count === 0 ? 0 : Math.min(searchCurrentIndex, count - 1);
+    setSearchCurrentIndex(clampedIndex);
+
+    if (count === 0) return;
+
+    // All matches (dim highlight)
+    CSS.highlights.set('search-matches', new Highlight(...ranges));
+
+    // Current match (bright highlight)
+    CSS.highlights.set('search-current', new Highlight(ranges[clampedIndex]));
+
+    // Scroll current match into view (scoped to the document panel only)
+    const currentRange = ranges[clampedIndex];
+    const el = currentRange.startContainer.parentElement;
+    if (el) scrollMatchIntoView(el);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchOpen, searchQuery, docModel, tags, showTags]);
+
+  // ── Navigate between search matches ──────────────────────────────────────
+  const goToMatch = useCallback(
+    (index: number) => {
+      const ranges = searchRangesRef.current;
+      if (ranges.length === 0 || typeof CSS === 'undefined' || !CSS.highlights) return;
+
+      const wrapped = ((index % ranges.length) + ranges.length) % ranges.length;
+      setSearchCurrentIndex(wrapped);
+      CSS.highlights.set('search-current', new Highlight(ranges[wrapped]));
+      const el = ranges[wrapped].startContainer.parentElement;
+      if (el) scrollMatchIntoView(el);
+    },
+    []
+  );
+
+  const handleSearchNext = useCallback(() => {
+    goToMatch(searchCurrentIndex + 1);
+  }, [goToMatch, searchCurrentIndex]);
+
+  const handleSearchPrevious = useCallback(() => {
+    goToMatch(searchCurrentIndex - 1);
+  }, [goToMatch, searchCurrentIndex]);
+
+  const handleSearchClose = useCallback(() => {
+    setSearchOpen(false);
+    setSearchQuery('');
+    setSearchMatchCount(0);
+    setSearchCurrentIndex(0);
+    if (typeof CSS !== 'undefined' && CSS.highlights) {
+      CSS.highlights.delete('search-matches');
+      CSS.highlights.delete('search-current');
+    }
+    searchRangesRef.current = [];
+  }, []);
+
+  const handleSearchQueryChange = useCallback((q: string) => {
+    setSearchQuery(q);
+    // Reset to first match whenever query changes
+    setSearchCurrentIndex(0);
+  }, []);
+
   // ── Improve ToC readability + align tabbed paragraphs (visual-only classes) ──
   useEffect(() => {
     if (!editorContainerRef.current) return;
@@ -571,15 +703,51 @@ export const DocViewer: React.FC<DocViewerProps> = ({ docModel, categories }) =>
   if (!editor) return null;
 
   return (
-    <div className="relative h-full" ref={editorContainerRef}>
-      {/* Selection hint banner */}
-      <div className="sticky top-0 z-10 bg-blue-50 border-b border-blue-100 px-4 py-2 flex items-center gap-2">
-        <svg className="w-4 h-4 text-blue-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-        <p className="text-xs text-blue-600">
-          Markera text, klicka bild/diagram eller klicka i en tabell för att skapa en tagg.
-        </p>
+    <div className="relative min-h-full" ref={editorContainerRef}>
+      {/* Sticky top bar: hint + optional search bar */}
+      <div className="sticky top-0 z-10 bg-blue-50 border-b border-blue-100 px-4 py-2 flex items-center gap-3">
+        {/* Info hint — shrinks when search bar is open */}
+        {!searchOpen && (
+          <>
+            <svg className="w-4 h-4 text-blue-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <p className="text-xs text-blue-600 flex-1">
+              Markera text och klicka bild för att skapa en tagg.
+            </p>
+          </>
+        )}
+
+        {/* Search bar (shown when open) */}
+        {searchOpen && (
+          <div className="flex-1">
+            <SearchBar
+              query={searchQuery}
+              matchCount={searchMatchCount}
+              currentMatch={searchCurrentIndex}
+              onQueryChange={handleSearchQueryChange}
+              onNext={handleSearchNext}
+              onPrevious={handleSearchPrevious}
+              onClose={handleSearchClose}
+            />
+          </div>
+        )}
+
+        {/* Search toggle button (always visible) */}
+        <button
+          onClick={() => setSearchOpen((v) => !v)}
+          title="Sök i dokument (Ctrl+F)"
+          className={`p-1.5 rounded-lg transition-colors flex-shrink-0 ${
+            searchOpen
+              ? 'text-blue-600 bg-blue-100'
+              : 'text-blue-400 hover:text-blue-600 hover:bg-blue-100'
+          }`}
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+              d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
+          </svg>
+        </button>
       </div>
 
       {/* TipTap editor */}
@@ -1015,6 +1183,44 @@ function isLikelyPageNumber(value: string): boolean {
 
 function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Scroll a matched element into view **within its scrollable panel only**.
+ *
+ * Using the native `element.scrollIntoView()` can cause the outer viewport
+ * to scroll as well (moving the sticky header or the whole page). Instead,
+ * we find the nearest scrollable ancestor and adjust only its `scrollTop`.
+ */
+function scrollMatchIntoView(el: HTMLElement): void {
+  // Walk up to find the first scrollable ancestor
+  let container: HTMLElement | null = el.parentElement;
+  while (container) {
+    const style = window.getComputedStyle(container);
+    const overflow = style.overflowY;
+    if ((overflow === 'auto' || overflow === 'scroll') && container.scrollHeight > container.clientHeight) {
+      break;
+    }
+    container = container.parentElement;
+  }
+
+  if (!container) {
+    // Fallback: native scroll but constrained to nearest
+    el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    return;
+  }
+
+  const containerRect = container.getBoundingClientRect();
+  const elRect = el.getBoundingClientRect();
+
+  // Target: vertically centre the element within the container
+  const targetScrollTop =
+    container.scrollTop +
+    (elRect.top - containerRect.top) -
+    container.clientHeight / 2 +
+    elRect.height / 2;
+
+  container.scrollTo({ top: Math.max(0, targetScrollTop), behavior: 'smooth' });
 }
 
 function createGraphPlaceholderDataUri(): string {

@@ -269,6 +269,20 @@
   box-shadow: inset 3px 0 0 rgba(37, 99, 235, 0.7);
 }
 
+/* ── Text search highlights (CSS Custom Highlight API) ──────────────────── */
+
+/* All matches — subtle yellow tint */
+::highlight(search-matches) {
+  background-color: rgba(234, 179, 8, 0.30);
+  color: inherit;
+}
+
+/* Currently active match — stronger amber highlight */
+::highlight(search-current) {
+  background-color: rgba(234, 179, 8, 0.75);
+  color: #1a1a1a;
+}
+
 /* ── DataMenu popover animation ──────────────────────────────────────────── */
 @keyframes fadeSlideDown {
   from {

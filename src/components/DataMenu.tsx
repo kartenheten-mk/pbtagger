@@ -162,10 +162,10 @@ export const DataMenu: React.FC = () => {
     try {
       const zip = new PizZip(zipBuffer);
       await exportDocx(zip, docModel, tags, fileName);
-      setSuccess('Tagged .docx downloaded!');
+      setSuccess('Taggad .docx nedladdad!');
       setOpen(false);
     } catch (e) {
-      setError('Export .docx failed. Please try again.');
+      setError('Export av .docx misslyckades. Försök igen.');
       console.error(e);
     } finally {
       setExportingDocx(false);
@@ -178,10 +178,10 @@ export const DataMenu: React.FC = () => {
     setError(null);
     try {
       await exportGeometryJson();
-      setSuccess('Geometry JSON downloaded!');
+      setSuccess('Geometri-JSON nedladdad!');
       setOpen(false);
     } catch (e) {
-      setError('Geometry export failed.');
+      setError('Geometriexport misslyckades.');
       console.error(e);
     } finally {
       setExportingGeo(false);
@@ -196,10 +196,10 @@ export const DataMenu: React.FC = () => {
     try {
       const bufferCopy = zipBuffer.slice(0);
       await exportProject(fileName, bufferCopy, tags, geometries, activeGeometryDocId);
-      setSuccess('Project exported!');
+      setSuccess('Projekt exporterat!');
       setOpen(false);
     } catch (e) {
-      setError('Project export failed.');
+      setError('Projektexport misslyckades.');
       console.error(e);
     } finally {
       setExportingProject(false);
@@ -212,12 +212,12 @@ export const DataMenu: React.FC = () => {
       const file = e.target.files?.[0];
       if (!file) return;
       if (!file.name.toLowerCase().endsWith('.docx')) {
-        setError('Only .docx files are supported.');
+        setError('Endast .docx-filer stöds.');
         return;
       }
       if (!window.confirm(
-        'Replace the current document with this new file?\n\n' +
-        'Your existing tags and geometry links will be preserved where possible.'
+        'Ersätt det aktuella dokumentet med den nya filen?\n\n' +
+        'Dina befintliga taggar och geometrilänkar bevaras i möjligaste mån.'
       )) {
         if (docxInputRef.current) docxInputRef.current.value = '';
         return;
@@ -232,10 +232,10 @@ export const DataMenu: React.FC = () => {
         const finalTags = embeddedTags.length > 0 ? embeddedTags : tags;
         // Use replaceDocument to stay within the same project (same documentId)
         replaceDocument(zipBytes, newModel, file.name, finalTags);
-        setSuccess('Document replaced!');
+        setSuccess('Dokument ersatt!');
         setOpen(false);
       } catch (e) {
-        setError('Failed to parse the new .docx file.');
+        setError('Kunde inte läsa den nya .docx-filen.');
         console.error(e);
       } finally {
         setImportingDocx(false);
@@ -256,10 +256,10 @@ export const DataMenu: React.FC = () => {
         const text = await file.text();
         const rawJson = JSON.parse(text) as Record<string, unknown>;
         await importGeometryJson(rawJson, file.name);
-        setSuccess('Geometry imported!');
+        setSuccess('Geometri importerad!');
         setOpen(false);
       } catch (e) {
-        setError('Failed to import geometry JSON. Is it a valid file?');
+        setError('Kunde inte importera geometri-JSON. Är det en giltig fil?');
         console.error(e);
       } finally {
         setImportingGeo(false);
@@ -282,7 +282,7 @@ export const DataMenu: React.FC = () => {
             ? 'bg-blue-600 border-blue-600 text-white shadow-md'
             : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-gray-300 shadow-sm'
         }`}
-        title="Open data import / export menu"
+        title="Öppna import-/exportmenyn"
       >
         {/* Folder icon */}
         <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -330,7 +330,7 @@ export const DataMenu: React.FC = () => {
             {/* ──────────── IMPORT ──────────────────────────────────── */}
             <div>
               <SectionLabel
-                label="Import"
+                label="Importera"
                 icon={
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -349,8 +349,8 @@ export const DataMenu: React.FC = () => {
                         d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
                   }
-                  title="Replace Document (.docx)"
-                  description="Swap in a new .docx while keeping your tags and geometry links."
+                  title="Ersätt dokument (.docx)"
+                  description="Byt ut mot en ny .docx och behåll dina taggar och geometrilänkar."
                   loading={importingDocx}
                   onClick={() => docxInputRef.current?.click()}
                 />
@@ -364,8 +364,8 @@ export const DataMenu: React.FC = () => {
                         d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
                     </svg>
                   }
-                  title="Import Geometry (.json)"
-                  description="Load a detaljplan JSON file to see geometries on the map."
+                  title="Importera geometri (.json)"
+                  description="Ladda en detaljplan-JSON-fil för att visa geometrier på kartan."
                   loading={importingGeo}
                   onClick={() => geoInputRef.current?.click()}
                 />
@@ -378,7 +378,7 @@ export const DataMenu: React.FC = () => {
             {/* ──────────── EXPORT ──────────────────────────────────── */}
             <div>
               <SectionLabel
-                label="Export"
+                label="Exportera"
                 icon={
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -397,10 +397,10 @@ export const DataMenu: React.FC = () => {
                         d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
                   }
-                  title="Export Tagged Document (.docx)"
-                  description="Download a .docx with content-controls and bookmarks injected."
+                  title="Exportera taggat dokument (.docx)"
+                  description="Ladda ner en .docx med innehållskontroller och bokmärken."
                   disabled={tags.length === 0}
-                  disabledReason="Add at least one tag first."
+                  disabledReason="Lägg till minst en tagg först."
                   loading={exportingDocx}
                   onClick={handleExportDocx}
                 />
@@ -414,10 +414,10 @@ export const DataMenu: React.FC = () => {
                         d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
                     </svg>
                   }
-                  title="Export Geometry (.json)"
-                  description="Download the geometry document in its original format."
+                  title="Exportera geometri (.json)"
+                  description="Ladda ner geometridokumentet i originalformat."
                   disabled={!activeGeometryDocId}
-                  disabledReason="No geometry file loaded."
+                  disabledReason="Ingen geometrifil laddad."
                   loading={exportingGeo}
                   onClick={handleExportGeo}
                 />
@@ -431,8 +431,8 @@ export const DataMenu: React.FC = () => {
                         d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                     </svg>
                   }
-                  title="Export Whole Project (.pbproject)"
-                  description="Everything in one file — document, tags and geometry."
+                  title="Exportera hela projektet (.pbproject)"
+                  description="Allt i en fil — dokument, taggar och geometri."
                   loading={exportingProject}
                   onClick={handleExportProject}
                 />
@@ -476,7 +476,7 @@ export const DataMenu: React.FC = () => {
             <div className="px-4 pb-4">
               <div className="flex items-center gap-2 text-xs text-gray-400">
                 <div className="w-3 h-3 border-2 border-gray-300 border-t-gray-500 rounded-full animate-spin" />
-                <span>Working…</span>
+                <span>Arbetar…</span>
               </div>
             </div>
           )}
