@@ -1,4 +1,5 @@
 import { getBookmarkSuffix, guessCategoryIdFromBookmarkName } from './bookmarkUtils';
+import { findOurCustomXmlPath } from './zipUtils';
 /**
  * DocxParser.ts
  *
@@ -160,13 +161,64 @@ function extractParagraphs(body: Element, zip: PizZip, relsMap: Record<string, s
     }
   }
 
-  // Walk direct children of body
+  // Walk direct children of body.
+  // IMPORTANT: When Word saves cross-paragraph bookmarks, it may hoist the
+  // <w:bookmarkStart> to the body level (between <w:p> elements).  We must
+  // handle those here so they are captured in `activeBookmarks` before the
+  // paragraphs that contain the corresponding <w:bookmarkEnd> are processed.
   const bodyChildren = body.childNodes;
   for (let i = 0; i < bodyChildren.length; i++) {
     const child = bodyChildren[i];
-    if (child.nodeType === 1) {
-      walkNode(child as Element);
+    if (child.nodeType !== 1) continue;
+    const el = child as Element;
+
+    // Body-level bookmarkStart: record with paragraphIndex = next paragraph
+    if (el.namespaceURI === NS.w && el.localName === 'bookmarkStart') {
+      const bmId = el.getAttributeNS(NS.w, 'id') || el.getAttribute('w:id');
+      const bmName = el.getAttributeNS(NS.w, 'name') || el.getAttribute('w:name');
+      if (bmId && bmName && bmName.includes('_')) {
+        activeBookmarks[bmId] = {
+          id: bmId,
+          name: bmName,
+          // The bookmark starts at the very beginning of the next paragraph
+          paragraphIndex: index,
+          startOffset: 0,
+          runId: `p${index}_r0`,
+        };
+      }
+      continue;
     }
+
+    // Body-level bookmarkEnd: completes at the end of the previous paragraph
+    if (el.namespaceURI === NS.w && el.localName === 'bookmarkEnd') {
+      const bmId = el.getAttributeNS(NS.w, 'id') || el.getAttribute('w:id');
+      if (bmId && activeBookmarks[bmId]) {
+        const bm = activeBookmarks[bmId];
+        if (bm.name && bm.paragraphIndex !== undefined && bm.startOffset !== undefined) {
+          const endParaIdx = index - 1;
+          if (endParaIdx >= 0) {
+            const endPara = result[endParaIdx];
+            const endOffset = endPara
+              ? endPara.runs.reduce((s, r) => s + r.text.length, 0)
+              : 0;
+            const isCrossPara = bm.paragraphIndex !== endParaIdx;
+            extractedBookmarks.push({
+              id: bm.id as string,
+              name: bm.name,
+              paragraphIndex: bm.paragraphIndex,
+              startOffset: bm.startOffset,
+              endOffset,
+              endParagraphIndex: isCrossPara ? endParaIdx : undefined,
+              runId: bm.runId,
+            });
+          }
+        }
+        delete activeBookmarks[bmId];
+      }
+      continue;
+    }
+
+    walkNode(el);
   }
 
   return result;
@@ -540,8 +592,10 @@ export function getRunSlicesForRange(
  * Returns an empty array if the file doesn't exist or isn't ours.
  */
 function extractTagsFromCustomXml(zip: PizZip): Tag[] {
-  const CUSTOM_XML_PATH = 'customXml/item1.xml';
-  const xmlFile = zip.file(CUSTOM_XML_PATH);
+  // Scan all customXml/item*.xml to find ours by namespace — Word may
+  // renumber these items when saving, so we can't rely on item1.xml.
+  const itemPath = findOurCustomXmlPath(zip);
+  const xmlFile = itemPath ? zip.file(itemPath) : null;
   if (!xmlFile) return [];
 
   try {
