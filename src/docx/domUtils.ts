@@ -420,6 +420,137 @@ export function injectSdtIntoParagraph(
 
 
 /**
+ * Inject bookmarkStart + bookmarkEnd for a tag that spans multiple paragraphs.
+ *
+ * The bookmarkStart is placed before the first tagged run in the start
+ * paragraph (splitting a run if the offset falls in the middle), and
+ * bookmarkEnd is placed after the last tagged run in the end paragraph.
+ *
+ * No <w:sdt> is used here — Word bookmarks alone fully support
+ * cross-paragraph ranges and are simpler to inject/extract.
+ */
+export function injectCrossParaBookmarks(
+  docDom: Document,
+  allParas: Element[],
+  tag: import('../types').Tag,
+  bookmarkCounter: { value: number }
+): void {
+  const endParaIdx = tag.endParagraphIndex!;
+  const startParaEl = allParas[tag.paragraphIndex];
+  const endParaEl = allParas[endParaIdx];
+  if (!startParaEl || !endParaEl) return;
+
+  const bmId = bookmarkCounter.value++;
+  const bmName = generateBookmarkName(tag);
+
+  const bookmarkStart = docDom.createElementNS(NS.w, 'w:bookmarkStart');
+  bookmarkStart.setAttributeNS(NS.w, 'w:id', String(bmId));
+  bookmarkStart.setAttributeNS(NS.w, 'w:name', bmName);
+
+  const bookmarkEnd = docDom.createElementNS(NS.w, 'w:bookmarkEnd');
+  bookmarkEnd.setAttributeNS(NS.w, 'w:id', String(bmId));
+
+  placeBookmarkAtOffset(docDom, startParaEl, tag.startOffset, 'start', bookmarkStart);
+  placeBookmarkAtOffset(docDom, endParaEl, tag.endOffset, 'end', bookmarkEnd);
+}
+
+/**
+ * Place a bookmark marker (start or end) at the given character offset
+ * within a paragraph.
+ *
+ * @param placement 'start' → insert before the run at offset (splitting if
+ *                  needed); 'end' → insert after the run containing offset.
+ */
+function placeBookmarkAtOffset(
+  docDom: Document,
+  paraEl: Element,
+  targetOffset: number,
+  placement: 'start' | 'end',
+  markerEl: Element
+): void {
+  const runElements = collectRunElements(paraEl);
+  if (runElements.length === 0) {
+    // Paragraph has no runs — just append the marker to the paragraph
+    paraEl.appendChild(markerEl);
+    return;
+  }
+
+  // Build a text-offset map for the paragraph's runs
+  let cursor = 0;
+  const runMap: { domRun: Element; start: number; end: number }[] = [];
+  for (const runEl of runElements) {
+    const text = getRunTextWithTabs(runEl);
+    if (text === '') continue;
+    runMap.push({ domRun: runEl, start: cursor, end: cursor + text.length });
+    cursor += text.length;
+  }
+
+  if (runMap.length === 0) {
+    paraEl.appendChild(markerEl);
+    return;
+  }
+
+  if (placement === 'start') {
+    // Find the first run that covers (or starts at) targetOffset
+    for (const entry of runMap) {
+      if (entry.end <= targetOffset) continue;
+
+      const parent = entry.domRun.parentNode!;
+      if (entry.start < targetOffset) {
+        // Need to split this run so the bookmark is on the boundary
+        const splitOffset = targetOffset - entry.start;
+        const [, after] = splitRunElement(docDom, entry.domRun, splitOffset);
+        parent.insertBefore(markerEl, after);
+      } else {
+        parent.insertBefore(markerEl, entry.domRun);
+      }
+      return;
+    }
+    // targetOffset is past all runs — insert after the last run
+    const last = runMap[runMap.length - 1].domRun;
+    const parent = last.parentNode!;
+    if (last.nextSibling) {
+      parent.insertBefore(markerEl, last.nextSibling);
+    } else {
+      parent.appendChild(markerEl);
+    }
+  } else {
+    // placement === 'end': insert after the last run that is ≤ targetOffset
+    let insertAfter: Element | null = null;
+    for (const entry of runMap) {
+      if (entry.start >= targetOffset) break;
+
+      if (entry.end > targetOffset) {
+        // Run straddles the boundary — split it
+        const splitOffset = targetOffset - entry.start;
+        const [before] = splitRunElement(docDom, entry.domRun, splitOffset);
+        insertAfter = before;
+        break;
+      }
+      insertAfter = entry.domRun;
+    }
+
+    if (!insertAfter) {
+      // targetOffset is before all runs — insert at the beginning of the para
+      const firstChild = paraEl.firstChild;
+      if (firstChild) {
+        paraEl.insertBefore(markerEl, firstChild);
+      } else {
+        paraEl.appendChild(markerEl);
+      }
+      return;
+    }
+
+    const parent = insertAfter.parentNode!;
+    if (insertAfter.nextSibling) {
+      parent.insertBefore(markerEl, insertAfter.nextSibling);
+    } else {
+      parent.appendChild(markerEl);
+    }
+  }
+}
+
+/**
  * Removes existing custom tag <w:sdt> elements and their associated bookmarks
  * from the document to prevent nesting when we inject new ones.
  */

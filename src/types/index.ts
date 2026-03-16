@@ -55,12 +55,18 @@ export interface Tag {
   targetType?: TagTargetType;
   /** Plain text content of the tagged selection */
   text: string;
-  /** Index of the paragraph in DocModel.paragraphs */
+  /** Index of the paragraph in DocModel.paragraphs where the tag starts */
   paragraphIndex: number;
   /** Character offset inside the paragraph's concatenated text (start) */
   startOffset: number;
   /** Character offset inside the paragraph's concatenated text (end) */
   endOffset: number;
+  /**
+   * When set, the tag spans from paragraphIndex:startOffset to
+   * endParagraphIndex:endOffset (i.e. across multiple paragraphs).
+   * When absent or equal to paragraphIndex, the tag is single-paragraph.
+   */
+  endParagraphIndex?: number;
   /** Run id anchor for image/graph tags */
   runId?: string;
   /** Table id anchor for table tags */

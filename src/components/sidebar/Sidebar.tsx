@@ -54,19 +54,67 @@ export const Sidebar: React.FC<SidebarProps> = ({ teman, categories }) => {
     const cat = categories.find((c) => c.id === categoryId);
     if (!cat) return;
 
-    const newTags: Tag[] = pendingSelection.map((sel) => ({
-      uuid: uuidv4(),
-      categoryId,
-      targetType: sel.type,
-      text: sel.text,
-      paragraphIndex: sel.paragraphIndex,
-      startOffset: sel.startOffset,
-      endOffset: sel.endOffset,
-      runId: sel.runId,
-      tableId: sel.tableId,
-      note: note || undefined,
-      createdAt: new Date().toISOString(),
-    }));
+    // Partition selections: group consecutive text selections into one
+    // multi-paragraph tag; keep non-text selections as individual tags.
+    const newTags: Tag[] = [];
+    const now = new Date().toISOString();
+
+    // Separate text selections from object (image/graph/table) selections
+    const textSelections = pendingSelection.filter((s) => s.type === 'text');
+    const objectSelections = pendingSelection.filter((s) => s.type !== 'text');
+
+    if (textSelections.length > 1) {
+      // Merge all consecutive text selections into a single multi-paragraph tag.
+      // Sort by paragraph index to ensure correct order.
+      const sorted = [...textSelections].sort(
+        (a, b) => a.paragraphIndex - b.paragraphIndex
+      );
+      const first = sorted[0];
+      const last = sorted[sorted.length - 1];
+
+      newTags.push({
+        uuid: uuidv4(),
+        categoryId,
+        targetType: 'text',
+        text: sorted.map((s) => s.text).join('\n\n'),
+        paragraphIndex: first.paragraphIndex,
+        startOffset: first.startOffset,
+        endOffset: last.endOffset,
+        endParagraphIndex: last.paragraphIndex,
+        note: note || undefined,
+        createdAt: now,
+      });
+    } else if (textSelections.length === 1) {
+      const sel = textSelections[0];
+      newTags.push({
+        uuid: uuidv4(),
+        categoryId,
+        targetType: 'text',
+        text: sel.text,
+        paragraphIndex: sel.paragraphIndex,
+        startOffset: sel.startOffset,
+        endOffset: sel.endOffset,
+        note: note || undefined,
+        createdAt: now,
+      });
+    }
+
+    // Object selections each become their own tag (no merging applicable)
+    for (const sel of objectSelections) {
+      newTags.push({
+        uuid: uuidv4(),
+        categoryId,
+        targetType: sel.type,
+        text: sel.text,
+        paragraphIndex: sel.paragraphIndex,
+        startOffset: sel.startOffset,
+        endOffset: sel.endOffset,
+        runId: sel.runId,
+        tableId: sel.tableId,
+        note: note || undefined,
+        createdAt: now,
+      });
+    }
 
     addTags(newTags);
     setPendingSelection(null);

@@ -32,6 +32,7 @@ import {
   collectParagraphsInOrder,
   injectBookmarkAroundRun,
   injectSdtIntoParagraph,
+  injectCrossParaBookmarks,
   cleanExistingTagAnchors,
 } from './domUtils';
 
@@ -82,6 +83,7 @@ export async function exportDocx(
       paragraphIndex: t.paragraphIndex,
       startOffset: t.startOffset,
       endOffset: t.endOffset,
+      endParagraphIndex: t.endParagraphIndex,
       runId: t.runId,
       tableId: t.tableId,
       geometryIds: t.geometryIds,
@@ -150,7 +152,11 @@ function injectObjectBookmarks(
 }
 
 /**
- * Inject <w:sdt> wrappers + bookmarks for text tags.
+ * Inject anchors for text tags.
+ *
+ * - Single-paragraph tags get an inline <w:sdt> + bookmarks (existing path).
+ * - Multi-paragraph tags get a cross-paragraph bookmark only (no SDT), since
+ *   inline SDTs cannot span <w:p> boundaries.
  */
 function injectTextContentControls(
   docDom: Document,
@@ -159,23 +165,38 @@ function injectTextContentControls(
   tags: Tag[],
   bookmarkCounter: { value: number }
 ): void {
-  // Sort tags by paragraph then by start offset (process in reverse within
-  // each paragraph to avoid offset drift from earlier injections)
-  const sortedTags = [...tags].sort((a, b) => {
+  const singleParaTags = tags.filter(
+    (t) => !t.endParagraphIndex || t.endParagraphIndex === t.paragraphIndex
+  );
+  const multiParaTags = tags.filter(
+    (t) => t.endParagraphIndex !== undefined && t.endParagraphIndex > t.paragraphIndex
+  );
+
+  // ── Single-paragraph tags: inline SDT + bookmarks ────────────────────────
+  // Process in reverse document order so earlier injections don't shift offsets
+  const sortedSingle = [...singleParaTags].sort((a, b) => {
     if (a.paragraphIndex !== b.paragraphIndex) {
-      return b.paragraphIndex - a.paragraphIndex; // reverse para order
+      return b.paragraphIndex - a.paragraphIndex;
     }
-    return b.startOffset - a.startOffset; // reverse offset order
+    return b.startOffset - a.startOffset;
   });
 
-  for (const tag of sortedTags) {
+  for (const tag of sortedSingle) {
     const paraEl = allParas[tag.paragraphIndex];
     if (!paraEl) continue;
-
     const docPara = docModel.paragraphs[tag.paragraphIndex];
     if (!docPara) continue;
-
     injectSdtIntoParagraph(docDom, paraEl, docPara, tag, bookmarkCounter, STORE_ITEM_ID);
+  }
+
+  // ── Multi-paragraph tags: cross-paragraph bookmarks only ─────────────────
+  // Process in reverse document order as well
+  const sortedMulti = [...multiParaTags].sort(
+    (a, b) => b.paragraphIndex - a.paragraphIndex
+  );
+
+  for (const tag of sortedMulti) {
+    injectCrossParaBookmarks(docDom, allParas, tag, bookmarkCounter);
   }
 }
 
