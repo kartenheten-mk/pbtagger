@@ -44,17 +44,51 @@ interface TipTapDoc {
   content: TipTapParagraphNode[];
 }
 
+// A tag segment represents how a (possibly multi-paragraph) tag applies to a
+// single paragraph. For multi-paragraph tags the start/end offsets are adjusted
+// per paragraph: Number.MAX_SAFE_INTEGER means "to end of the paragraph".
+interface ParaTagSegment {
+  uuid: string;
+  categoryId: string;
+  startOffset: number;
+  endOffset: number; // Number.MAX_SAFE_INTEGER → clamp to paragraph length
+}
+
 function docModelToTipTap(model: DocModel, tags: Tag[], categories: Category[]): TipTapDoc {
-  // Build quick lookups
-  const textTagsByPara = new Map<number, Tag[]>();
+  // Build quick lookups, expanding multi-paragraph tags across all spanned
+  // paragraphs so the rendering loop stays per-paragraph.
+  const textTagsByPara = new Map<number, ParaTagSegment[]>();
   const objectTagByKey = new Map<string, Tag>();
 
   for (const tag of tags) {
     const targetType = tag.targetType ?? 'text';
     if (targetType === 'text') {
-      const arr = textTagsByPara.get(tag.paragraphIndex) ?? [];
-      arr.push(tag);
-      textTagsByPara.set(tag.paragraphIndex, arr);
+      const endParaIdx = tag.endParagraphIndex ?? tag.paragraphIndex;
+
+      if (endParaIdx <= tag.paragraphIndex) {
+        // Single-paragraph tag
+        const arr = textTagsByPara.get(tag.paragraphIndex) ?? [];
+        arr.push({ uuid: tag.uuid, categoryId: tag.categoryId, startOffset: tag.startOffset, endOffset: tag.endOffset });
+        textTagsByPara.set(tag.paragraphIndex, arr);
+      } else {
+        // Multi-paragraph tag – expand into per-paragraph segments
+        // First paragraph: startOffset → end of paragraph
+        const firstArr = textTagsByPara.get(tag.paragraphIndex) ?? [];
+        firstArr.push({ uuid: tag.uuid, categoryId: tag.categoryId, startOffset: tag.startOffset, endOffset: Number.MAX_SAFE_INTEGER });
+        textTagsByPara.set(tag.paragraphIndex, firstArr);
+
+        // Middle paragraphs: whole paragraph
+        for (let pi = tag.paragraphIndex + 1; pi < endParaIdx; pi++) {
+          const arr = textTagsByPara.get(pi) ?? [];
+          arr.push({ uuid: tag.uuid, categoryId: tag.categoryId, startOffset: 0, endOffset: Number.MAX_SAFE_INTEGER });
+          textTagsByPara.set(pi, arr);
+        }
+
+        // Last paragraph: 0 → endOffset
+        const lastArr = textTagsByPara.get(endParaIdx) ?? [];
+        lastArr.push({ uuid: tag.uuid, categoryId: tag.categoryId, startOffset: 0, endOffset: tag.endOffset });
+        textTagsByPara.set(endParaIdx, lastArr);
+      }
       continue;
     }
 

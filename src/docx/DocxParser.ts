@@ -1,4 +1,5 @@
 import { getBookmarkSuffix, guessCategoryIdFromBookmarkName } from './bookmarkUtils';
+import { findOurCustomXmlPath } from './zipUtils';
 /**
  * DocxParser.ts
  *
@@ -98,9 +99,16 @@ interface TableContext {
 export interface ExtractedBookmark {
   id: string;
   name: string;
+  /** Index of the paragraph where bookmarkStart was found */
   paragraphIndex: number;
   startOffset?: number;
   endOffset?: number;
+  /**
+   * Set when the bookmarkEnd was found in a different paragraph than
+   * bookmarkStart — i.e. a cross-paragraph bookmark. The endOffset then
+   * refers to a character offset in this end paragraph.
+   */
+  endParagraphIndex?: number;
   runId?: string; // used for object bookmarks
 }
 
@@ -153,13 +161,64 @@ function extractParagraphs(body: Element, zip: PizZip, relsMap: Record<string, s
     }
   }
 
-  // Walk direct children of body
+  // Walk direct children of body.
+  // IMPORTANT: When Word saves cross-paragraph bookmarks, it may hoist the
+  // <w:bookmarkStart> to the body level (between <w:p> elements).  We must
+  // handle those here so they are captured in `activeBookmarks` before the
+  // paragraphs that contain the corresponding <w:bookmarkEnd> are processed.
   const bodyChildren = body.childNodes;
   for (let i = 0; i < bodyChildren.length; i++) {
     const child = bodyChildren[i];
-    if (child.nodeType === 1) {
-      walkNode(child as Element);
+    if (child.nodeType !== 1) continue;
+    const el = child as Element;
+
+    // Body-level bookmarkStart: record with paragraphIndex = next paragraph
+    if (el.namespaceURI === NS.w && el.localName === 'bookmarkStart') {
+      const bmId = el.getAttributeNS(NS.w, 'id') || el.getAttribute('w:id');
+      const bmName = el.getAttributeNS(NS.w, 'name') || el.getAttribute('w:name');
+      if (bmId && bmName && bmName.includes('_')) {
+        activeBookmarks[bmId] = {
+          id: bmId,
+          name: bmName,
+          // The bookmark starts at the very beginning of the next paragraph
+          paragraphIndex: index,
+          startOffset: 0,
+          runId: `p${index}_r0`,
+        };
+      }
+      continue;
     }
+
+    // Body-level bookmarkEnd: completes at the end of the previous paragraph
+    if (el.namespaceURI === NS.w && el.localName === 'bookmarkEnd') {
+      const bmId = el.getAttributeNS(NS.w, 'id') || el.getAttribute('w:id');
+      if (bmId && activeBookmarks[bmId]) {
+        const bm = activeBookmarks[bmId];
+        if (bm.name && bm.paragraphIndex !== undefined && bm.startOffset !== undefined) {
+          const endParaIdx = index - 1;
+          if (endParaIdx >= 0) {
+            const endPara = result[endParaIdx];
+            const endOffset = endPara
+              ? endPara.runs.reduce((s, r) => s + r.text.length, 0)
+              : 0;
+            const isCrossPara = bm.paragraphIndex !== endParaIdx;
+            extractedBookmarks.push({
+              id: bm.id as string,
+              name: bm.name,
+              paragraphIndex: bm.paragraphIndex,
+              startOffset: bm.startOffset,
+              endOffset,
+              endParagraphIndex: isCrossPara ? endParaIdx : undefined,
+              runId: bm.runId,
+            });
+          }
+        }
+        delete activeBookmarks[bmId];
+      }
+      continue;
+    }
+
+    walkNode(el);
   }
 
   return result;
@@ -223,29 +282,32 @@ function extractRuns(para: Element, paraIndex: number, zip: PizZip, relsMap: Rec
       if (id && activeBookmarks[id]) {
         const bm = activeBookmarks[id];
         if (bm.name && bm.paragraphIndex !== undefined && bm.startOffset !== undefined) {
-          // If the bookmark ends in a different paragraph than it started, cap the endOffset
-          // to the end of the starting paragraph (or rather, the textOffset we reached at the end of the start para).
-          // But since we are processing Para B now, we don't know the exact length of Para A.
-          // Wait, if it's a different paragraph, we can just say endOffset = undefined and handle it later,
-          // or we can set a flag.
-          // Let's just store the endParagraphIndex too.
-          let finalEndOffset = textOffset;
-          if (bm.paragraphIndex !== paraIndex) {
-              // Spans multiple paragraphs. Tag model doesn't support this well.
-              // Just use the start paragraph and set endOffset to something large, or leave it.
-              // Actually, if it spans, the text inside it might be huge.
-              // We'll mark it as a multi-paragraph bookmark. For simplicity, we can set endOffset to the text length of the start paragraph later.
-              finalEndOffset = 999999; // We will clamp this in reconcileTagsWithBookmarks
-          }
+          const isCrossPara = bm.paragraphIndex !== paraIndex;
 
-          extractedBookmarks.push({
-            id: bm.id as string,
-            name: bm.name,
-            paragraphIndex: bm.paragraphIndex,
-            startOffset: bm.startOffset,
-            endOffset: finalEndOffset,
-            runId: bm.runId,
-          });
+          if (isCrossPara) {
+            // Cross-paragraph bookmark: record which paragraph the end is in,
+            // and the character offset within that end paragraph.
+            extractedBookmarks.push({
+              id: bm.id as string,
+              name: bm.name,
+              paragraphIndex: bm.paragraphIndex,
+              startOffset: bm.startOffset,
+              // endOffset is the offset reached so far in the END paragraph
+              endOffset: textOffset,
+              endParagraphIndex: paraIndex,
+              runId: bm.runId,
+            });
+          } else {
+            // Same-paragraph bookmark
+            extractedBookmarks.push({
+              id: bm.id as string,
+              name: bm.name,
+              paragraphIndex: bm.paragraphIndex,
+              startOffset: bm.startOffset,
+              endOffset: textOffset,
+              runId: bm.runId,
+            });
+          }
         }
         delete activeBookmarks[id];
       }
@@ -530,8 +592,10 @@ export function getRunSlicesForRange(
  * Returns an empty array if the file doesn't exist or isn't ours.
  */
 function extractTagsFromCustomXml(zip: PizZip): Tag[] {
-  const CUSTOM_XML_PATH = 'customXml/item1.xml';
-  const xmlFile = zip.file(CUSTOM_XML_PATH);
+  // Scan all customXml/item*.xml to find ours by namespace — Word may
+  // renumber these items when saving, so we can't rely on item1.xml.
+  const itemPath = findOurCustomXmlPath(zip);
+  const xmlFile = itemPath ? zip.file(itemPath) : null;
   if (!xmlFile) return [];
 
   try {
@@ -571,6 +635,13 @@ function extractTagsFromCustomXml(zip: PizZip): Tag[] {
 
       if (!uuid || !categoryId) continue;
 
+      // Read optional endParagraphIndex (present for multi-paragraph tags)
+      const endParagraphIndexRaw = el.getAttribute('endParagraphIndex');
+      const endParagraphIndex =
+        endParagraphIndexRaw !== null && endParagraphIndexRaw !== ''
+          ? parseInt(endParagraphIndexRaw, 10)
+          : undefined;
+
       tags.push({
         uuid,
         categoryId,
@@ -579,6 +650,10 @@ function extractTagsFromCustomXml(zip: PizZip): Tag[] {
         paragraphIndex,
         startOffset,
         endOffset,
+        endParagraphIndex:
+          endParagraphIndex !== undefined && endParagraphIndex !== paragraphIndex
+            ? endParagraphIndex
+            : undefined,
         runId,
         tableId,
         geometryIds,
@@ -601,7 +676,37 @@ function normalizeTagTargetType(value: string | null): TagTargetType {
   return 'text';
 }
 
+/**
+ * Build a combined text string from a multi-paragraph range.
+ * Paragraphs are joined with '\n\n' (matching how the editor stores them).
+ */
+function buildMultiParaText(
+  paragraphs: DocParagraph[],
+  startParaIdx: number,
+  startOffset: number,
+  endParaIdx: number,
+  endOffset: number
+): string {
+  const parts: string[] = [];
 
+  for (let pi = startParaIdx; pi <= endParaIdx; pi++) {
+    const para = paragraphs[pi];
+    if (!para) continue;
+    const text = getParagraphText(para);
+
+    if (pi === startParaIdx && pi === endParaIdx) {
+      parts.push(text.slice(startOffset, Math.min(endOffset, text.length)));
+    } else if (pi === startParaIdx) {
+      parts.push(text.slice(startOffset));
+    } else if (pi === endParaIdx) {
+      parts.push(text.slice(0, Math.min(endOffset, text.length)));
+    } else {
+      parts.push(text);
+    }
+  }
+
+  return parts.join('\n\n');
+}
 
 function reconcileTagsWithBookmarks(
   tags: Tag[],
@@ -640,15 +745,25 @@ function reconcileTagsWithBookmarks(
           tag.startOffset = bm.startOffset;
           tag.endOffset = bm.endOffset;
 
-          // Re-extract the text to ensure it matches the new offsets
-          const para = paragraphs[tag.paragraphIndex];
-          if (para) {
-            const paraText = getParagraphText(para);
-            // Clamp endOffset if it was a multi-paragraph bookmark
-            if (tag.endOffset > paraText.length) {
-                tag.endOffset = paraText.length;
+          if (bm.endParagraphIndex !== undefined) {
+            // Cross-paragraph bookmark: set endParagraphIndex and rebuild text
+            tag.endParagraphIndex = bm.endParagraphIndex;
+            tag.text = buildMultiParaText(
+              paragraphs,
+              bm.paragraphIndex,
+              bm.startOffset,
+              bm.endParagraphIndex,
+              bm.endOffset
+            );
+          } else {
+            // Single-paragraph bookmark: re-extract text
+            tag.endParagraphIndex = undefined;
+            const para = paragraphs[tag.paragraphIndex];
+            if (para) {
+              const paraText = getParagraphText(para);
+              tag.endOffset = Math.min(tag.endOffset, paraText.length);
+              tag.text = paraText.slice(tag.startOffset, tag.endOffset);
             }
-            tag.text = paraText.slice(tag.startOffset, tag.endOffset);
           }
         }
       }

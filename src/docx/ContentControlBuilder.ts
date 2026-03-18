@@ -103,6 +103,11 @@ export interface TagMetadata {
   paragraphIndex: number;
   startOffset: number;
   endOffset: number;
+  /**
+   * When set, the tag spans paragraphs from `paragraphIndex` to
+   * `endParagraphIndex`. Omitted for single-paragraph tags.
+   */
+  endParagraphIndex?: number;
   runId?: string;
   tableId?: string;
   /** UUIDs of linked geometries (stored as comma-separated string in XML) */
@@ -119,7 +124,11 @@ export function buildCustomXmlItem(tags: TagMetadata[]): string {
         t.geometryIds && t.geometryIds.length > 0
           ? ` geometryIds="${escXml(t.geometryIds.join(','))}"`
           : '';
-      return `  <pb:tag uuid="${escXml(t.uuid)}" categoryId="${escXml(t.categoryId)}" targetType="${escXml(targetType)}" paragraphIndex="${t.paragraphIndex}" startOffset="${t.startOffset}" endOffset="${t.endOffset}" createdAt="${escXml(t.createdAt)}"${t.runId ? ` runId="${escXml(t.runId)}"` : ''}${t.tableId ? ` tableId="${escXml(t.tableId)}"` : ''}${geometryIdsAttr}${t.note ? ` note="${escXml(t.note)}"` : ''}>
+      const endParaAttr =
+        t.endParagraphIndex !== undefined && t.endParagraphIndex !== t.paragraphIndex
+          ? ` endParagraphIndex="${t.endParagraphIndex}"`
+          : '';
+      return `  <pb:tag uuid="${escXml(t.uuid)}" categoryId="${escXml(t.categoryId)}" targetType="${escXml(targetType)}" paragraphIndex="${t.paragraphIndex}" startOffset="${t.startOffset}" endOffset="${t.endOffset}"${endParaAttr} createdAt="${escXml(t.createdAt)}"${t.runId ? ` runId="${escXml(t.runId)}"` : ''}${t.tableId ? ` tableId="${escXml(t.tableId)}"` : ''}${geometryIdsAttr}${t.note ? ` note="${escXml(t.note)}"` : ''}>
     <pb:text>${escXml(t.text)}</pb:text>
   </pb:tag>`;
     })

@@ -6,7 +6,8 @@
  *  2. Injects anchors into document.xml:
  *     - <w:sdt> + bookmarks for text tags
  *     - bookmarks for image/graph tags
- *  3. Writes / updates customXml/item1.xml with all tag metadata
+ *  3. Writes / updates the customXml item that holds our tag metadata
+ *     (dynamically resolved — Word may renumber items when saving)
  *  4. Updates [Content_Types].xml and word/_rels/document.xml.rels if needed
  *  5. Re-zips and triggers a browser download
  *
@@ -26,19 +27,19 @@ import {
   ensureCustomXmlRels,
   updateDocumentRels,
   updateContentTypes,
+  resolveCustomXmlSlot,
 } from './zipUtils';
 import { findMaxBookmarkId } from './bookmarkUtils';
 import {
   collectParagraphsInOrder,
   injectBookmarkAroundRun,
   injectSdtIntoParagraph,
+  injectCrossParaBookmarks,
   cleanExistingTagAnchors,
 } from './domUtils';
 
 // Fixed store item ID for our custom XML part (GUID without braces used in file)
 const STORE_ITEM_ID = 'A1B2C3D4-E5F6-7890-ABCD-EF1234567890';
-const CUSTOM_XML_PATH = 'customXml/item1.xml';
-const CUSTOM_XML_PROPS_PATH = 'customXml/itemProps1.xml';
 
 /**
  * Main export function. Clones the ZIP, injects tags, and downloads the file.
@@ -72,7 +73,10 @@ export async function exportDocx(
   const modifiedDocXml = serializeXml(docDom);
   zip.file('word/document.xml', modifiedDocXml);
 
-  // 5. Write Custom XML part (all tag types)
+  // 5. Resolve the correct customXml slot (handles Word renumbering items)
+  const { itemPath, itemNumber, propsPath, relsPath } = resolveCustomXmlSlot(zip);
+
+  // 6. Write Custom XML part (all tag types)
   const customXmlContent = buildCustomXmlItem(
     tags.map((t) => ({
       uuid: t.uuid,
@@ -82,6 +86,7 @@ export async function exportDocx(
       paragraphIndex: t.paragraphIndex,
       startOffset: t.startOffset,
       endOffset: t.endOffset,
+      endParagraphIndex: t.endParagraphIndex,
       runId: t.runId,
       tableId: t.tableId,
       geometryIds: t.geometryIds,
@@ -89,19 +94,19 @@ export async function exportDocx(
       createdAt: t.createdAt,
     }))
   );
-  zip.file(CUSTOM_XML_PATH, customXmlContent);
-  zip.file(CUSTOM_XML_PROPS_PATH, buildCustomXmlItemProps(STORE_ITEM_ID));
+  zip.file(itemPath, customXmlContent);
+  zip.file(propsPath, buildCustomXmlItemProps(STORE_ITEM_ID));
 
-  // 6. Ensure customXml/_rels/item1.xml.rels exists
-  ensureCustomXmlRels(zip);
+  // 7. Ensure customXml/_rels/item{N}.xml.rels exists
+  ensureCustomXmlRels(zip, relsPath, itemNumber);
 
-  // 7. Update word/_rels/document.xml.rels
-  updateDocumentRels(zip);
+  // 8. Update word/_rels/document.xml.rels
+  updateDocumentRels(zip, itemPath);
 
-  // 8. Update [Content_Types].xml
-  updateContentTypes(zip);
+  // 9. Update [Content_Types].xml
+  updateContentTypes(zip, itemPath, propsPath);
 
-  // 9. Generate blob and trigger download
+  // 10. Generate blob and trigger download
   const blob = zip.generate({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
   const exportName = fileName.replace(/\.docx$/i, '') + '_tagged.docx';
   saveAs(blob, exportName);
@@ -150,7 +155,11 @@ function injectObjectBookmarks(
 }
 
 /**
- * Inject <w:sdt> wrappers + bookmarks for text tags.
+ * Inject anchors for text tags.
+ *
+ * - Single-paragraph tags get an inline <w:sdt> + bookmarks (existing path).
+ * - Multi-paragraph tags get a cross-paragraph bookmark only (no SDT), since
+ *   inline SDTs cannot span <w:p> boundaries.
  */
 function injectTextContentControls(
   docDom: Document,
@@ -159,23 +168,38 @@ function injectTextContentControls(
   tags: Tag[],
   bookmarkCounter: { value: number }
 ): void {
-  // Sort tags by paragraph then by start offset (process in reverse within
-  // each paragraph to avoid offset drift from earlier injections)
-  const sortedTags = [...tags].sort((a, b) => {
+  const singleParaTags = tags.filter(
+    (t) => !t.endParagraphIndex || t.endParagraphIndex === t.paragraphIndex
+  );
+  const multiParaTags = tags.filter(
+    (t) => t.endParagraphIndex !== undefined && t.endParagraphIndex > t.paragraphIndex
+  );
+
+  // ── Single-paragraph tags: inline SDT + bookmarks ────────────────────────
+  // Process in reverse document order so earlier injections don't shift offsets
+  const sortedSingle = [...singleParaTags].sort((a, b) => {
     if (a.paragraphIndex !== b.paragraphIndex) {
-      return b.paragraphIndex - a.paragraphIndex; // reverse para order
+      return b.paragraphIndex - a.paragraphIndex;
     }
-    return b.startOffset - a.startOffset; // reverse offset order
+    return b.startOffset - a.startOffset;
   });
 
-  for (const tag of sortedTags) {
+  for (const tag of sortedSingle) {
     const paraEl = allParas[tag.paragraphIndex];
     if (!paraEl) continue;
-
     const docPara = docModel.paragraphs[tag.paragraphIndex];
     if (!docPara) continue;
-
     injectSdtIntoParagraph(docDom, paraEl, docPara, tag, bookmarkCounter, STORE_ITEM_ID);
+  }
+
+  // ── Multi-paragraph tags: cross-paragraph bookmarks only ─────────────────
+  // Process in reverse document order as well
+  const sortedMulti = [...multiParaTags].sort(
+    (a, b) => b.paragraphIndex - a.paragraphIndex
+  );
+
+  for (const tag of sortedMulti) {
+    injectCrossParaBookmarks(docDom, allParas, tag, bookmarkCounter);
   }
 }
 
