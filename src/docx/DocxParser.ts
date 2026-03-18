@@ -1,5 +1,7 @@
-import { getBookmarkSuffix, guessCategoryIdFromBookmarkName } from './bookmarkUtils';
+import { getBookmarkSuffix, guessCategoryIdFromBookmarkName, generateBookmarkName } from './bookmarkUtils';
 import { findOurCustomXmlPath } from './zipUtils';
+import { extractPlanbeskrivningFromZip } from './PlanbeskrivningXmlParser';
+import type { PlanbeskrivningImportResult } from './PlanbeskrivningXmlParser';
 /**
  * DocxParser.ts
  *
@@ -30,6 +32,12 @@ export interface ParseResult {
   zip: PizZip;
   docModel: DocModel;
   tags: Tag[];
+  /**
+   * Present when the .docx contains a Planbeskrivning v2.0 custom XML part.
+   * Contains the restored header config, extracted GML geometries, and a
+   * map from <identitet> (= bookmark name) → geometry UUID.
+   */
+  planbeskrivning?: PlanbeskrivningImportResult;
 }
 
 /**
@@ -81,10 +89,39 @@ export async function parseDocx(buffer: ArrayBuffer): Promise<ParseResult> {
   // Reconcile tags using extracted bookmarks
   tags = reconcileTagsWithBookmarks(tags, extractedBookmarks, paragraphs);
 
+  // ── Planbeskrivning v2.0 XML import ────────────────────────────────────────
+  const planbeskrivning = extractPlanbeskrivningFromZip(zip) ?? undefined;
+
+  if (planbeskrivning && planbeskrivning.identitetToGeometryUuid.size > 0) {
+    // Build a map from bookmark name → tag for fast lookup
+    const tagByBookmarkName = new Map<string, Tag>();
+    for (const tag of tags) {
+      const bm = generateBookmarkName(tag);
+      if (bm) tagByBookmarkName.set(bm, tag);
+    }
+
+    // Link each tag whose bookmark name matches a Planbeskrivning <identitet>.
+    // identitetToGeometryUuid maps the base identitet → ALL geometry UUIDs for
+    // that tag (derived _g2/_g3 blocks are already grouped under the base key).
+    for (const [identitet, geoUuids] of planbeskrivning.identitetToGeometryUuid) {
+      const tag = tagByBookmarkName.get(identitet);
+      if (!tag) continue;
+
+      // Merge ALL extracted geometry UUIDs into the tag's geometryIds.
+      // Prepend new ones, preserve any existing manual links, avoid duplicates.
+      const existing = tag.geometryIds ?? [];
+      const toAdd = geoUuids.filter((uuid) => !existing.includes(uuid));
+      if (toAdd.length > 0) {
+        tag.geometryIds = [...toAdd, ...existing];
+      }
+    }
+  }
+
   return {
     zip,
     docModel: { paragraphs },
     tags,
+    planbeskrivning,
   };
 }
 

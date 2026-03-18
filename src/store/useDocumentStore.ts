@@ -2,7 +2,8 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { temporal } from 'zundo';
 import { v4 as uuidv4 } from 'uuid';
-import type { Tag, Geometry, DocModel, AppState, PendingSelection } from '../types';
+import type { Tag, Geometry, DocModel, AppState, PendingSelection, PlanbeskrivningConfig } from '../types';
+import { buildDefaultConfig } from '../docx/PlanbeskrivningXmlBuilder';
 import {
   saveDocument as dbSave,
   getDocument as dbGet,
@@ -98,6 +99,14 @@ interface DocumentActions {
 
   // ─── UI State ───────────────────────────────────────────────────────────
   toggleShowTags: () => void;
+
+  // ─── Planbeskrivning config ──────────────────────────────────────────────
+  /** Update one or more fields of the Planbeskrivning export config */
+  setPlanbeskrivningConfig: (config: Partial<PlanbeskrivningConfig>) => void;
+  /** Reset config to defaults (e.g. after loading a new document) */
+  resetPlanbeskrivningConfig: (detaljplansreferens?: string) => void;
+  /** Toggle whether to include Planbeskrivning XML in the next export */
+  toggleExportPlanbeskrivning: () => void;
 }
 
 const initialState: AppState = {
@@ -112,6 +121,8 @@ const initialState: AppState = {
   pendingSelection: null,
   showTags: true,
   activeGeometryDocId: null,
+  planbeskrivningConfig: null,
+  exportPlanbeskrivning: false,
 };
 
 // ─── Debounced auto-save to IndexedDB ──────────────────────────────────────
@@ -408,10 +419,23 @@ export const useDocumentStore = create<AppState & DocumentActions>()(
               ? state.geometries.filter((g) => g.sourceDocId !== prev)
               : state.geometries;
 
+            // ── Auto-populate detaljplansreferens in Planbeskrivning config ──
+            // Only set it if the config is null or if the referens was previously
+            // pointing at the old plan doc (avoid overwriting manual edits).
+            const prevRef = state.planbeskrivningConfig?.detaljplansreferens ?? '';
+            const shouldUpdateRef = !state.planbeskrivningConfig || prevRef === '' || prevRef === prev;
+            const updatedConfig: PlanbeskrivningConfig | null = shouldUpdateRef
+              ? {
+                  ...(state.planbeskrivningConfig ?? buildDefaultConfig(geometryDoc.id)),
+                  detaljplansreferens: geometryDoc.id,
+                }
+              : state.planbeskrivningConfig;
+
             const nextState = {
               geometries: [...keptGeometries, ...newGeometries],
               activeGeometryDocId: geometryDoc.id,
               tags: updatedTags,
+              planbeskrivningConfig: updatedConfig,
             };
             debouncedSave({ ...state, ...nextState });
             return nextState;
@@ -512,6 +536,23 @@ export const useDocumentStore = create<AppState & DocumentActions>()(
 
         // ─── UI State ───────────────────────────────────────────────────────
         toggleShowTags: () => set((state) => ({ showTags: !state.showTags })),
+
+        // ─── Planbeskrivning config ─────────────────────────────────────────
+        setPlanbeskrivningConfig: (changes) =>
+          set((state) => {
+            const current =
+              state.planbeskrivningConfig ??
+              buildDefaultConfig(state.activeGeometryDocId ?? undefined);
+            return { planbeskrivningConfig: { ...current, ...changes } };
+          }),
+
+        resetPlanbeskrivningConfig: (detaljplansreferens) =>
+          set(() => ({
+            planbeskrivningConfig: buildDefaultConfig(detaljplansreferens),
+          })),
+
+        toggleExportPlanbeskrivning: () =>
+          set((state) => ({ exportPlanbeskrivning: !state.exportPlanbeskrivning })),
       }),
       {
         name: 'pb-tagger-storage',
@@ -521,6 +562,8 @@ export const useDocumentStore = create<AppState & DocumentActions>()(
           geometries: state.geometries,
           fileName: state.fileName,
           documentId: state.documentId,
+          planbeskrivningConfig: state.planbeskrivningConfig,
+          exportPlanbeskrivning: state.exportPlanbeskrivning,
         }),
       },
     ),

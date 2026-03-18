@@ -36,7 +36,7 @@ const teman: Tema[] = (categoriesData as { teman: Tema[] }).teman;
 const categories: Category[] = flattenCategories(teman);
 
 export default function App() {
-  const { docModel, setDocument, clearDocument, importGeometryJson, restoreProject } = useDocumentStore();
+  const { docModel, setDocument, clearDocument, importGeometryJson, restoreProject, setPlanbeskrivningConfig, addGeometry } = useDocumentStore();
   const [isLoading, setIsLoading] = useState(false);
   const [parseError, setParseError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -79,7 +79,7 @@ export default function App() {
       setParseError(null);
       try {
         const buffer = await docxFile.arrayBuffer();
-        const { zip, docModel: model, tags: embeddedTags } = await parseDocx(buffer);
+        const { zip, docModel: model, tags: embeddedTags, planbeskrivning } = await parseDocx(buffer);
 
         // Store the zip's raw bytes so the exporter can re-open it losslessly
         const zipBytes = zip.generate({ type: 'arraybuffer' });
@@ -89,6 +89,14 @@ export default function App() {
 
         // setDocument triggers Zustand store to save to DB asynchronously
         setDocument(zipBytes, model, finalFileName, embeddedTags);
+
+        // Restore Planbeskrivning config + GML geometries from embedded XML (if any)
+        if (planbeskrivning) {
+          setPlanbeskrivningConfig(planbeskrivning.config);
+          for (const geo of planbeskrivning.geometries) {
+            addGeometry(geo);
+          }
+        }
 
         // If a JSON file is provided, import its geometry
         if (jsonFile) {
@@ -115,7 +123,7 @@ export default function App() {
         setIsLoading(false);
       }
     },
-    [setDocument, importGeometryJson]
+    [setDocument, importGeometryJson, setPlanbeskrivningConfig, addGeometry]
   );
 
   const handleClearDocument = useCallback(() => {

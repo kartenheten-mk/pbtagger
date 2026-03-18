@@ -178,6 +178,32 @@ export interface PendingSelection {
   tableId?: string;
 }
 
+// ─── Planbeskrivning v2.0 export config ──────────────────────────────────────
+
+/**
+ * Header metadata required for the Lantmäteriet Planbeskrivning v2.0
+ * custom XML part (omfattningar.xml).
+ */
+export interface PlanbeskrivningConfig {
+  /** UUID identifying this Planbeskrivning object */
+  objektidentitet: string;
+  /** Incrementing integer version number (default 1) */
+  objektversion: number;
+  /** ISO 8601 datetime when this version became valid */
+  versionGiltigFran: string;
+  /**
+   * UUID reference to the Detaljplan this description belongs to.
+   * Auto-populated from the active GeometryDoc when available.
+   */
+  detaljplansreferens: string;
+  /** Name of the producing software (default "PB Tagger") */
+  programvara: string;
+  /** Version of the producing software */
+  programvaruversion: string;
+  /** Municipality archive identifier, e.g. "MORA:2024/12345" */
+  arkividentitetKommun: string;
+}
+
 // ─── App State ───────────────────────────────────────────────────────────────
 
 export interface AppState {
@@ -203,4 +229,8 @@ export interface AppState {
   showTags: boolean;
   /** UUID of the currently active geometry (detaljplan) document */
   activeGeometryDocId: string | null;
+  /** Metadata for generating the Planbeskrivning v2.0 XML on export */
+  planbeskrivningConfig: PlanbeskrivningConfig | null;
+  /** Whether to include the Planbeskrivning XML (omfattningar.xml) in export */
+  exportPlanbeskrivning: boolean;
 }

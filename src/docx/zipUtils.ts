@@ -1,5 +1,6 @@
 import PizZip from 'pizzip';
 import { CUSTOM_XML_REL_TYPE, CUSTOM_XML_CONTENT_TYPE, CUSTOM_XML_NS } from './ContentControlBuilder';
+import { PLANBESKRIVNING_NS } from './PlanbeskrivningXmlBuilder';
 
 export const DOC_RELS_PATH = 'word/_rels/document.xml.rels';
 export const CONTENT_TYPES_PATH = '[Content_Types].xml';
@@ -110,6 +111,114 @@ export function updateDocumentRels(zip: PizZip, itemPath: string): void {
     zip.file(DOC_RELS_PATH, relsXml);
   }
 }
+
+// ─── Planbeskrivning XML slot ─────────────────────────────────────────────────
+
+/** Store-item GUID used for the Planbeskrivning custom XML part (braces omitted) */
+export const PLANBESKRIVNING_STORE_ITEM_ID = 'B2C3D4E5-F6A7-8901-BCDE-F12345678901';
+
+/**
+ * Scan customXml/item*.xml files and return the path of the one that
+ * contains our Planbeskrivning namespace.
+ */
+export function findPlanbeskrivningXmlPath(zip: PizZip): string | null {
+  const candidates = Object.keys(zip.files)
+    .filter((name) => /^customXml\/item\d+\.xml$/.test(name))
+    .sort();
+
+  for (const path of candidates) {
+    const file = zip.file(path);
+    if (!file) continue;
+    try {
+      if (file.asText().includes(PLANBESKRIVNING_NS)) return path;
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}
+
+/**
+ * Resolve the customXml slot for the Planbeskrivning XML, avoiding the slot
+ * already claimed by the tag-metadata item (identified by `excludeItemNumber`).
+ */
+export function resolvePlanbeskrivningSlot(
+  zip: PizZip,
+  excludeItemNumber: number
+): {
+  itemPath: string;
+  itemNumber: number;
+  propsPath: string;
+  relsPath: string;
+} {
+  // Check if there is already an existing Planbeskrivning part
+  const existing = findPlanbeskrivningXmlPath(zip);
+  if (existing) {
+    const num = itemNumberFromPath(existing);
+    return {
+      itemPath: existing,
+      itemNumber: num,
+      propsPath: `customXml/itemProps${num}.xml`,
+      relsPath: `customXml/_rels/item${num}.xml.rels`,
+    };
+  }
+
+  // Allocate next available slot, skipping the tag-metadata slot
+  const existingNums = Object.keys(zip.files)
+    .filter((name) => /^customXml\/item\d+\.xml$/.test(name))
+    .map((name) => {
+      const m = name.match(/item(\d+)\.xml$/);
+      return m ? parseInt(m[1], 10) : 0;
+    })
+    .filter((n) => n > 0);
+
+  // Start from max+1 and skip the excluded number
+  let nextNum = existingNums.length > 0 ? Math.max(...existingNums) + 1 : 1;
+  if (nextNum === excludeItemNumber) nextNum++;
+
+  return {
+    itemPath: `customXml/item${nextNum}.xml`,
+    itemNumber: nextNum,
+    propsPath: `customXml/itemProps${nextNum}.xml`,
+    relsPath: `customXml/_rels/item${nextNum}.xml.rels`,
+  };
+}
+
+/**
+ * Build the itemProps XML for the Planbeskrivning custom XML part.
+ */
+export function buildPlanbeskrivningItemProps(): string {
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<ds:datastoreItem ds:itemID="{${PLANBESKRIVNING_STORE_ITEM_ID}}" xmlns:ds="http://schemas.openxmlformats.org/officeDocument/2006/customXml">
+  <ds:schemaRefs>
+    <ds:schemaRef ds:uri="${PLANBESKRIVNING_NS}"/>
+  </ds:schemaRefs>
+</ds:datastoreItem>`;
+}
+
+/**
+ * Add a Relationship entry in word/_rels/document.xml.rels for the
+ * Planbeskrivning custom XML part, using a dedicated rel ID.
+ */
+export function updateDocumentRelsForPlanbeskrivning(
+  zip: PizZip,
+  itemPath: string
+): void {
+  const relsFile = zip.file(DOC_RELS_PATH);
+  if (!relsFile) return;
+
+  let relsXml = relsFile.asText();
+  if (relsXml.includes(`../${itemPath}`)) return;
+
+  const relId = 'rIdPbPlanbeskrivning1';
+  if (!relsXml.includes(relId)) {
+    const newRel = `<Relationship Id="${relId}" Type="${CUSTOM_XML_REL_TYPE}" Target="../${itemPath}"/>`;
+    relsXml = relsXml.replace('</Relationships>', `  ${newRel}\n</Relationships>`);
+    zip.file(DOC_RELS_PATH, relsXml);
+  }
+}
+
+// ─── Content_Types helpers ────────────────────────────────────────────────────
 
 /**
  * Ensure [Content_Types].xml has Override entries for our custom XML item

@@ -17,7 +17,7 @@
 
 import PizZip from 'pizzip';
 import { saveAs } from 'file-saver';
-import type { Tag, DocModel } from '../types';
+import type { Tag, DocModel, Geometry, PlanbeskrivningConfig } from '../types';
 import { parseXml, serializeXml } from './XmlHelpers';
 import {
   buildCustomXmlItem,
@@ -28,8 +28,12 @@ import {
   updateDocumentRels,
   updateContentTypes,
   resolveCustomXmlSlot,
+  resolvePlanbeskrivningSlot,
+  buildPlanbeskrivningItemProps,
+  updateDocumentRelsForPlanbeskrivning,
 } from './zipUtils';
 import { findMaxBookmarkId } from './bookmarkUtils';
+import { buildPlanbeskrivningXml } from './PlanbeskrivningXmlBuilder';
 import {
   collectParagraphsInOrder,
   injectBookmarkAroundRun,
@@ -42,13 +46,28 @@ import {
 const STORE_ITEM_ID = 'A1B2C3D4-E5F6-7890-ABCD-EF1234567890';
 
 /**
+ * Options for Planbeskrivning v2.0 XML generation during export.
+ */
+export interface PlanbeskrivningExportOptions {
+  config: PlanbeskrivningConfig;
+  geometries: Geometry[];
+}
+
+/**
  * Main export function. Clones the ZIP, injects tags, and downloads the file.
+ *
+ * @param originalZip      The original PizZip archive
+ * @param docModel         Parsed document model
+ * @param tags             All tags to export
+ * @param fileName         Original file name (used for download name)
+ * @param planbeskrivning  When provided, also injects the Planbeskrivning v2.0 XML
  */
 export async function exportDocx(
   originalZip: PizZip,
   docModel: DocModel,
   tags: Tag[],
-  fileName: string
+  fileName: string,
+  planbeskrivning?: PlanbeskrivningExportOptions
 ): Promise<void> {
   // 1. Clone the ZIP so we never mutate the in-memory original
   const zipData = originalZip.generate({ type: 'arraybuffer' });
@@ -106,10 +125,48 @@ export async function exportDocx(
   // 9. Update [Content_Types].xml
   updateContentTypes(zip, itemPath, propsPath);
 
-  // 10. Generate blob and trigger download
+  // ── 10. Optionally inject Planbeskrivning v2.0 XML (omfattningar.xml) ────
+  if (planbeskrivning) {
+    injectPlanbeskrivningXml(zip, itemNumber, tags, planbeskrivning);
+  }
+
+  // 11. Generate blob and trigger download
   const blob = zip.generate({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
   const exportName = fileName.replace(/\.docx$/i, '') + '_tagged.docx';
   saveAs(blob, exportName);
+}
+
+/**
+ * Inject the Planbeskrivning v2.0 XML (omfattningar.xml) as a second
+ * custom XML part into the ZIP archive.
+ */
+function injectPlanbeskrivningXml(
+  zip: PizZip,
+  tagMetadataItemNumber: number,
+  tags: Tag[],
+  opts: PlanbeskrivningExportOptions
+): void {
+  // Resolve a slot that doesn't conflict with the tag-metadata slot
+  const {
+    itemPath: pbItemPath,
+    itemNumber: pbItemNumber,
+    propsPath: pbPropsPath,
+    relsPath: pbRelsPath,
+  } = resolvePlanbeskrivningSlot(zip, tagMetadataItemNumber);
+
+  // Build the XML content
+  const pbXml = buildPlanbeskrivningXml(opts.config, tags, opts.geometries);
+
+  // Write the XML part and its props
+  zip.file(pbItemPath, pbXml);
+  zip.file(pbPropsPath, buildPlanbeskrivningItemProps());
+
+  // Ensure the _rels file exists for this part
+  ensureCustomXmlRels(zip, pbRelsPath, pbItemNumber);
+
+  // Register in document.xml.rels and [Content_Types].xml
+  updateDocumentRelsForPlanbeskrivning(zip, pbItemPath);
+  updateContentTypes(zip, pbItemPath, pbPropsPath);
 }
 
 /**
