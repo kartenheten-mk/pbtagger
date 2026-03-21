@@ -8,6 +8,24 @@ export interface GmlExportPreviewResult {
   linkedGeometryIdsByTagUuid: Map<string, Set<string>>;
 }
 
+function buildStablePreviewGeometryIds(
+  geometries: Geometry[]
+): { geometries: Geometry[]; uuidMap: Map<string, string> } {
+  const identitetCounts = new Map<string, number>();
+  const uuidMap = new Map<string, string>();
+
+  const stabilized = geometries.map((geo) => {
+    const identitet = String(geo.properties?.['identitet'] ?? geo.name ?? geo.uuid);
+    const count = (identitetCounts.get(identitet) ?? 0) + 1;
+    identitetCounts.set(identitet, count);
+    const stableUuid = `preview_gml_${identitet}_${count}`;
+    uuidMap.set(geo.uuid, stableUuid);
+    return { ...geo, uuid: stableUuid };
+  });
+
+  return { geometries: stabilized, uuidMap };
+}
+
 function emptyPreview(): GmlExportPreviewResult {
   return {
     geometries: [],
@@ -28,16 +46,22 @@ export function buildGmlExportPreview(
     const xml = buildPlanbeskrivningXml(config, tags, jsonGeometries);
     const parsed = parsePlanbeskrivningXmlText(xml);
     if (!parsed) return emptyPreview();
+    const { geometries: stablePreviewGeometries, uuidMap } = buildStablePreviewGeometryIds(
+      parsed.geometries
+    );
 
     const linkedGeometryIdsByTagUuid = new Map<string, Set<string>>();
     for (const tag of tags) {
       const identitet = generateBookmarkName(tag);
       const previewIds = parsed.identitetToGeometryUuid.get(identitet) ?? [];
-      linkedGeometryIdsByTagUuid.set(tag.uuid, new Set(previewIds));
+      const stablePreviewIds = previewIds
+        .map((id) => uuidMap.get(id))
+        .filter((id): id is string => !!id);
+      linkedGeometryIdsByTagUuid.set(tag.uuid, new Set(stablePreviewIds));
     }
 
     return {
-      geometries: parsed.geometries,
+      geometries: stablePreviewGeometries,
       linkedGeometryIdsByTagUuid,
     };
   } catch (error) {

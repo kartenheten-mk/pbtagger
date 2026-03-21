@@ -23,6 +23,7 @@ import type { PickerItem } from './MapView';
 import { splitGeometriesBySource } from './geometrySource';
 import { buildGmlExportPreview } from './gmlExportPreview';
 import {
+  buildFocusLinkedGeometryIdsByTagUuidForMode,
   buildInspectionSelectedGeometryUuids,
   buildDisplayLinkedGeometryIdsByTagUuidForMode,
   resolveActiveMapMainMode,
@@ -74,6 +75,7 @@ export const GeometryPanel: React.FC = () => {
 
   const geometryListRef = useRef<HTMLDivElement>(null);
   const previousSelectedTagUuidRef = useRef<string | null>(null);
+  const pendingManualFocusUuidRef = useRef<string | null>(null);
   /** Ref to the map wrapper div — used for picker positioning */
   const mapWrapperRef = useRef<HTMLDivElement>(null);
   const [expandedGeoUuid, setExpandedGeoUuid] = useState<string | null>(null);
@@ -138,6 +140,23 @@ export const GeometryPanel: React.FC = () => {
   );
   const displayLinkedGeometryIdsByTagUuid = useMemo(() => {
     return buildDisplayLinkedGeometryIdsByTagUuidForMode({
+      tags,
+      activeMainMode,
+      gmlViewMode,
+      jsonGeometryIdSet,
+      importedDocxGeometryIdSet,
+      previewLinkedGeometryIdsByTagUuid: gmlPreview.linkedGeometryIdsByTagUuid,
+    });
+  }, [
+    tags,
+    activeMainMode,
+    gmlViewMode,
+    jsonGeometryIdSet,
+    importedDocxGeometryIdSet,
+    gmlPreview.linkedGeometryIdsByTagUuid,
+  ]);
+  const focusLinkedGeometryIdsByTagUuid = useMemo(() => {
+    return buildFocusLinkedGeometryIdsByTagUuidForMode({
       tags,
       activeMainMode,
       gmlViewMode,
@@ -282,6 +301,16 @@ export const GeometryPanel: React.FC = () => {
     },
     [selectedTagUuid, selectTag]
   );
+  const focusTagFromGeometry = useCallback(
+    (tagUuid: string, geometryUuid: string) => {
+      if (selectedTagUuid === tagUuid) return;
+      pendingManualFocusUuidRef.current = geometryUuid;
+      if (selectedTagUuid !== tagUuid) {
+        selectTag(tagUuid);
+      }
+    },
+    [selectedTagUuid, selectTag]
+  );
 
   // ── Auto-expand and scroll to linked geometry when a tag is selected ───────
   useEffect(() => {
@@ -293,12 +322,30 @@ export const GeometryPanel: React.FC = () => {
     previousSelectedTagUuidRef.current = selectedTagUuid;
     if (isLinking) return;
 
+    const pendingManualFocusUuid = pendingManualFocusUuidRef.current;
+    if (pendingManualFocusUuid) {
+      const isStillVisible = visibleGeometries.some((g) => g.uuid === pendingManualFocusUuid);
+      pendingManualFocusUuidRef.current = null;
+      if (isStillVisible) {
+        setFocusedGeometryUuid(pendingManualFocusUuid);
+        setExpandedGeoUuid(pendingManualFocusUuid);
+        const timer = setTimeout(() => {
+          const el = geometryListRef.current?.querySelector<HTMLElement>(
+            `[data-geometry-uuid="${pendingManualFocusUuid}"]`
+          );
+          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }, 100);
+        return () => clearTimeout(timer);
+      }
+    }
+
     const focusGeoId = resolveFocusedGeometryForSelectedTag({
       selectedTagUuid,
-      displayLinkedGeometryIdsByTagUuid,
+      displayLinkedGeometryIdsByTagUuid: focusLinkedGeometryIdsByTagUuid,
       visibleGeometries,
       previousFocusedGeometryUuid: focusedGeometryUuid,
       allowVisiblePreviousFocus: !didTagChange,
+      prioritizeFirstVisibleLinked: activeMainMode === 'gml' && gmlViewMode === 'preview',
     });
 
     if (focusGeoId) {
@@ -313,9 +360,7 @@ export const GeometryPanel: React.FC = () => {
         }
       }
       setExpandedGeoUuid(focusGeoId);
-      if (focusedGeometryUuid !== focusGeoId) {
-        setFocusedGeometryUuid(focusGeoId);
-      }
+      setFocusedGeometryUuid(focusGeoId);
       const timer = setTimeout(() => {
         const el = geometryListRef.current?.querySelector<HTMLElement>(
           `[data-geometry-uuid="${focusGeoId}"]`
@@ -324,11 +369,14 @@ export const GeometryPanel: React.FC = () => {
       }, 100);
       return () => clearTimeout(timer);
     }
+    setExpandedGeoUuid(null);
     setFocusedGeometryUuid(null);
   }, [
     selectedTagUuid,
-    displayLinkedGeometryIdsByTagUuid,
+    focusLinkedGeometryIdsByTagUuid,
     activeTypeFilters,
+    activeMainMode,
+    gmlViewMode,
     visibleGeometries,
     filteredGeometries,
     isLinking,
@@ -363,13 +411,23 @@ export const GeometryPanel: React.FC = () => {
         return;
       }
       const linkedTags = getLinkedTagsForGeometry(uuid);
-      if (linkedTags.length > 0) {
+      if (activeMainMode === 'gml' && gmlViewMode === 'preview' && linkedTags.length > 0) {
+        focusTagFromGeometry(linkedTags[0].uuid, uuid);
+      } else if (linkedTags.length > 0) {
         focusTag(linkedTags[0].uuid);
       }
       setFocusedGeometryUuid(uuid);
       setExpandedGeoUuid((prev) => (prev === uuid ? null : uuid));
     },
-    [isLinking, activeMainMode, toggleStaged, getLinkedTagsForGeometry, focusTag]
+    [
+      isLinking,
+      activeMainMode,
+      gmlViewMode,
+      toggleStaged,
+      getLinkedTagsForGeometry,
+      focusTag,
+      focusTagFromGeometry,
+    ]
   );
 
   // ── List item click ────────────────────────────────────────────────────────
@@ -382,21 +440,38 @@ export const GeometryPanel: React.FC = () => {
       }
       const linkedTags = getLinkedTagsForGeometry(uuid);
       if (activeMainMode === 'gml' && linkedTags.length > 0) {
-        focusTag(linkedTags[0].uuid);
+        if (gmlViewMode === 'preview') {
+          focusTagFromGeometry(linkedTags[0].uuid, uuid);
+        } else {
+          focusTag(linkedTags[0].uuid);
+        }
       }
       setFocusedGeometryUuid(uuid);
       setExpandedGeoUuid((prev) => (prev === uuid ? null : uuid));
     },
-    [isLinking, activeMainMode, toggleStaged, getLinkedTagsForGeometry, focusTag]
+    [
+      isLinking,
+      activeMainMode,
+      gmlViewMode,
+      toggleStaged,
+      getLinkedTagsForGeometry,
+      focusTag,
+      focusTagFromGeometry,
+    ]
   );
 
   const handleTagSubClick = useCallback(
     (e: React.MouseEvent, tag: Tag, geometryUuid: string) => {
       e.stopPropagation();
+      setExpandedGeoUuid(geometryUuid);
       setFocusedGeometryUuid(geometryUuid);
-      focusTag(tag.uuid);
+      if (activeMainMode === 'gml' && gmlViewMode === 'preview') {
+        focusTagFromGeometry(tag.uuid, geometryUuid);
+      } else {
+        focusTag(tag.uuid);
+      }
     },
-    [focusTag]
+    [activeMainMode, gmlViewMode, focusTag, focusTagFromGeometry]
   );
 
   return (

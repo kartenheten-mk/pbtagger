@@ -131,4 +131,31 @@ describe('buildGmlExportPreview', () => {
       expectedParsed!.identitetToGeometryUuid.get(generateBookmarkName(tagB))?.length ?? 0
     );
   });
+
+  it('uses stable preview UUIDs across recomputations', () => {
+    const config = buildDefaultConfig('plan-1');
+    const tag = makeTag({
+      uuid: '55555555-5555-4555-8555-555555555555',
+      text: 'Stabil preview',
+      geometryIds: ['json-1', 'json-2'],
+    });
+    const jsonGeometries = [
+      makePolygon('json-1', 'Geo 1'),
+      makePolygon('json-2', 'Geo 2'),
+    ];
+
+    const previewA = buildGmlExportPreview(config, [tag], jsonGeometries);
+    const previewB = buildGmlExportPreview(config, [tag], jsonGeometries);
+
+    const uuidsA = previewA.geometries.map((g) => g.uuid);
+    const uuidsB = previewB.geometries.map((g) => g.uuid);
+    expect(uuidsB).toEqual(uuidsA);
+
+    const previewIds = Array.from(previewA.linkedGeometryIdsByTagUuid.get(tag.uuid) ?? []);
+    expect(previewIds.length).toBeGreaterThan(0);
+    const uuidSet = new Set(uuidsA);
+    for (const id of previewIds) {
+      expect(uuidSet.has(id)).toBe(true);
+    }
+  });
 });
