@@ -107,6 +107,11 @@ export interface ValidationResult {
   warnings: string[];
 }
 
+export interface SpecExportEligibility {
+  eligible: boolean;
+  reason?: string;
+}
+
 // ─── Internal helpers ─────────────────────────────────────────────────────────
 
 /** XML-escape a string value */
@@ -116,6 +121,26 @@ function esc(s: string): string {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+}
+
+export function getSpecExportEligibility(tag: Tag): SpecExportEligibility {
+  const targetType = tag.targetType ?? 'text';
+  if (targetType !== 'text') {
+    return {
+      eligible: false,
+      reason: `targetType "${targetType}" exporteras inte som <Omfattning>; taggen behålls endast i appens metadata.`,
+    };
+  }
+
+  const category = CATEGORY_MAP.get(tag.categoryId);
+  if (!category) {
+    return {
+      eligible: false,
+      reason: `category "${tag.categoryId}" saknar BFS 2020:8-mappning och exporteras därför inte som <Omfattning>.`,
+    };
+  }
+
+  return { eligible: true };
 }
 
 /** Indent a multi-line string by N spaces */
@@ -513,6 +538,14 @@ export function validatePlanbeskrivning(
   const seenIdentiteter = new Set<string>();
 
   for (const tag of tags) {
+    const eligibility = getSpecExportEligibility(tag);
+    if (!eligibility.eligible) {
+      warnings.push(
+        `Tag ${tag.uuid}: exkluderad från Planbeskrivning-export. ${eligibility.reason ?? 'Okänd anledning.'}`
+      );
+      continue;
+    }
+
     const identitet = generateBookmarkName(tag);
     const identitetKey = identitet.toLowerCase();
     const category = CATEGORY_MAP.get(tag.categoryId);
@@ -616,12 +649,8 @@ export function buildPlanbeskrivningXml(
 ): string {
   const geometryMap = new Map(geometries.map((g) => [g.uuid, g]));
 
-  // Only export tags that can produce a valid identitet
-  const exportableTags = tags.filter((t) => {
-    const cat = CATEGORY_MAP.get(t.categoryId);
-    // Skip tags with no usable bookmark name
-    return cat !== undefined || t.categoryId;
-  });
+  // Export only tags that are eligible for the spec-facing Planbeskrivning XML.
+  const exportableTags = tags.filter((t) => getSpecExportEligibility(t).eligible);
 
   // PLANB-003: track identiteter case-insensitively; suffix duplicates
   const usedIdentiteterLower = new Set<string>();

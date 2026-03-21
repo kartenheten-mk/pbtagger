@@ -93,6 +93,10 @@ export async function parseDocx(buffer: ArrayBuffer): Promise<ParseResult> {
   const planbeskrivning = extractPlanbeskrivningFromZip(zip) ?? undefined;
 
   if (planbeskrivning && planbeskrivning.identitetToGeometryUuid.size > 0) {
+    const importedGmlUuidSet = new Set(
+      planbeskrivning.geometries.map((geo) => geo.uuid)
+    );
+
     // Build a map from bookmark name → tag for fast lookup
     const tagByBookmarkName = new Map<string, Tag>();
     for (const tag of tags) {
@@ -108,8 +112,15 @@ export async function parseDocx(buffer: ArrayBuffer): Promise<ParseResult> {
       if (!tag) continue;
 
       // Merge ALL extracted geometry UUIDs into the tag's geometryIds.
-      // Prepend new ones, preserve any existing manual links, avoid duplicates.
+      // Keep existing non-GML links (typically JSON IDs from customXml) as the
+      // source of truth and avoid duplicating each link with an imported GML ID.
+      // If no non-GML links exist, use extracted GML UUIDs as fallback.
       const existing = tag.geometryIds ?? [];
+      const hasNonGmlLinks = existing.some((id) => !importedGmlUuidSet.has(id));
+      if (hasNonGmlLinks) {
+        continue;
+      }
+
       const toAdd = geoUuids.filter((uuid) => !existing.includes(uuid));
       if (toAdd.length > 0) {
         tag.geometryIds = [...toAdd, ...existing];

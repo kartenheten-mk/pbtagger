@@ -11,10 +11,12 @@ import { DOMParser } from '@xmldom/xmldom';
 import {
   buildPlanbeskrivningXml,
   buildDefaultConfig,
+  getSpecExportEligibility,
   validateIdentitet,
   validatePlanbeskrivning,
   PLANBESKRIVNING_NS,
 } from '../../src/docx/PlanbeskrivningXmlBuilder';
+import { generateBookmarkName } from '../../src/docx/bookmarkUtils';
 import type { PlanbeskrivningConfig } from '../../src/types';
 import type { Tag, Geometry } from '../../src/types';
 
@@ -32,7 +34,7 @@ function makeTag(overrides: Partial<Tag> = {}): Tag {
   const idx = _tagCounter++;
   return {
     uuid: `tag-uuid-${idx}`,
-    categoryId: 'cat-1',
+    categoryId: 'detaljplanens-syfte--syfte',
     targetType: 'text',
     text: 'Test text',
     paragraphIndex: idx,
@@ -135,6 +137,24 @@ describe('validateIdentitet (PLANB-005)', () => {
   });
 });
 
+describe('getSpecExportEligibility', () => {
+  it('allows text tags with BFS-mapped category', () => {
+    expect(getSpecExportEligibility(makeTag())).toEqual({ eligible: true });
+  });
+
+  it('excludes non-text target types from Planbeskrivning export', () => {
+    const result = getSpecExportEligibility(makeTag({ targetType: 'image', runId: 'r1' }));
+    expect(result.eligible).toBe(false);
+    expect(result.reason).toContain('targetType "image"');
+  });
+
+  it('excludes tags without BFS-mapped category from Planbeskrivning export', () => {
+    const result = getSpecExportEligibility(makeTag({ categoryId: 'missing-category' }));
+    expect(result.eligible).toBe(false);
+    expect(result.reason).toContain('saknar BFS 2020:8-mappning');
+  });
+});
+
 // ─── buildDefaultConfig ───────────────────────────────────────────────────────
 
 describe('buildDefaultConfig', () => {
@@ -229,6 +249,18 @@ describe('buildPlanbeskrivningXml — document structure', () => {
     const count = (xml.match(/<Omfattning>/g) ?? []).length;
     expect(count).toBe(2);
   });
+
+  it('skips non-text app tags from Planbeskrivning XML while keeping text tags', () => {
+    const tags = [
+      makeTag({ uuid: 'uuid-text', targetType: 'text' }),
+      makeTag({ uuid: 'uuid-image', targetType: 'image', runId: 'img-1' }),
+    ];
+    const xml = buildPlanbeskrivningXml(cfg, tags, []);
+    const count = (xml.match(/<Omfattning>/g) ?? []).length;
+    expect(count).toBe(1);
+    expect(xml).toContain(generateBookmarkName(tags[0]));
+    expect(xml).not.toContain(generateBookmarkName(tags[1]));
+  });
 });
 
 // ─── PLANB-003: Unique identities ─────────────────────────────────────────────
@@ -308,6 +340,28 @@ describe('PLANB-001 — at least one Lage attribute', () => {
   });
 });
 
+describe('validatePlanbeskrivning — export eligibility warnings', () => {
+  it('warns when a non-text app tag is excluded from Planbeskrivning export', () => {
+    const result = validatePlanbeskrivning(
+      [makeTag({ uuid: 'tag-image', targetType: 'image', runId: 'img-1' })],
+      []
+    );
+    expect(result.valid).toBe(true);
+    expect(result.errors).toEqual([]);
+    expect(result.warnings.some((warning) => warning.includes('exkluderad från Planbeskrivning-export'))).toBe(true);
+  });
+
+  it('warns when a tag lacks BFS mapping and is excluded from Planbeskrivning export', () => {
+    const result = validatePlanbeskrivning(
+      [makeTag({ uuid: 'tag-unknown-cat', categoryId: 'missing-category' })],
+      []
+    );
+    expect(result.valid).toBe(true);
+    expect(result.errors).toEqual([]);
+    expect(result.warnings.some((warning) => warning.includes('saknar BFS 2020:8-mappning'))).toBe(true);
+  });
+});
+
 // ─── PLANB-002: Motiv till reglering requires planbestammelsereferens ──────────
 
 describe('PLANB-002 — Motiv till reglering requires planbestammelsereferens', () => {
@@ -368,15 +422,16 @@ describe('PLANB-008 — only one indirect reference per Lage', () => {
 // ─── PLANB-004 / PLANB-007 strict validation ─────────────────────────────────
 
 describe('strict validation coverage', () => {
-  it('reports PLANB-004 when category is outside BFS mapping', () => {
+  it('warns and excludes tags when category is outside BFS mapping', () => {
     const tag = makeTag({
       uuid: 'p4-tag',
       categoryId: 'non-bfs-category',
       geometryIds: undefined,
     });
     const result = validatePlanbeskrivning([tag], []);
-    expect(result.valid).toBe(false);
-    expect(result.errors.some((e) => e.rule === 'PLANB-004')).toBe(true);
+    expect(result.valid).toBe(true);
+    expect(result.errors).toEqual([]);
+    expect(result.warnings.some((warning) => warning.includes('saknar BFS 2020:8-mappning'))).toBe(true);
   });
 
   it('reports PLANB-007 when objektreferens would be non-persistent', () => {
@@ -392,7 +447,7 @@ describe('strict validation coverage', () => {
     };
     const tag = makeTag({
       uuid: 'p7-tag',
-      categoryId: 'syfte',
+      categoryId: 'detaljplanens-syfte--syfte',
       geometryIds: ['temp-id'],
     });
     const result = validatePlanbeskrivning([tag], [geo]);
@@ -472,13 +527,11 @@ describe('<Indelning> classification', () => {
     expect(xml).toContain('<Indelning>');
   });
 
-  it('produces valid <Indelning> for an unknown categoryId (fallback)', () => {
+  it('excludes unknown categoryId from Planbeskrivning XML instead of emitting fallback indelning', () => {
     const tag = makeTag({ uuid: 'unknown-cat', categoryId: 'completely-unknown-category' });
     const xml = buildPlanbeskrivningXml(makeConfig(), [tag], []);
-    // Should still produce a valid Omfattning with tema/grupp (using fallback)
-    expect(xml).toContain('<Indelning>');
-    expect(xml).toContain('<tema>');
-    expect(xml).toContain('<grupp>');
+    expect(xml).not.toContain('<Omfattning>');
+    expect(xml).not.toContain('<Indelning>');
     expect(() => parseXml(xml)).not.toThrow();
   });
 });
