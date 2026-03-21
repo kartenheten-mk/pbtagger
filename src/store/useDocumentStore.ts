@@ -105,8 +105,8 @@ interface DocumentActions {
   setPlanbeskrivningConfig: (config: Partial<PlanbeskrivningConfig>) => void;
   /** Reset config to defaults (e.g. after loading a new document) */
   resetPlanbeskrivningConfig: (detaljplansreferens?: string) => void;
-  /** Toggle whether to include Planbeskrivning XML in the next export */
-  toggleExportPlanbeskrivning: () => void;
+  /** Toggle whether compliance errors should block export */
+  togglePlanbeskrivningCompliance: () => void;
 }
 
 const initialState: AppState = {
@@ -122,7 +122,7 @@ const initialState: AppState = {
   showTags: true,
   activeGeometryDocId: null,
   planbeskrivningConfig: null,
-  exportPlanbeskrivning: false,
+  enforcePlanbeskrivningCompliance: true,
 };
 
 // ─── Debounced auto-save to IndexedDB ──────────────────────────────────────
@@ -551,8 +551,12 @@ export const useDocumentStore = create<AppState & DocumentActions>()(
             planbeskrivningConfig: buildDefaultConfig(detaljplansreferens),
           })),
 
-        toggleExportPlanbeskrivning: () =>
-          set((state) => ({ exportPlanbeskrivning: !state.exportPlanbeskrivning })),
+        togglePlanbeskrivningCompliance: () =>
+          set((state) => ({
+            enforcePlanbeskrivningCompliance:
+              !state.enforcePlanbeskrivningCompliance,
+          })),
+
       }),
       {
         name: 'pb-tagger-storage',
@@ -563,7 +567,8 @@ export const useDocumentStore = create<AppState & DocumentActions>()(
           fileName: state.fileName,
           documentId: state.documentId,
           planbeskrivningConfig: state.planbeskrivningConfig,
-          exportPlanbeskrivning: state.exportPlanbeskrivning,
+          enforcePlanbeskrivningCompliance:
+            state.enforcePlanbeskrivningCompliance,
         }),
       },
     ),

@@ -231,6 +231,6 @@ export interface AppState {
   activeGeometryDocId: string | null;
   /** Metadata for generating the Planbeskrivning v2.0 XML on export */
   planbeskrivningConfig: PlanbeskrivningConfig | null;
-  /** Whether to include the Planbeskrivning XML (omfattningar.xml) in export */
-  exportPlanbeskrivning: boolean;
+  /** If true, compliance errors block Planbeskrivning export */
+  enforcePlanbeskrivningCompliance: boolean;
 }

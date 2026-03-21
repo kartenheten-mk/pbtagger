@@ -12,8 +12,10 @@
  *   PLANB-001  At least one location attribute must exist in <Lage>
  *   PLANB-002  "Motiv till reglering" must have <planbestammelsereferens>
  *   PLANB-003  All <identitet> values must be unique
+ *   PLANB-004  tema/grupp/undergrupp must come from BFS 2020:8 mapping
  *   PLANB-005  <identitet> matches ^[A-Za-zÅÄÖåäö][A-Za-zÅÄÖåäö0-9_]{0,39}$
  *   PLANB-006  Direct GML geometry takes precedence over indirect references
+ *   PLANB-007  <objektreferens> must use a persistent identifier
  *   PLANB-008  Only ONE of objektreferens/planbestammelsereferens/planomrade per <Lage>
  */
 
@@ -87,8 +89,10 @@ export type PlanbRule =
   | 'PLANB-001'
   | 'PLANB-002'
   | 'PLANB-003'
+  | 'PLANB-004'
   | 'PLANB-005'
   | 'PLANB-006'
+  | 'PLANB-007'
   | 'PLANB-008';
 
 export interface PlanbeskrivningValidationError {
@@ -132,13 +136,14 @@ function indent(xml: string, spaces: number): string {
  */
 function reprojectToSweref99TM(xy: number[], fromCrs: string): [number, number] {
   if (fromCrs === TARGET_CRS) return [xy[0], xy[1]];
-  try {
-    const [e, n] = proj4(fromCrs, TARGET_CRS, [xy[0], xy[1]]);
-    return [e, n];
-  } catch {
-    // If reprojection fails (unknown CRS), return original coords
-    return [xy[0], xy[1]];
+  if (!proj4.defs(fromCrs)) {
+    throw new Error(`Unsupported CRS "${fromCrs}" for Planbeskrivning export.`);
   }
+  const [e, n] = proj4(fromCrs, TARGET_CRS, [xy[0], xy[1]]);
+  if (!Number.isFinite(e) || !Number.isFinite(n)) {
+    throw new Error(`Invalid reprojected coordinate from "${fromCrs}" to "${TARGET_CRS}".`);
+  }
+  return [e, n];
 }
 
 /** Build a space-separated GML posList from an array of [x,y] pairs */
@@ -477,6 +482,20 @@ function buildOmfattningBlocks(
   });
 }
 
+function isUuidLike(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value
+  );
+}
+
+function isUriLike(value: string): boolean {
+  return /^[A-Za-z][A-Za-z0-9+.-]*:[^\s]+$/.test(value);
+}
+
+function hasPersistentIdentifier(value: string): boolean {
+  return isUuidLike(value) || isUriLike(value);
+}
+
 // ─── Validation ───────────────────────────────────────────────────────────────
 
 /**
@@ -495,6 +514,8 @@ export function validatePlanbeskrivning(
 
   for (const tag of tags) {
     const identitet = generateBookmarkName(tag);
+    const identitetKey = identitet.toLowerCase();
+    const category = CATEGORY_MAP.get(tag.categoryId);
 
     // PLANB-005
     if (!IDENTITET_RE.test(identitet)) {
@@ -506,16 +527,24 @@ export function validatePlanbeskrivning(
     }
 
     // PLANB-003
-    if (seenIdentiteter.has(identitet)) {
+    if (seenIdentiteter.has(identitetKey)) {
       errors.push({
         rule: 'PLANB-003',
         message: `Duplicate identitet "${identitet}" for tag ${tag.uuid}.`,
         tagUuid: tag.uuid,
       });
     }
-    seenIdentiteter.add(identitet);
+    seenIdentiteter.add(identitetKey);
 
-    const category = CATEGORY_MAP.get(tag.categoryId);
+    // PLANB-004
+    if (!category) {
+      errors.push({
+        rule: 'PLANB-004',
+        message: `Tag ${tag.uuid}: category "${tag.categoryId}" is not part of the BFS 2020:8 mapping used for export.`,
+        tagUuid: tag.uuid,
+      });
+    }
+
     const isMotivTillReglering =
       (category?.gruppName ?? '').toLowerCase() === 'motiv till reglering';
 
@@ -539,6 +568,24 @@ export function validatePlanbeskrivning(
         errors.push({
           rule: 'PLANB-002',
           message: `Tag ${tag.uuid}: grupp "Motiv till reglering" requires a linked bestämmelse geometry for <planbestammelsereferens>.`,
+          tagUuid: tag.uuid,
+        });
+      }
+    }
+
+    // PLANB-007
+    for (const geo of linkedGeos) {
+      const serializable = serializeGml(geo) !== null;
+      if (serializable) continue;
+      if (isBestammelseFeature(geo.featureType) || isDetaljplanFeature(geo.featureType)) {
+        continue;
+      }
+      if (!hasPersistentIdentifier(geo.uuid) || !geo.sourceDocId) {
+        errors.push({
+          rule: 'PLANB-007',
+          message:
+            `Tag ${tag.uuid}: geometry "${geo.uuid}" would be exported as <objektreferens>, ` +
+            'but lacks a verifiable persistent identifier/provenance (expected UUID/URI + sourceDocId).',
           tagUuid: tag.uuid,
         });
       }
@@ -576,8 +623,8 @@ export function buildPlanbeskrivningXml(
     return cat !== undefined || t.categoryId;
   });
 
-  // PLANB-003: track identiteter for uniqueness; suffix duplicates
-  const usedIdentiteter = new Map<string, number>();
+  // PLANB-003: track identiteter case-insensitively; suffix duplicates
+  const usedIdentiteterLower = new Set<string>();
 
   const omfattningBlocks: string[] = [];
 
@@ -588,13 +635,16 @@ export function buildPlanbeskrivningXml(
     for (const { xml, identitet } of blocks) {
       // PLANB-003: ensure uniqueness by appending _2, _3, … for duplicates
       let finalIdentitet = identitet;
-      const count = usedIdentiteter.get(identitet) ?? 0;
-      if (count > 0) {
-        const suffix = `_${count + 1}`;
-        const base = identitet.slice(0, 40 - suffix.length);
-        finalIdentitet = base + suffix;
+      if (usedIdentiteterLower.has(finalIdentitet.toLowerCase())) {
+        let n = 2;
+        do {
+          const suffix = `_${n}`;
+          const base = identitet.slice(0, 40 - suffix.length);
+          finalIdentitet = base + suffix;
+          n++;
+        } while (usedIdentiteterLower.has(finalIdentitet.toLowerCase()));
       }
-      usedIdentiteter.set(identitet, count + 1);
+      usedIdentiteterLower.add(finalIdentitet.toLowerCase());
 
       if (finalIdentitet !== identitet) {
         // Patch the identitet in the block

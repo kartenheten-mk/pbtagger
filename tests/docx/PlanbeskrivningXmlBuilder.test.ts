@@ -12,6 +12,7 @@ import {
   buildPlanbeskrivningXml,
   buildDefaultConfig,
   validateIdentitet,
+  validatePlanbeskrivning,
   PLANBESKRIVNING_NS,
 } from '../../src/docx/PlanbeskrivningXmlBuilder';
 import type { PlanbeskrivningConfig } from '../../src/types';
@@ -361,6 +362,42 @@ describe('PLANB-008 — only one indirect reference per Lage', () => {
       const indirectCount = [hasOmrade, hasPlanbestammelseRef, hasObjektRef].filter(Boolean).length;
       expect(indirectCount, 'Lage must have at most one indirect reference type').toBeLessThanOrEqual(1);
     }
+  });
+});
+
+// ─── PLANB-004 / PLANB-007 strict validation ─────────────────────────────────
+
+describe('strict validation coverage', () => {
+  it('reports PLANB-004 when category is outside BFS mapping', () => {
+    const tag = makeTag({
+      uuid: 'p4-tag',
+      categoryId: 'non-bfs-category',
+      geometryIds: undefined,
+    });
+    const result = validatePlanbeskrivning([tag], []);
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((e) => e.rule === 'PLANB-004')).toBe(true);
+  });
+
+  it('reports PLANB-007 when objektreferens would be non-persistent', () => {
+    const geo: Geometry = {
+      uuid: 'temp-id',
+      name: 'Temp object',
+      type: 'polygon',
+      // Non-serializable polygon => falls back to objektreferens path
+      coordinates: [] as unknown as number[][][],
+      crs: 'EPSG:3006',
+      featureType: 'annat-objekt',
+      properties: {},
+    };
+    const tag = makeTag({
+      uuid: 'p7-tag',
+      categoryId: 'syfte',
+      geometryIds: ['temp-id'],
+    });
+    const result = validatePlanbeskrivning([tag], [geo]);
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((e) => e.rule === 'PLANB-007')).toBe(true);
   });
 });
 

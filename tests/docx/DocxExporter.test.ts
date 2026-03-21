@@ -6,6 +6,7 @@ import { parseDocx } from '../../src/docx/DocxParser';
 import { exportDocx } from '../../src/docx/DocxExporter';
 import * as fileSaver from 'file-saver';
 import { DOMParser } from '@xmldom/xmldom';
+import { buildDefaultConfig } from '../../src/docx/PlanbeskrivningXmlBuilder';
 
 vi.mock('file-saver', () => ({
   saveAs: vi.fn(),
@@ -58,5 +59,37 @@ describe('DocxExporter', () => {
     }
 
     expect(nestedCount).toBe(0);
+  });
+
+  it('allows export when compliance blocking is disabled', async () => {
+    const filePath = path.join(__dirname, '../docx_example_file/error_when_opening_in_word.docx');
+    const buffer = fs.readFileSync(filePath);
+    const arrayBuffer = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
+    const { zip: originalZip, docModel, tags } = await parseDocx(arrayBuffer);
+
+    expect(tags.length).toBeGreaterThan(0);
+    const invalidTags = tags.map((t, i) =>
+      i === 0 ? { ...t, categoryId: 'invalid-category-for-test' } : t
+    );
+
+    // Strict mode: should block
+    await expect(
+      exportDocx(originalZip, docModel, invalidTags, 'strict.docx', {
+        config: buildDefaultConfig(),
+        geometries: [],
+        enforceCompliance: true,
+      })
+    ).rejects.toThrow(/PLANB-004/);
+
+    // Optional mode: should allow export
+    await expect(
+      exportDocx(originalZip, docModel, invalidTags, 'optional.docx', {
+        config: buildDefaultConfig(),
+        geometries: [],
+        enforceCompliance: false,
+      })
+    ).resolves.toBeUndefined();
+
+    expect(fileSaver.saveAs).toHaveBeenCalledTimes(1);
   });
 });

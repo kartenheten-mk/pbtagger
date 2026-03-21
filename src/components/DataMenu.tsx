@@ -106,8 +106,8 @@ export const DataMenu: React.FC = () => {
     importGeometryJson,
     exportGeometryJson,
     planbeskrivningConfig,
-    exportPlanbeskrivning,
-    toggleExportPlanbeskrivning,
+    enforcePlanbeskrivningCompliance,
+    togglePlanbeskrivningCompliance,
     setPlanbeskrivningConfig,
     addGeometry,
   } = useDocumentStore();
@@ -169,22 +169,26 @@ export const DataMenu: React.FC = () => {
     setError(null);
     try {
       const zip = new PizZip(zipBuffer);
-      const pbOpts = exportPlanbeskrivning
-        ? {
-            config: planbeskrivningConfig ?? buildDefaultConfig(activeGeometryDocId ?? undefined),
-            geometries,
-          }
-        : undefined;
+      const pbOpts = {
+        config: planbeskrivningConfig ?? buildDefaultConfig(activeGeometryDocId ?? undefined),
+        geometries,
+        enforceCompliance: enforcePlanbeskrivningCompliance,
+      };
       await exportDocx(zip, docModel, tags, fileName, pbOpts);
-      setSuccess(exportPlanbeskrivning ? 'Taggad .docx med Planbeskrivning v2.0 nedladdad!' : 'Taggad .docx nedladdad!');
+      setSuccess(
+        enforcePlanbeskrivningCompliance
+          ? 'Taggad .docx med Planbeskrivning v2.0 nedladdad!'
+          : 'Taggad .docx nedladdad (compliance-kontroll var avstängd).'
+      );
       setOpen(false);
     } catch (e) {
-      setError('Export av .docx misslyckades. Försök igen.');
+      const msg = e instanceof Error ? e.message : 'Export av .docx misslyckades. Försök igen.';
+      setError(msg);
       console.error(e);
     } finally {
       setExportingDocx(false);
     }
-  }, [zipBuffer, docModel, tags, fileName, exportPlanbeskrivning, planbeskrivningConfig, activeGeometryDocId, geometries]);
+  }, [zipBuffer, docModel, tags, fileName, planbeskrivningConfig, activeGeometryDocId, geometries, enforcePlanbeskrivningCompliance]);
 
   // ── Export geometry JSON ───────────────────────────────────────────────────
   const handleExportGeo = useCallback(async () => {
@@ -326,7 +330,7 @@ export const DataMenu: React.FC = () => {
       {open && (
         <div
           ref={popoverRef}
-          className="absolute right-0 top-full mt-2 w-80 bg-white border border-gray-200 rounded-2xl shadow-xl z-50 overflow-hidden"
+          className="absolute right-0 top-full mt-2 w-80 max-h-[calc(100vh-5rem)] bg-white border border-gray-200 rounded-2xl shadow-xl z-50 overflow-y-auto overscroll-contain"
           style={{ animation: 'fadeSlideDown 0.15s ease-out' }}
         >
           {/* Header bar */}
@@ -477,7 +481,7 @@ export const DataMenu: React.FC = () => {
                 }
               />
               <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 space-y-3">
-                {/* Toggle row */}
+                {/* Compliance note */}
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-2 min-w-0">
                     <div className="w-6 h-6 rounded-md bg-amber-100 flex items-center justify-center flex-shrink-0">
@@ -488,80 +492,56 @@ export const DataMenu: React.FC = () => {
                     </div>
                     <div className="min-w-0">
                       <p className="text-xs font-semibold text-amber-900 leading-tight">
-                        Inkludera <code className="font-mono text-[10px]">omfattningar.xml</code>
+                        <code className="font-mono text-[10px]">omfattningar.xml</code> inkluderas alltid
                       </p>
                       <p className="text-[10px] text-amber-700 leading-snug">
-                        Bädda in Lantmäterivets Planbeskrivning-XML vid export.
+                        Välj om compliance-fel ska blockera export eller inte.
                       </p>
                     </div>
                   </div>
-                  {/* Toggle switch */}
                   <button
-                    onClick={toggleExportPlanbeskrivning}
+                    onClick={togglePlanbeskrivningCompliance}
                     role="switch"
-                    aria-checked={exportPlanbeskrivning}
+                    aria-checked={enforcePlanbeskrivningCompliance}
+                    title={
+                      enforcePlanbeskrivningCompliance
+                        ? 'Export blockeras vid compliance-fel'
+                        : 'Export tillåts även vid compliance-fel'
+                    }
                     className={`relative inline-flex h-5 w-9 flex-shrink-0 rounded-full border-2 transition-colors focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-1 ${
-                      exportPlanbeskrivning
+                      enforcePlanbeskrivningCompliance
                         ? 'border-amber-500 bg-amber-500'
                         : 'border-gray-300 bg-gray-200'
                     }`}
                   >
                     <span
                       className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform mt-px ${
-                        exportPlanbeskrivning ? 'translate-x-4' : 'translate-x-px'
+                        enforcePlanbeskrivningCompliance ? 'translate-x-4' : 'translate-x-px'
                       }`}
                     />
                   </button>
                 </div>
+                <p className="text-[10px] text-amber-700 leading-snug">
+                  {enforcePlanbeskrivningCompliance
+                    ? 'Läge: Blockera export vid compliance-fel.'
+                    : 'Läge: Tillåt export även om compliance-fel finns.'}
+                </p>
 
-                {/* Settings button (only when enabled) */}
-                {exportPlanbeskrivning && (
-                  <button
-                    onClick={() => { setOpen(false); setShowPbConfig(true); }}
-                    className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-amber-300 bg-white hover:bg-amber-50 text-xs font-medium text-amber-700 transition-colors"
-                  >
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                        d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                    Redigera metadata…
-                  </button>
-                )}
+                <button
+                  onClick={() => { setOpen(false); setShowPbConfig(true); }}
+                  className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-amber-300 bg-white hover:bg-amber-50 text-xs font-medium text-amber-700 transition-colors"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                      d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                  Redigera metadata…
+                </button>
               </div>
             </div>
 
           </div>
-
-          {/* ── Status banners ─────────────────────────────────────────── */}
-          {(error || success) && (
-            <div className={`mx-4 mb-4 px-3 py-2 rounded-lg text-xs font-medium flex items-center gap-2 ${
-              error
-                ? 'bg-red-50 border border-red-200 text-red-700'
-                : 'bg-green-50 border border-green-200 text-green-700'
-            }`}>
-              {error ? (
-                <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                    d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              ) : (
-                <svg className="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              )}
-              <span>{error ?? success}</span>
-              <button
-                onClick={() => { setError(null); setSuccess(null); }}
-                className="ml-auto opacity-60 hover:opacity-100"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-          )}
 
           {/* Loading overlay hint */}
           {anyLoading && (
@@ -572,6 +552,40 @@ export const DataMenu: React.FC = () => {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Screen-level status message (outside dropdown) */}
+      {(error || success) && (
+        <div className="fixed right-4 top-20 z-[120] w-[min(24rem,calc(100vw-2rem))]">
+          <div
+            className={`px-3 py-2 rounded-lg text-xs font-medium flex items-start gap-2 shadow-lg ${
+              error
+                ? 'bg-red-50 border border-red-200 text-red-700'
+                : 'bg-green-50 border border-green-200 text-green-700'
+            }`}
+          >
+            {error ? (
+              <svg className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            ) : (
+              <svg className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            )}
+            <span className="leading-snug whitespace-pre-line">{error ?? success}</span>
+            <button
+              onClick={() => { setError(null); setSuccess(null); }}
+              className="ml-auto opacity-60 hover:opacity-100"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
         </div>
       )}
 
