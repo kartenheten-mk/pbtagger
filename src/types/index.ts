@@ -81,6 +81,7 @@ export interface Tag {
 // ─── Geometry ────────────────────────────────────────────────────────────────
 
 export type GeometryType = 'point' | 'polygon' | 'line';
+export type GeometrySource = 'json' | 'docx_gml';
 
 /**
  * Internal representation of a single geometry feature.
@@ -104,6 +105,15 @@ export interface Geometry {
   featureType?: string;
   /** UUID of the parent GeometryDoc this feature belongs to */
   sourceDocId?: string;
+  /**
+   * Origin of the geometry:
+   *  - "json"     = imported detaljplan JSON
+   *  - "docx_gml" = parsed from Planbeskrivning GML in a DOCX file
+   *
+   * Optional for backward compatibility with persisted data created
+   * before this field existed.
+   */
+  source?: GeometrySource;
   /** Additional properties from the source JSON for display/export */
   properties?: Record<string, unknown>;
   color?: string;

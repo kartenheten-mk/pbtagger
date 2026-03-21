@@ -17,6 +17,8 @@ import {
 } from '../geometry/geometryDb';
 import { parseDetaljplanJson } from '../geometry/detaljplanParser';
 import { exportGeometryDocAsString } from '../geometry/geoJsonConverter';
+import { normalizeGeometrySource } from '../geometry/geometrySource';
+import { replaceDocxGmlGeometriesInState } from './geometryMerge';
 import { saveAs } from 'file-saver';
 
 interface DocumentActions {
@@ -63,6 +65,8 @@ interface DocumentActions {
 
   // ─── Geometry management ────────────────────────────────────────────────
   addGeometry: (geometry: Geometry) => void;
+  /** Replace all DOCX-derived GML geometries with a fresh import set */
+  setDocxGmlGeometries: (geometries: Geometry[]) => void;
   updateGeometry: (uuid: string, changes: Partial<Geometry>) => void;
   removeGeometry: (uuid: string) => void;
 
@@ -183,6 +187,8 @@ export const useDocumentStore = create<AppState & DocumentActions>()(
         ) => {
           const documentId = uuidv4();
           const now = new Date().toISOString();
+          const migratedTags = migrateTagsGeometryIds(tags);
+          const normalizedGeometries = geometries.map(normalizeGeometrySource);
 
           if (geometryDoc) {
              await saveGeometryDoc(geometryDoc);
@@ -193,8 +199,8 @@ export const useDocumentStore = create<AppState & DocumentActions>()(
             zipBuffer,
             docModel,
             fileName,
-            tags,
-            geometries,
+            tags: migratedTags,
+            geometries: normalizedGeometries,
             pendingSelection: null,
             showTags: true,
             activeGeometryDocId,
@@ -207,8 +213,8 @@ export const useDocumentStore = create<AppState & DocumentActions>()(
             fileName,
             zipBuffer,
             docModel,
-            tags,
-            geometries,
+            tags: migratedTags,
+            geometries: normalizedGeometries,
             createdAt: now,
             updatedAt: now,
           });
@@ -217,7 +223,7 @@ export const useDocumentStore = create<AppState & DocumentActions>()(
         setDocument: (zipBuffer, docModel, fileName, initialTags) => {
           const documentId = uuidv4();
           const now = new Date().toISOString();
-          const tags = initialTags ?? [];
+          const tags = migrateTagsGeometryIds(initialTags ?? []);
           set({ documentId, zipBuffer, docModel, fileName, tags, geometries: [], pendingSelection: null, showTags: true });
           // Clear undo/redo history — it belongs to the previous document
           useDocumentStore.temporal.getState().clear();
@@ -241,7 +247,8 @@ export const useDocumentStore = create<AppState & DocumentActions>()(
           const documentId = state.documentId;
           if (!documentId) return;
           const now = new Date().toISOString();
-          set({ zipBuffer, docModel, fileName, tags });
+          const migratedTags = migrateTagsGeometryIds(tags);
+          set({ zipBuffer, docModel, fileName, tags: migratedTags });
           // Clear undo history since the document structure changed
           useDocumentStore.temporal.getState().clear();
           // Persist to IndexedDB under the same ID
@@ -251,7 +258,7 @@ export const useDocumentStore = create<AppState & DocumentActions>()(
               fileName,
               zipBuffer,
               docModel,
-              tags,
+              tags: migratedTags,
               geometries: get().geometries,
               createdAt: existing?.createdAt ?? now,
               updatedAt: now,
@@ -277,7 +284,7 @@ export const useDocumentStore = create<AppState & DocumentActions>()(
             docModel: doc.docModel,
             fileName: doc.fileName,
             tags: migrateTagsGeometryIds(doc.tags),
-            geometries: doc.geometries,
+            geometries: doc.geometries.map(normalizeGeometrySource),
             selectedTagUuid: null,
             linkingTagUuid: null,
             pendingSelection: null,
@@ -345,7 +352,18 @@ export const useDocumentStore = create<AppState & DocumentActions>()(
         // ─── Geometry management ────────────────────────────────────────────
         addGeometry: (geometry) =>
           set((state) => {
-            const next = { geometries: [...state.geometries, geometry] };
+            const next = { geometries: [...state.geometries, normalizeGeometrySource(geometry)] };
+            debouncedSave({ ...state, ...next });
+            return next;
+          }),
+
+        setDocxGmlGeometries: (geometries) =>
+          set((state) => {
+            const next = replaceDocxGmlGeometriesInState(
+              state.geometries,
+              state.tags,
+              geometries
+            );
             debouncedSave({ ...state, ...next });
             return next;
           }),
@@ -378,7 +396,8 @@ export const useDocumentStore = create<AppState & DocumentActions>()(
 
         // ─── Geometry document import / export ─────────────────────────────
         importGeometryJson: async (rawJson, fileName) => {
-          const { geometryDoc, geometries: newGeometries } = parseDetaljplanJson(rawJson, fileName);
+          const { geometryDoc, geometries } = parseDetaljplanJson(rawJson, fileName);
+          const newGeometries = geometries.map(normalizeGeometrySource);
 
           const prev = get().activeGeometryDocId;
 

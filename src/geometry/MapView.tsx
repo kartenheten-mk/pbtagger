@@ -68,6 +68,10 @@ interface MapViewProps {
    * Parent should show a disambiguation picker using these coordinates.
    */
   onMultiFeatureClick: (items: PickerItem[], pixelX: number, pixelY: number) => void;
+  /** Empty-state title shown when no geometries are available in current view */
+  emptyStateTitle?: string;
+  /** Empty-state subtitle shown under title */
+  emptyStateSubtitle?: string;
 }
 
 // ─── Style factory ────────────────────────────────────────────────────────────
@@ -122,6 +126,8 @@ export const MapView: React.FC<MapViewProps> = ({
   isLinking,
   onFeatureClick,
   onMultiFeatureClick,
+  emptyStateTitle = 'Ingen geometri inläst',
+  emptyStateSubtitle = 'Ladda upp en detaljplan-JSON',
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<Map | null>(null);
@@ -297,8 +303,8 @@ export const MapView: React.FC<MapViewProps> = ({
       {/* Empty state overlay */}
       {geometries.length === 0 && (
         <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/70 backdrop-blur-sm pointer-events-none">
-          <p className="text-xs text-gray-500 font-medium">Ingen geometri inläst</p>
-          <p className="text-xs text-gray-400 mt-1">Ladda upp en detaljplan-JSON</p>
+          <p className="text-xs text-gray-500 font-medium">{emptyStateTitle}</p>
+          <p className="text-xs text-gray-400 mt-1">{emptyStateSubtitle}</p>
         </div>
       )}
     </div>

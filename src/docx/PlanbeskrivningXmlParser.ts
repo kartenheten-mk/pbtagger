@@ -61,7 +61,7 @@ export function extractPlanbeskrivningFromZip(
 
   try {
     const xmlText = file.asText();
-    return parsePlanbeskrivningXml(xmlText);
+    return parsePlanbeskrivningXmlText(xmlText);
   } catch (err) {
     console.warn('[PlanbeskrivningXmlParser] Failed to parse Planbeskrivning XML:', err);
     return null;
@@ -70,7 +70,9 @@ export function extractPlanbeskrivningFromZip(
 
 // ─── XML parsing ─────────────────────────────────────────────────────────────
 
-function parsePlanbeskrivningXml(xmlText: string): PlanbeskrivningImportResult | null {
+export function parsePlanbeskrivningXmlText(
+  xmlText: string
+): PlanbeskrivningImportResult | null {
   const doc = parseXml(xmlText);
 
   // Find the root <Planbeskrivning> element (may be in default NS or prefixed)
@@ -270,7 +272,9 @@ function parsePolygonGeometry(ytaEl: Element, identitet: string): Geometry | nul
     type: 'polygon' as GeometryType,
     coordinates: rings as number[][][],
     crs: 'EPSG:3006',
+    source: 'docx_gml',
     featureType: 'planbeskrivning',
+    color: '#f97316',
     properties: { identitet },
   };
 }
@@ -309,7 +313,9 @@ function parsePointGeometry(punktEl: Element, identitet: string): Geometry | nul
     type: 'point' as GeometryType,
     coordinates: xy as number[],
     crs: 'EPSG:3006',
+    source: 'docx_gml',
     featureType: 'planbeskrivning',
+    color: '#f97316',
     properties: { identitet },
   };
 }
@@ -334,7 +340,9 @@ function parseLineGeometry(linjeEl: Element, identitet: string): Geometry | null
     type: 'line' as GeometryType,
     coordinates: coords as number[][],
     crs: 'EPSG:3006',
+    source: 'docx_gml',
     featureType: 'planbeskrivning',
+    color: '#f97316',
     properties: { identitet },
   };
 }

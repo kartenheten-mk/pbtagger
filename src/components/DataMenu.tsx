@@ -109,7 +109,7 @@ export const DataMenu: React.FC = () => {
     enforcePlanbeskrivningCompliance,
     togglePlanbeskrivningCompliance,
     setPlanbeskrivningConfig,
-    addGeometry,
+    setDocxGmlGeometries,
   } = useDocumentStore();
 
   const [open, setOpen] = useState(false);
@@ -253,9 +253,9 @@ export const DataMenu: React.FC = () => {
         // Restore Planbeskrivning config + GML geometries from the embedded XML
         if (planbeskrivning) {
           setPlanbeskrivningConfig(planbeskrivning.config);
-          for (const geo of planbeskrivning.geometries) {
-            addGeometry(geo);
-          }
+          setDocxGmlGeometries(planbeskrivning.geometries);
+        } else {
+          setDocxGmlGeometries([]);
         }
         setSuccess(planbeskrivning?.geometries.length
           ? `Dokument ersatt! ${planbeskrivning.geometries.length} geometri(er) återställda från Planbeskrivning-XML.`
@@ -269,7 +269,7 @@ export const DataMenu: React.FC = () => {
         if (docxInputRef.current) docxInputRef.current.value = '';
       }
     },
-    [tags, replaceDocument, setPlanbeskrivningConfig, addGeometry]
+    [tags, replaceDocument, setPlanbeskrivningConfig, setDocxGmlGeometries]
   );
 
   // ── Import geometry JSON ───────────────────────────────────────────────────

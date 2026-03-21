@@ -94,6 +94,7 @@ describe('PlanbeskrivningXmlParser — multi-geometry grouping', () => {
 
       expect(result).not.toBeNull();
       expect(result!.geometries).toHaveLength(3);
+      expect(new Set(result!.geometries.map((g) => g.source))).toEqual(new Set(['docx_gml']));
       expect(result!.identitetToGeometryUuid.size).toBe(1);
       expect(result!.identitetToGeometryUuid.get(base)).toHaveLength(3);
     });

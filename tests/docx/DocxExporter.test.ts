@@ -62,6 +62,8 @@ describe('DocxExporter', () => {
   });
 
   it('allows export when compliance blocking is disabled', async () => {
+    vi.mocked(fileSaver.saveAs).mockClear();
+
     const filePath = path.join(__dirname, '../docx_example_file/error_when_opening_in_word.docx');
     const buffer = fs.readFileSync(filePath);
     const arrayBuffer = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);

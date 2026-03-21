@@ -36,7 +36,7 @@ const teman: Tema[] = (categoriesData as { teman: Tema[] }).teman;
 const categories: Category[] = flattenCategories(teman);
 
 export default function App() {
-  const { docModel, setDocument, clearDocument, importGeometryJson, restoreProject, setPlanbeskrivningConfig, addGeometry } = useDocumentStore();
+  const { docModel, setDocument, clearDocument, importGeometryJson, restoreProject, setPlanbeskrivningConfig, setDocxGmlGeometries } = useDocumentStore();
   const [isLoading, setIsLoading] = useState(false);
   const [parseError, setParseError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -93,9 +93,10 @@ export default function App() {
         // Restore Planbeskrivning config + GML geometries from embedded XML (if any)
         if (planbeskrivning) {
           setPlanbeskrivningConfig(planbeskrivning.config);
-          for (const geo of planbeskrivning.geometries) {
-            addGeometry(geo);
-          }
+          setDocxGmlGeometries(planbeskrivning.geometries);
+        } else {
+          // Ensure stale GML comparison layer is cleared when no Planbeskrivning
+          setDocxGmlGeometries([]);
         }
 
         // If a JSON file is provided, import its geometry
@@ -123,7 +124,7 @@ export default function App() {
         setIsLoading(false);
       }
     },
-    [setDocument, importGeometryJson, setPlanbeskrivningConfig, addGeometry]
+    [setDocument, importGeometryJson, setPlanbeskrivningConfig, setDocxGmlGeometries]
   );
 
   const handleClearDocument = useCallback(() => {
