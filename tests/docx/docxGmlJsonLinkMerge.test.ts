@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import { parseDocx } from '../../src/docx/DocxParser';
+import { parseDetaljplanJson } from '../../src/geometry/detaljplanParser';
+import { buildMirroredDisplayLinks } from '../../src/geometry/tagLinkMirror';
 
 function toArrayBuffer(buffer: Buffer): ArrayBuffer {
   return buffer.buffer.slice(
@@ -38,5 +40,36 @@ describe('DOCX import keeps JSON geometry links without duplicating GML links', 
       const nonGmlCount = ids.length - gmlCount;
       expect(gmlCount > 0 && nonGmlCount > 0).toBe(false);
     }
+  });
+
+  it('can still resolve imported DOCX GML links for JSON-linked tags at display time', async () => {
+    const docxPath = path.join(
+      __dirname,
+      '../docx_example_file/2_old_gml_tag_2_new.docx'
+    );
+    const jsonPath = path.join(
+      __dirname,
+      '../geometry_json_file/dp225.json'
+    );
+
+    const parsedDocx = await parseDocx(toArrayBuffer(fs.readFileSync(docxPath)));
+    const parsedJson = parseDetaljplanJson(
+      JSON.parse(fs.readFileSync(jsonPath, 'utf8')) as Record<string, unknown>,
+      'dp225.json'
+    );
+
+    const mirrored = buildMirroredDisplayLinks(
+      parsedDocx.tags,
+      new Set(parsedJson.geometries.map((geometry) => geometry.uuid)),
+      parsedDocx.planbeskrivning?.geometries ?? []
+    );
+
+    const tagsWithImportedDocxMatches = parsedDocx.tags.filter((tag) => {
+      const mirroredIds = mirrored.get(tag.uuid) ?? new Set<string>();
+      const explicitIds = new Set(tag.geometryIds ?? []);
+      return Array.from(mirroredIds).some((geometryId) => !explicitIds.has(geometryId));
+    });
+
+    expect(tagsWithImportedDocxMatches.length).toBeGreaterThan(0);
   });
 });

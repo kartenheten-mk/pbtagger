@@ -22,6 +22,7 @@ import { MapView } from './MapView';
 import type { PickerItem } from './MapView';
 import { splitGeometriesBySource } from './geometrySource';
 import { buildGmlExportPreview } from './gmlExportPreview';
+import { buildMirroredDisplayLinks } from './tagLinkMirror';
 import {
   buildFocusLinkedGeometryIdsByTagUuidForMode,
   buildInspectionSelectedGeometryUuids,
@@ -138,6 +139,19 @@ export const GeometryPanel: React.FC = () => {
     () => new Set(importedDocxGeometries.map((g) => g.uuid)),
     [importedDocxGeometries]
   );
+  const importedDocxLinkedGeometryIdsByTagUuid = useMemo(() => {
+    const mirrored = buildMirroredDisplayLinks(tags, jsonGeometryIdSet, importedDocxGeometries);
+    const filtered = new Map<string, Set<string>>();
+
+    for (const [tagUuid, geometryIds] of mirrored.entries()) {
+      filtered.set(
+        tagUuid,
+        new Set(Array.from(geometryIds).filter((id) => importedDocxGeometryIdSet.has(id)))
+      );
+    }
+
+    return filtered;
+  }, [tags, jsonGeometryIdSet, importedDocxGeometries, importedDocxGeometryIdSet]);
   const displayLinkedGeometryIdsByTagUuid = useMemo(() => {
     return buildDisplayLinkedGeometryIdsByTagUuidForMode({
       tags,
@@ -146,6 +160,7 @@ export const GeometryPanel: React.FC = () => {
       jsonGeometryIdSet,
       importedDocxGeometryIdSet,
       previewLinkedGeometryIdsByTagUuid: gmlPreview.linkedGeometryIdsByTagUuid,
+      importedDocxLinkedGeometryIdsByTagUuid,
     });
   }, [
     tags,
@@ -154,6 +169,7 @@ export const GeometryPanel: React.FC = () => {
     jsonGeometryIdSet,
     importedDocxGeometryIdSet,
     gmlPreview.linkedGeometryIdsByTagUuid,
+    importedDocxLinkedGeometryIdsByTagUuid,
   ]);
   const focusLinkedGeometryIdsByTagUuid = useMemo(() => {
     return buildFocusLinkedGeometryIdsByTagUuidForMode({
@@ -163,6 +179,7 @@ export const GeometryPanel: React.FC = () => {
       jsonGeometryIdSet,
       importedDocxGeometryIdSet,
       previewLinkedGeometryIdsByTagUuid: gmlPreview.linkedGeometryIdsByTagUuid,
+      importedDocxLinkedGeometryIdsByTagUuid,
     });
   }, [
     tags,
@@ -171,6 +188,7 @@ export const GeometryPanel: React.FC = () => {
     jsonGeometryIdSet,
     importedDocxGeometryIdSet,
     gmlPreview.linkedGeometryIdsByTagUuid,
+    importedDocxLinkedGeometryIdsByTagUuid,
   ]);
   const linkedTagUuidsByGeometryUuid = useMemo(() => {
     const map = new Map<string, string[]>();

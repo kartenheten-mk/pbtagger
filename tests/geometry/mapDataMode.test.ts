@@ -78,9 +78,31 @@ describe('mapDataMode view-model helpers', () => {
       jsonGeometryIdSet: new Set(['json-1']),
       importedDocxGeometryIdSet: new Set(['imported-1']),
       previewLinkedGeometryIdsByTagUuid: new Map([['tag-2', new Set(['preview-1'])]]),
+      importedDocxLinkedGeometryIdsByTagUuid: new Map(),
     });
 
     expect(Array.from(links.get('tag-2') ?? [])).toEqual(['imported-1']);
+  });
+
+  it('uses mirrored imported DOCX links when tag only stores JSON geometry ids', () => {
+    const tag = makeTag({
+      uuid: 'tag-2b',
+      geometryIds: ['json-1'],
+    });
+
+    const links = buildDisplayLinkedGeometryIdsByTagUuidForMode({
+      tags: [tag],
+      activeMainMode: 'gml',
+      gmlViewMode: 'imported_docx',
+      jsonGeometryIdSet: new Set(['json-1']),
+      importedDocxGeometryIdSet: new Set(['imported-1']),
+      previewLinkedGeometryIdsByTagUuid: new Map(),
+      importedDocxLinkedGeometryIdsByTagUuid: new Map([
+        ['tag-2b', new Set(['imported-1'])],
+      ]),
+    });
+
+    expect(Array.from(links.get('tag-2b') ?? [])).toEqual(['imported-1']);
   });
 
   it('uses preview-derived links as focus source in GML preview mode', () => {
@@ -96,6 +118,7 @@ describe('mapDataMode view-model helpers', () => {
       jsonGeometryIdSet: new Set(['json-1']),
       importedDocxGeometryIdSet: new Set(['imported-1']),
       previewLinkedGeometryIdsByTagUuid: new Map([['tag-3', new Set(['preview-1'])]]),
+      importedDocxLinkedGeometryIdsByTagUuid: new Map(),
     });
 
     expect(Array.from(links.get('tag-3') ?? [])).toEqual(['preview-1']);

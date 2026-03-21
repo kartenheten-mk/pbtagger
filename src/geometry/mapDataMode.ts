@@ -110,6 +110,7 @@ interface BuildDisplayLinksArgs {
   jsonGeometryIdSet: Set<string>;
   importedDocxGeometryIdSet: Set<string>;
   previewLinkedGeometryIdsByTagUuid: Map<string, Set<string>>;
+  importedDocxLinkedGeometryIdsByTagUuid: Map<string, Set<string>>;
 }
 
 function cloneLinkMap(source: Map<string, Set<string>>): Map<string, Set<string>> {
@@ -124,7 +125,9 @@ function cloneLinkMap(source: Map<string, Set<string>>): Map<string, Set<string>
  * Returns geometry IDs to treat as linked for UI display in the active mode.
  * - JSON mode: explicit JSON links only
  * - GML preview mode: derived preview links only
- * - Imported DOCX mode: explicit links to imported DOCX geometries only
+ * - Imported DOCX mode: explicit DOCX links OR mirrored DOCX links derived
+ *   from matching JSON-linked tags when the imported DOCX contains the same
+ *   logical GML tag
  */
 export function buildDisplayLinkedGeometryIdsByTagUuidForMode(
   args: BuildDisplayLinksArgs
@@ -136,6 +139,7 @@ export function buildDisplayLinkedGeometryIdsByTagUuidForMode(
     jsonGeometryIdSet,
     importedDocxGeometryIdSet,
     previewLinkedGeometryIdsByTagUuid,
+    importedDocxLinkedGeometryIdsByTagUuid,
   } = args;
 
   const result = new Map<string, Set<string>>();
@@ -154,9 +158,11 @@ export function buildDisplayLinkedGeometryIdsByTagUuidForMode(
       continue;
     }
 
-    const importedLinks = (tag.geometryIds ?? []).filter((id) =>
-      importedDocxGeometryIdSet.has(id)
-    );
+    const importedLinks =
+      importedDocxLinkedGeometryIdsByTagUuid.get(tag.uuid) ??
+      new Set(
+        (tag.geometryIds ?? []).filter((id) => importedDocxGeometryIdSet.has(id))
+      );
     result.set(tag.uuid, new Set(importedLinks));
   }
 
@@ -167,7 +173,7 @@ export function buildDisplayLinkedGeometryIdsByTagUuidForMode(
  * Returns geometry IDs to use for tag-driven focus behavior in the active mode.
  * - JSON mode: explicit JSON links only
  * - GML preview mode: derived preview links only (export preview source of truth)
- * - Imported DOCX mode: explicit links to imported DOCX geometries only
+ * - Imported DOCX mode: explicit or mirrored imported DOCX links
  */
 export function buildFocusLinkedGeometryIdsByTagUuidForMode(
   args: BuildDisplayLinksArgs
