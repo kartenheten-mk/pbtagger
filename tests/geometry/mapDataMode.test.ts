@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Geometry, Tag } from '../../src/types';
 import {
   buildFocusLinkedGeometryIdsByTagUuidForMode,
-  buildInspectionSelectedGeometryUuids,
+  buildHighlightedGeometryUuids,
   buildDisplayLinkedGeometryIdsByTagUuidForMode,
   resolveFocusedGeometryForSelectedTag,
   resolveActiveMapMainMode,
@@ -130,10 +130,95 @@ describe('mapDataMode view-model helpers', () => {
     expect(resolveActiveMapMainMode('gml', false)).toBe('gml');
   });
 
-  it('returns single selected geometry in inspection mode', () => {
-    expect(buildInspectionSelectedGeometryUuids(false, 'geo-1')).toEqual(['geo-1']);
-    expect(buildInspectionSelectedGeometryUuids(false, null)).toEqual([]);
-    expect(buildInspectionSelectedGeometryUuids(true, 'geo-1')).toEqual([]);
+  it('highlights all linked visible geometries for a selected tag', () => {
+    const visible = [
+      makeGeometry('geo-a', 'json'),
+      makeGeometry('geo-b', 'json'),
+      makeGeometry('geo-c', 'json'),
+    ];
+
+    expect(
+      buildHighlightedGeometryUuids({
+        isLinking: false,
+        manualFocusedGeometryUuid: null,
+        selectedTagUuid: 'tag-1',
+        displayLinkedGeometryIdsByTagUuid: new Map([
+          ['tag-1', new Set(['geo-c', 'geo-b', 'geo-z'])],
+        ]),
+        visibleGeometries: visible,
+      })
+    ).toEqual(['geo-b', 'geo-c']);
+  });
+
+  it('prefers a manual geometry focus override over tag-driven multi-highlight', () => {
+    const visible = [
+      makeGeometry('geo-a', 'json'),
+      makeGeometry('geo-b', 'json'),
+      makeGeometry('geo-c', 'json'),
+    ];
+
+    expect(
+      buildHighlightedGeometryUuids({
+        isLinking: false,
+        manualFocusedGeometryUuid: 'geo-c',
+        selectedTagUuid: 'tag-1',
+        displayLinkedGeometryIdsByTagUuid: new Map([
+          ['tag-1', new Set(['geo-b', 'geo-c'])],
+        ]),
+        visibleGeometries: visible,
+      })
+    ).toEqual(['geo-c']);
+  });
+
+  it('highlights a manually focused unlinked geometry even when no tag is selected', () => {
+    const visible = [
+      makeGeometry('geo-a', 'json'),
+      makeGeometry('geo-b', 'json'),
+    ];
+
+    expect(
+      buildHighlightedGeometryUuids({
+        isLinking: false,
+        manualFocusedGeometryUuid: 'geo-b',
+        selectedTagUuid: null,
+        displayLinkedGeometryIdsByTagUuid: new Map(),
+        visibleGeometries: visible,
+      })
+    ).toEqual(['geo-b']);
+  });
+
+  it('falls back to tag-driven multi-highlight when manual focus is no longer visible', () => {
+    const visible = [
+      makeGeometry('geo-a', 'json'),
+      makeGeometry('geo-b', 'json'),
+      makeGeometry('geo-c', 'json'),
+    ];
+
+    expect(
+      buildHighlightedGeometryUuids({
+        isLinking: false,
+        manualFocusedGeometryUuid: 'geo-z',
+        selectedTagUuid: 'tag-1',
+        displayLinkedGeometryIdsByTagUuid: new Map([
+          ['tag-1', new Set(['geo-b', 'geo-c'])],
+        ]),
+        visibleGeometries: visible,
+      })
+    ).toEqual(['geo-b', 'geo-c']);
+  });
+
+  it('suppresses inspection highlight while linking', () => {
+    expect(
+      buildHighlightedGeometryUuids({
+        isLinking: true,
+        manualFocusedGeometryUuid: 'geo-1',
+        selectedTagUuid: 'tag-1',
+        displayLinkedGeometryIdsByTagUuid: new Map([
+          ['tag-1', new Set(['geo-1'])],
+        ]),
+        visibleGeometries: [makeGeometry('geo-1', 'json')],
+      })
+    ).toEqual([]);
   });
 
   it('resolves focused geometry for selected tag with deterministic preference', () => {

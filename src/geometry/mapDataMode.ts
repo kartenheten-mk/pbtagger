@@ -21,12 +21,41 @@ export function selectVisibleGeometries(
   return gmlViewMode === 'preview' ? previewGeometries : importedDocxGeometries;
 }
 
-export function buildInspectionSelectedGeometryUuids(
-  isLinking: boolean,
-  focusedGeometryUuid: string | null
+interface BuildHighlightedGeometryUuidsArgs {
+  isLinking: boolean;
+  manualFocusedGeometryUuid: string | null;
+  selectedTagUuid: string | null;
+  displayLinkedGeometryIdsByTagUuid: Map<string, Set<string>>;
+  visibleGeometries: Geometry[];
+}
+
+export function buildHighlightedGeometryUuids(
+  args: BuildHighlightedGeometryUuidsArgs
 ): string[] {
-  if (isLinking || !focusedGeometryUuid) return [];
-  return [focusedGeometryUuid];
+  const {
+    isLinking,
+    manualFocusedGeometryUuid,
+    selectedTagUuid,
+    displayLinkedGeometryIdsByTagUuid,
+    visibleGeometries,
+  } = args;
+
+  if (isLinking) return [];
+
+  const visibleIds = new Set(visibleGeometries.map((geometry) => geometry.uuid));
+
+  if (manualFocusedGeometryUuid && visibleIds.has(manualFocusedGeometryUuid)) {
+    return [manualFocusedGeometryUuid];
+  }
+
+  if (!selectedTagUuid) return [];
+
+  const linkedGeometryIds = displayLinkedGeometryIdsByTagUuid.get(selectedTagUuid);
+  if (!linkedGeometryIds || linkedGeometryIds.size === 0) return [];
+
+  return visibleGeometries
+    .map((geometry) => geometry.uuid)
+    .filter((uuid) => linkedGeometryIds.has(uuid));
 }
 
 interface ResolveFocusedGeometryArgs {

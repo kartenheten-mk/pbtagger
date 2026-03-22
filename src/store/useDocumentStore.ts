@@ -347,7 +347,14 @@ export const useDocumentStore = create<AppState & DocumentActions>()(
             return next;
           }),
 
-        selectTag: (uuid) => set({ selectedTagUuid: uuid }),
+        selectTag: (uuid) =>
+          set((state) => {
+            if (uuid !== null && state.selectedTagUuid === uuid) {
+              queueMicrotask(() => set({ selectedTagUuid: uuid }));
+              return { selectedTagUuid: null };
+            }
+            return { selectedTagUuid: uuid };
+          }),
 
         // ─── Geometry management ────────────────────────────────────────────
         addGeometry: (geometry) =>
