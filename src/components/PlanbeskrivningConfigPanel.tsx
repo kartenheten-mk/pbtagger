@@ -14,7 +14,7 @@
  *   arkividentitetKommun — free text, e.g. "MORA:2024/123"
  */
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useDocumentStore } from '../store/useDocumentStore';
 import { buildDefaultConfig } from '../docx/PlanbeskrivningXmlBuilder';
 
@@ -22,7 +22,21 @@ interface Props {
   onClose: () => void;
 }
 
+type DraftConfig = ReturnType<typeof buildDefaultConfig>;
+
 // ─── Small helpers ────────────────────────────────────────────────────────────
+
+
+function createDraftConfig(
+  planbeskrivningConfig: DraftConfig | null,
+  activeGeometryDocId: string | null
+): DraftConfig {
+  return planbeskrivningConfig ?? buildDefaultConfig(activeGeometryDocId ?? undefined);
+}
+
+function toDatetimeLocalValue(iso: string): string {
+  return iso.slice(0, 16);
+}
 
 function isValidUuid(s: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
@@ -71,24 +85,35 @@ export const PlanbeskrivningConfigPanel: React.FC<Props> = ({ onClose }) => {
   } = useDocumentStore();
 
   // Initialize local draft from store (or defaults)
-  const [draft, setDraft] = useState(() =>
-    planbeskrivningConfig ?? buildDefaultConfig(activeGeometryDocId ?? undefined)
+  const initialDraft = useMemo(
+    () => createDraftConfig(planbeskrivningConfig, activeGeometryDocId),
+    [planbeskrivningConfig, activeGeometryDocId]
   );
+
+  const [draft, setDraft] = useState<DraftConfig>(initialDraft);
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saved, setSaved] = useState(false);
+  const savedResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const detailPlanReference = planbeskrivningConfig?.detaljplansreferens ?? '';
 
   // Sync draft when store config changes externally (e.g. geometry import)
   useEffect(() => {
     if (!planbeskrivningConfig) return;
     setDraft((prev) => ({
       ...prev,
-      detaljplansreferens: planbeskrivningConfig.detaljplansreferens,
+      detaljplansreferens: detailPlanReference,
     }));
-  }, [planbeskrivningConfig?.detaljplansreferens]);
+  }, [planbeskrivningConfig, detailPlanReference]);
+
+  useEffect(() => () => {
+    if (savedResetTimerRef.current) {
+      clearTimeout(savedResetTimerRef.current);
+    }
+  }, []);
 
   const update = useCallback(
-    (key: keyof typeof draft, value: string | number) => {
+    (key: keyof DraftConfig, value: string | number) => {
       setDraft((prev) => ({ ...prev, [key]: value }));
       setErrors((prev) => ({ ...prev, [key]: '' }));
       setSaved(false);
@@ -114,11 +139,19 @@ export const PlanbeskrivningConfigPanel: React.FC<Props> = ({ onClose }) => {
     if (!validate()) return;
     setPlanbeskrivningConfig(draft);
     setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+
+    if (savedResetTimerRef.current) {
+      clearTimeout(savedResetTimerRef.current);
+    }
+
+    savedResetTimerRef.current = setTimeout(() => {
+      setSaved(false);
+      savedResetTimerRef.current = null;
+    }, 2000);
   }, [draft, validate, setPlanbeskrivningConfig]);
 
   const handleReset = useCallback(() => {
-    const fresh = buildDefaultConfig(activeGeometryDocId ?? undefined);
+    const fresh = createDraftConfig(null, activeGeometryDocId);
     setDraft(fresh);
     resetPlanbeskrivningConfig(activeGeometryDocId ?? undefined);
     setErrors({});
@@ -218,7 +251,7 @@ export const PlanbeskrivningConfigPanel: React.FC<Props> = ({ onClose }) => {
           >
             <input
               type="datetime-local"
-              value={draft.versionGiltigFran.slice(0, 16)}
+              value={toDatetimeLocalValue(draft.versionGiltigFran)}
               onChange={(e) => {
                 // Convert datetime-local value back to a full ISO string with offset
                 const iso = e.target.value
