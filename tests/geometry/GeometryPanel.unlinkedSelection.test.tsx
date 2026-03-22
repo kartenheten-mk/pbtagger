@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, cleanup } from '@testing-library/react';
 import { GeometryPanel } from '../../src/geometry/GeometryPanel';
 import { useDocumentStore } from '../../src/store/useDocumentStore';
-import type { Geometry } from '../../src/types';
+import type { Geometry, Tag } from '../../src/types';
 
 vi.mock('../../src/geometry/MapView', () => ({
   MapView: ({
@@ -87,15 +87,38 @@ function makeGeometry(uuid: string, name: string): Geometry {
   };
 }
 
-function resetStore(geometries: Geometry[]) {
+function makeTag(overrides: Partial<Tag> = {}): Tag {
+  return {
+    uuid: 'tag-1',
+    categoryId: 'detaljplanens-syfte--syfte',
+    targetType: 'text',
+    text: 'Markerad tagg',
+    paragraphIndex: 0,
+    startOffset: 0,
+    endOffset: 9,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
+function resetStore(
+  geometries: Geometry[],
+  {
+    tags = [],
+    selectedTagUuid = null,
+  }: {
+    tags?: Tag[];
+    selectedTagUuid?: string | null;
+  } = {}
+) {
   useDocumentStore.setState({
     documentId: null,
     zipBuffer: null,
     docModel: null,
     fileName: '',
-    tags: [],
+    tags,
     geometries,
-    selectedTagUuid: null,
+    selectedTagUuid,
     linkingTagUuid: null,
     pendingSelection: null,
     showTags: true,
@@ -111,6 +134,12 @@ function getGeometryRow(uuid: string, container: HTMLElement): HTMLElement {
     throw new Error(`Geometry row ${uuid} not found`);
   }
   return row;
+}
+
+function hasExactText(expected: string) {
+  return (_: string, element: Element | null) =>
+    element?.textContent === expected &&
+    Array.from(element.children).every((child) => child.textContent !== expected);
 }
 
 describe('GeometryPanel unlinked geometry selection', () => {
@@ -166,5 +195,55 @@ describe('GeometryPanel unlinked geometry selection', () => {
     );
     expect(getGeometryRow('geo-b', container).className).toContain('bg-blue-50');
     expect(useDocumentStore.getState().selectedTagUuid).toBeNull();
+  });
+
+  it('shows a JSON linked summary using unique linked geometry count', () => {
+    resetStore(
+      [
+        makeGeometry('geo-a', 'Linked A'),
+        makeGeometry('geo-b', 'Linked B'),
+        makeGeometry('geo-c', 'Linked C'),
+      ],
+      {
+        tags: [
+          makeTag({ geometryIds: ['geo-a', 'geo-b'] }),
+          makeTag({ uuid: 'tag-2', geometryIds: ['geo-a', 'missing-geo'] }),
+        ],
+        selectedTagUuid: 'tag-1',
+      }
+    );
+
+    const { container } = render(<GeometryPanel />);
+
+    expect(screen.getByText(hasExactText('2 av 3 geometrier är länkade'))).toBeTruthy();
+    expect(screen.queryByText('GML PREVIEW')).toBeNull();
+    expect(screen.queryByText('GML DOCX')).toBeNull();
+    expect(container.textContent).not.toContain('Delta');
+    expect(container.textContent).not.toContain('JSON-länkar');
+    expect(container.textContent).not.toContain('Vald tagg');
+    expect(container.textContent).not.toContain('Preview-GML');
+  });
+
+  it('hides the JSON linked summary in GML mode while keeping GML header controls intact', () => {
+    resetStore(
+      [
+        makeGeometry('geo-a', 'Linked A'),
+        makeGeometry('geo-b', 'Linked B'),
+      ],
+      {
+        tags: [makeTag({ geometryIds: ['geo-a'] })],
+      }
+    );
+
+    render(<GeometryPanel />);
+
+    expect(screen.getByText(hasExactText('1 av 2 geometrier är länkade'))).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'GML' }));
+
+    expect(screen.queryByText(hasExactText('1 av 2 geometrier är länkade'))).toBeNull();
+    expect(screen.getByRole('button', { name: 'Preview' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Imported DOCX' })).toBeTruthy();
+    expect(screen.getByText(hasExactText('GML-preview · 1 visade'))).toBeTruthy();
   });
 });

@@ -153,6 +153,19 @@ export const GeometryPanel: React.FC = () => {
 
     return filtered;
   }, [tags, jsonGeometryIdSet, importedDocxGeometries, importedDocxGeometryIdSet]);
+  const linkedJsonGeometryCount = useMemo(() => {
+    const linkedIds = new Set<string>();
+
+    for (const tag of tags) {
+      for (const geometryId of tag.geometryIds ?? []) {
+        if (jsonGeometryIdSet.has(geometryId)) {
+          linkedIds.add(geometryId);
+        }
+      }
+    }
+
+    return linkedIds.size;
+  }, [tags, jsonGeometryIdSet]);
   const displayLinkedGeometryIdsByTagUuid = useMemo(() => {
     return buildDisplayLinkedGeometryIdsByTagUuidForMode({
       tags,
@@ -214,22 +227,7 @@ export const GeometryPanel: React.FC = () => {
     },
     [linkedTagUuidsByGeometryUuid, tagByUuid]
   );
-  const selectedTag = selectedTagUuid
-    ? tags.find((t) => t.uuid === selectedTagUuid) ?? null
-    : null;
-  const selectedTagJsonLinkCount = selectedTag
-    ? (selectedTag.geometryIds ?? []).filter((id) => jsonGeometryIdSet.has(id)).length
-    : 0;
-  const selectedTagGmlLinkCount = selectedTag
-    ? gmlViewMode === 'preview'
-      ? (gmlPreview.linkedGeometryIdsByTagUuid.get(selectedTag.uuid)?.size ?? 0)
-      : (selectedTag.geometryIds ?? []).filter((id) => importedDocxGeometryIdSet.has(id)).length
-    : 0;
-  const activeGmlCount =
-    gmlViewMode === 'preview' ? gmlPreviewGeometries.length : importedDocxGeometries.length;
-  const geometryCountDelta = jsonGeometries.length - activeGmlCount;
   const gmlModeLabel = gmlViewMode === 'preview' ? 'GML-preview' : 'GML-importerad';
-  const gmlTagSplitLabel = gmlViewMode === 'preview' ? 'Preview-GML' : 'DOCX-GML';
   const gmlEmptyTitle =
     gmlViewMode === 'preview'
       ? 'Ingen exportbar GML än'
@@ -558,33 +556,13 @@ export const GeometryPanel: React.FC = () => {
           </div>
         )}
 
-        <div className="grid grid-cols-3 gap-1.5">
-          <div className="px-2 py-1 rounded-lg border border-blue-100 bg-blue-50">
-            <p className="text-[10px] uppercase tracking-wide text-blue-500">JSON</p>
-            <p className="text-xs font-semibold text-blue-700">{jsonGeometries.length}</p>
-          </div>
-          <div className="px-2 py-1 rounded-lg border border-orange-100 bg-orange-50">
-            <p className="text-[10px] uppercase tracking-wide text-orange-500">
-              {gmlViewMode === 'preview' ? 'GML PREVIEW' : 'GML DOCX'}
-            </p>
-            <p className="text-xs font-semibold text-orange-700">{activeGmlCount}</p>
-          </div>
-          <div className="px-2 py-1 rounded-lg border border-gray-200 bg-gray-50">
-            <p className="text-[10px] uppercase tracking-wide text-gray-400">Delta</p>
-            <p className="text-xs font-semibold text-gray-700">
-              {geometryCountDelta > 0 ? '+' : ''}{geometryCountDelta}
-            </p>
-          </div>
-        </div>
-
-        {selectedTag && (
-          <div className="px-2.5 py-1.5 rounded-lg border border-gray-200 bg-white">
-            <p className="text-[10px] uppercase tracking-wide text-gray-400">Vald tagg</p>
-            <p className="text-xs text-gray-600">
-              JSON-länkar: <span className="font-semibold text-blue-700">{selectedTagJsonLinkCount}</span>
-              {' · '}
-              {gmlTagSplitLabel}:{' '}
-              <span className="font-semibold text-orange-700">{selectedTagGmlLinkCount}</span>
+        {activeMainMode === 'json' && (
+          <div className="px-2.5 py-1.5 rounded-lg border border-blue-100 bg-blue-50/70">
+            <p className="text-xs text-blue-700">
+              <span className="font-semibold">{linkedJsonGeometryCount}</span>
+              {' av '}
+              <span className="font-semibold">{jsonGeometries.length}</span>
+              {' geometrier är länkade'}
             </p>
           </div>
         )}
