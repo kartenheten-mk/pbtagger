@@ -216,6 +216,7 @@ describe('GeometryPanel unlinked geometry selection', () => {
     const { container } = render(<GeometryPanel />);
 
     expect(screen.getByText(hasExactText('2 av 3 geometrier är länkade'))).toBeTruthy();
+    expect(screen.getByText(hasExactText('JSON · 3 visade'))).toBeTruthy();
     expect(screen.queryByText('GML PREVIEW')).toBeNull();
     expect(screen.queryByText('GML DOCX')).toBeNull();
     expect(container.textContent).not.toContain('Delta');
@@ -239,11 +240,59 @@ describe('GeometryPanel unlinked geometry selection', () => {
 
     expect(screen.getByText(hasExactText('1 av 2 geometrier är länkade'))).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('button', { name: 'GML' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Geometrier i dokument' }));
 
     expect(screen.queryByText(hasExactText('1 av 2 geometrier är länkade'))).toBeNull();
     expect(screen.getByRole('button', { name: 'Preview' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Imported DOCX' })).toBeTruthy();
-    expect(screen.getByText(hasExactText('GML-preview · 1 visade'))).toBeTruthy();
+    expect(
+      screen.getByText(hasExactText('1 geometrier kommer att exporteras till dokumentet'))
+    ).toBeTruthy();
+  });
+
+  it('shows imported-docx header copy when using the imported GML view', () => {
+    resetStore(
+      [
+        makeGeometry('geo-a', 'Linked A'),
+        makeGeometry('geo-b', 'Linked B'),
+      ],
+      {
+        tags: [
+          makeTag({
+            geometryIds: ['geo-a', 'docx-1'],
+          }),
+        ],
+      }
+    );
+
+    render(<GeometryPanel />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Geometrier i dokument' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Imported DOCX' }));
+
+    expect(
+      screen.getByText(hasExactText('0 geometrier finns redan i dokumentet'))
+    ).toBeTruthy();
+  });
+
+  it('uses the same GML copy in the maximized modal header', () => {
+    resetStore(
+      [
+        makeGeometry('geo-a', 'Linked A'),
+        makeGeometry('geo-b', 'Linked B'),
+      ],
+      {
+        tags: [makeTag({ geometryIds: ['geo-a'] })],
+      }
+    );
+
+    render(<GeometryPanel />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Geometrier i dokument' }));
+    fireEvent.click(screen.getByTitle('Maximera karta'));
+
+    expect(
+      screen.getAllByText(hasExactText('1 geometrier kommer att exporteras till dokumentet'))
+    ).toHaveLength(2);
   });
 });

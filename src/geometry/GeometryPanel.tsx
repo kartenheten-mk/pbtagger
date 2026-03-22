@@ -298,6 +298,10 @@ export const GeometryPanel: React.FC = () => {
     }
     return true;
   });
+  const gmlHeaderSummary =
+    gmlViewMode === 'preview'
+      ? `${filteredGeometries.length} geometrier kommer att exporteras till dokumentet`
+      : `${filteredGeometries.length} geometrier finns redan i dokumentet`;
 
   const selectedGeometryUuids = buildHighlightedGeometryUuids({
     isLinking,
@@ -496,9 +500,9 @@ export const GeometryPanel: React.FC = () => {
           <div className="min-w-0">
             <h2 className="text-sm font-semibold text-gray-700 truncate">Karta</h2>
             <p className="text-xs text-gray-400 mt-0.5">
-              {activeMainMode === 'json' ? 'JSON' : gmlModeLabel}
-              {' · '}
-              {filteredGeometries.length} visade
+              {activeMainMode === 'json'
+                ? `JSON · ${filteredGeometries.length} visade`
+                : gmlHeaderSummary}
             </p>
           </div>
 
@@ -512,7 +516,7 @@ export const GeometryPanel: React.FC = () => {
               }`}
               title="Visa importerad JSON-geometri"
             >
-              JSON
+              Tillgängliga geometrier
             </button>
             <button
               onClick={() => setMapMainMode('gml')}
@@ -524,7 +528,7 @@ export const GeometryPanel: React.FC = () => {
               } disabled:opacity-50 disabled:cursor-not-allowed`}
               title={isLinking ? 'Länkning sker mot JSON-lagret' : 'Visa GML-lager'}
             >
-              GML
+              Geometrier i dokument
             </button>
           </div>
         </div>
@@ -1013,7 +1017,9 @@ export const GeometryPanel: React.FC = () => {
                 <div>
                   <h2 className="text-sm font-semibold text-gray-700">Karta</h2>
                   <p className="text-xs text-gray-400">
-                    {activeMainMode === 'json' ? 'JSON' : gmlModeLabel} · {filteredGeometries.length} geometrier visade
+                    {activeMainMode === 'json'
+                      ? `JSON · ${filteredGeometries.length} geometrier visade`
+                      : gmlHeaderSummary}
                   </p>
                 </div>
               </div>
