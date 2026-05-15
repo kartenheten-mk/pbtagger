@@ -54,6 +54,16 @@ function featureColor(featureType?: string): string {
   return FEATURE_COLORS[featureType ?? ''] ?? '#6b7280';
 }
 
+function compareTagsByDocumentOrder(a: Tag, b: Tag): number {
+  return (
+    a.paragraphIndex - b.paragraphIndex ||
+    a.startOffset - b.startOffset ||
+    (a.endParagraphIndex ?? a.paragraphIndex) - (b.endParagraphIndex ?? b.paragraphIndex) ||
+    a.endOffset - b.endOffset ||
+    a.uuid.localeCompare(b.uuid)
+  );
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export const GeometryPanel: React.FC = () => {
@@ -201,7 +211,8 @@ export const GeometryPanel: React.FC = () => {
       const ids = linkedTagUuidsByGeometryUuid.get(geometryUuid) ?? [];
       return ids
         .map((id) => tagByUuid.get(id))
-        .filter((tag): tag is Tag => !!tag);
+        .filter((tag): tag is Tag => !!tag)
+        .sort(compareTagsByDocumentOrder);
     },
     [linkedTagUuidsByGeometryUuid, tagByUuid]
   );

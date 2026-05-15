@@ -6,6 +6,7 @@ import { fireEvent, render, screen, cleanup } from '@testing-library/react';
 import { GeometryPanel } from '../../src/geometry/GeometryPanel';
 import { useDocumentStore } from '../../src/store/useDocumentStore';
 import type { Geometry, Tag } from '../../src/types';
+import { generateBookmarkName } from '../../src/docx/bookmarkUtils';
 
 vi.mock('../../src/geometry/MapView', () => ({
   MapView: ({
@@ -316,5 +317,66 @@ describe('GeometryPanel unlinked geometry selection', () => {
     expect(
       screen.getAllByText(hasExactText('1 geometrier finns redan i dokumentet'))
     ).toHaveLength(2);
+  });
+
+  it('selects the first linked tag in document order when clicking imported DOCX GML', () => {
+    resetStore(
+      [
+        makeDocxGmlGeometry('docx-1', 'Imported A'),
+      ],
+      {
+        tags: [
+          makeTag({
+            uuid: 'later-tag',
+            text: 'Later tag',
+            paragraphIndex: 4,
+            startOffset: 0,
+            endOffset: 9,
+            geometryIds: ['docx-1'],
+          }),
+          makeTag({
+            uuid: 'earlier-tag',
+            text: 'Earlier tag',
+            paragraphIndex: 2,
+            startOffset: 0,
+            endOffset: 11,
+            geometryIds: ['docx-1'],
+          }),
+        ],
+      }
+    );
+
+    render(<GeometryPanel />);
+
+    fireEvent.click(screen.getByText('map-select-docx-1'));
+
+    expect(useDocumentStore.getState().selectedTagUuid).toBe('earlier-tag');
+    expect(screen.getByText('Earlier tag')).toBeTruthy();
+    expect(screen.getByText('Later tag')).toBeTruthy();
+  });
+
+  it('selects a tag from imported DOCX GML when only stale JSON links exist', () => {
+    const tag = makeTag({
+      uuid: '11111111-2222-3333-4444-555555555555',
+      geometryIds: ['stale-json-1'],
+    });
+    const identitet = generateBookmarkName(tag);
+    resetStore(
+      [
+        {
+          ...makeDocxGmlGeometry('docx-1', 'Imported from DOCX'),
+          properties: { identitet },
+        },
+      ],
+      {
+        tags: [tag],
+      }
+    );
+
+    render(<GeometryPanel />);
+
+    fireEvent.click(screen.getByText('map-select-docx-1'));
+
+    expect(useDocumentStore.getState().selectedTagUuid).toBe(tag.uuid);
   });
 });

@@ -70,6 +70,21 @@ describe('tagLinkMirror', () => {
     expect(linked).toEqual(expect.arrayContaining(['json-1', 'gml-x']));
   });
 
+  it('mirrors stale external geometry links when no JSON document is loaded', () => {
+    const tag = makeTag({ geometryIds: ['stale-json-1'] });
+    const base = generateBookmarkName(tag);
+    const gml = makeGeometry({
+      uuid: 'gml-from-docx',
+      source: 'docx_gml',
+      properties: { identitet: base },
+    });
+
+    const map = buildMirroredDisplayLinks([tag], new Set(), [gml]);
+    const linked = Array.from(map.get(tag.uuid) ?? new Set<string>());
+
+    expect(linked).toEqual(expect.arrayContaining(['stale-json-1', 'gml-from-docx']));
+  });
+
   it('does not mirror when tag has no JSON geometry link', () => {
     const tag = makeTag({ geometryIds: ['gml-1'] });
     const base = generateBookmarkName(tag);

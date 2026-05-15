@@ -97,11 +97,22 @@ export async function parseDocx(buffer: ArrayBuffer): Promise<ParseResult> {
       planbeskrivning.geometries.map((geo) => geo.uuid)
     );
 
-    // Build a map from bookmark name → tag for fast lookup
+    // Build a map from bookmark name → tag for fast lookup. Prefer the
+    // actual bookmark names found in the DOCX, because those are also used as
+    // Planbeskrivning <identitet> values and may outlive category label tweaks.
     const tagByBookmarkName = new Map<string, Tag>();
+    const tagBySuffix = new Map<string, Tag>();
     for (const tag of tags) {
+      const suffix = tag.uuid.replace(/-/g, '').slice(0, 8).toLowerCase();
+      tagBySuffix.set(suffix, tag);
+
       const bm = generateBookmarkName(tag);
       if (bm) tagByBookmarkName.set(bm, tag);
+    }
+    for (const bm of extractedBookmarks) {
+      const suffix = getBookmarkSuffix(bm.name);
+      const tag = suffix ? tagBySuffix.get(suffix) : undefined;
+      if (tag) tagByBookmarkName.set(bm.name, tag);
     }
 
     // Link each tag whose bookmark name matches a Planbeskrivning <identitet>.
@@ -768,17 +779,19 @@ function reconcileTagsWithBookmarks(
     tagBySuffix.set(suffix, tag);
   }
 
-  const processedSuffixes = new Set<string>();
+  const bookmarkSuffixes = new Set<string>();
+  const matchedSuffixes = new Set<string>();
 
   // 1. Reconcile existing tags with bookmarks
   for (const bm of extractedBookmarks) {
     const suffix = getBookmarkSuffix(bm.name);
     if (!suffix) continue;
 
-    processedSuffixes.add(suffix);
+    bookmarkSuffixes.add(suffix);
     const tag = tagBySuffix.get(suffix);
 
     if (tag) {
+      matchedSuffixes.add(suffix);
       // Update the tag's position based on the bookmark
       tag.paragraphIndex = bm.paragraphIndex;
 
@@ -830,19 +843,20 @@ function reconcileTagsWithBookmarks(
   // Because if we found 0 bookmarks, maybe they exported without tags or something, though customXml exists.
   // Actually, if customXml exists, it was exported by us. If a tag is missing its bookmark, it was deleted.
 
-  if (extractedBookmarks.some(bm => getBookmarkSuffix(bm.name) !== null)) {
+  if (bookmarkSuffixes.size > 0) {
     tags = tags.filter(tag => {
       const suffix = tag.uuid.replace(/-/g, '').slice(0, 8).toLowerCase();
-      return processedSuffixes.has(suffix);
+      return bookmarkSuffixes.has(suffix);
     });
   }
 
   // 3. Create new tags from unmatched bookmarks
+  const createdSuffixes = new Set<string>();
   for (const bm of extractedBookmarks) {
     const suffix = getBookmarkSuffix(bm.name);
     if (!suffix) continue;
 
-    if (!processedSuffixes.has(suffix)) {
+    if (!matchedSuffixes.has(suffix) && !createdSuffixes.has(suffix)) {
       // It's a validly named bookmark but missing from customXml
       const guessedCategoryId = guessCategoryIdFromBookmarkName(bm.name);
 
@@ -851,31 +865,48 @@ function reconcileTagsWithBookmarks(
         // e.g. suffix + '-0000-0000-0000-000000000000'
         const newUuid = suffix + '-0000-0000-0000-000000000000';
 
+        const startOffset = bm.startOffset ?? 0;
+        const endOffset = bm.endOffset ?? startOffset;
+        const isTextRange =
+          bm.endParagraphIndex !== undefined || endOffset > startOffset;
+
         const newTag: Tag = {
           uuid: newUuid,
           categoryId: guessedCategoryId,
-          targetType: bm.runId ? 'image' : 'text', // Heuristic: runId presence -> object tag
+          targetType: isTextRange ? 'text' : 'image',
           paragraphIndex: bm.paragraphIndex,
-          startOffset: bm.startOffset || 0,
-          endOffset: bm.endOffset || 0,
-          runId: bm.runId,
+          startOffset,
+          endOffset,
+          endParagraphIndex: bm.endParagraphIndex,
+          runId: isTextRange ? undefined : bm.runId,
           text: '',
           createdAt: new Date().toISOString(),
         };
 
         if (newTag.targetType === 'text') {
-           const para = paragraphs[newTag.paragraphIndex];
-           if (para) {
-             const paraText = getParagraphText(para);
-             // Clamp endOffset if it was a multi-paragraph bookmark
-             if (newTag.endOffset > paraText.length) {
-                 newTag.endOffset = paraText.length;
-             }
-             newTag.text = paraText.slice(newTag.startOffset, newTag.endOffset);
-           }
+          if (newTag.endParagraphIndex !== undefined) {
+            newTag.text = buildMultiParaText(
+              paragraphs,
+              newTag.paragraphIndex,
+              newTag.startOffset,
+              newTag.endParagraphIndex,
+              newTag.endOffset
+            );
+          } else {
+            const para = paragraphs[newTag.paragraphIndex];
+            if (para) {
+              const paraText = getParagraphText(para);
+              // Clamp endOffset if Word moved the bookmark boundary.
+              if (newTag.endOffset > paraText.length) {
+                newTag.endOffset = paraText.length;
+              }
+              newTag.text = paraText.slice(newTag.startOffset, newTag.endOffset);
+            }
+          }
         }
 
         tags.push(newTag);
+        createdSuffixes.add(suffix);
       }
     }
   }
