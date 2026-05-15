@@ -6,12 +6,29 @@ import { parseDocx } from '../../src/docx/DocxParser';
 import { exportDocx } from '../../src/docx/DocxExporter';
 import * as fileSaver from 'file-saver';
 import { DOMParser } from '@xmldom/xmldom';
+import { buildDefaultConfig } from '../../src/docx/PlanbeskrivningXmlBuilder';
+import { generateBookmarkName } from '../../src/docx/bookmarkUtils';
+import type { Geometry } from '../../src/types';
 
 vi.mock('file-saver', () => ({
   saveAs: vi.fn(),
 }));
 
 describe('DocxExporter', () => {
+  function getSavedBlob(): Blob {
+    expect(fileSaver.saveAs).toHaveBeenCalled();
+    const saveAsMock = vi.mocked(fileSaver.saveAs);
+    return saveAsMock.mock.calls.at(-1)?.[0] as Blob;
+  }
+
+  function findCustomXmlByNamespace(zip: PizZip, namespace: string): string {
+    const match = Object.keys(zip.files)
+      .filter((name) => /^customXml\/item\d+\.xml$/.test(name))
+      .find((name) => zip.file(name)?.asText().includes(namespace));
+    expect(match).toBeTruthy();
+    return match!;
+  }
+
   it('does not create nested w:sdt tags when re-exporting a tagged document', async () => {
     // 1. Read the corrupted document which already has our tags in it
     const filePath = path.join(__dirname, '../docx_example_file/error_when_opening_in_word.docx');
@@ -58,5 +75,86 @@ describe('DocxExporter', () => {
     }
 
     expect(nestedCount).toBe(0);
+  });
+
+  it('keeps app-only tags in pb:tags but excludes them from Planbeskrivning XML', async () => {
+    vi.mocked(fileSaver.saveAs).mockClear();
+
+    const filePath = path.join(__dirname, '../docx_example_file/error_when_opening_in_word.docx');
+    const buffer = fs.readFileSync(filePath);
+    const arrayBuffer = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
+    const { zip: originalZip, docModel, tags } = await parseDocx(arrayBuffer);
+
+    expect(tags.length).toBeGreaterThan(0);
+    const appOnlyTags = tags.map((t, i) =>
+      i === 0 ? { ...t, categoryId: 'invalid-category-for-test' } : t
+    );
+    const excludedBookmark = generateBookmarkName(appOnlyTags[0]);
+
+    await expect(
+      exportDocx(originalZip, docModel, appOnlyTags, 'excluded-tag.docx', {
+        config: buildDefaultConfig(),
+        geometries: [],
+        enforceCompliance: true,
+      })
+    ).resolves.toBeUndefined();
+
+    const exportedBuffer = await getSavedBlob().arrayBuffer();
+    const newZip = new PizZip(exportedBuffer);
+
+    const pbTagsPath = findCustomXmlByNamespace(newZip, 'https://planbeskrivning/tagging/v1');
+    const planbeskrivningPath = findCustomXmlByNamespace(
+      newZip,
+      'http://namespace.lantmateriet.se/distribution/geodatakatalog/planbeskrivning/v2'
+    );
+
+    const pbTagsXml = newZip.file(pbTagsPath)!.asText();
+    const planbeskrivningXml = newZip.file(planbeskrivningPath)!.asText();
+
+    expect(pbTagsXml).toContain('invalid-category-for-test');
+    expect(planbeskrivningXml).not.toContain(excludedBookmark);
+  });
+
+  it('allows export when compliance blocking is disabled for true spec errors', async () => {
+    vi.mocked(fileSaver.saveAs).mockClear();
+
+    const filePath = path.join(__dirname, '../docx_example_file/error_when_opening_in_word.docx');
+    const buffer = fs.readFileSync(filePath);
+    const arrayBuffer = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
+    const { zip: originalZip, docModel, tags } = await parseDocx(arrayBuffer);
+
+    expect(tags.length).toBeGreaterThan(0);
+    const invalidTags = tags.map((t, i) =>
+      i === 0 ? { ...t, geometryIds: ['temp-id-for-test'] } : t
+    );
+    const invalidGeometries: Geometry[] = [{
+      uuid: 'temp-id-for-test',
+      name: 'Temp object',
+      type: 'polygon',
+      coordinates: [] as unknown as number[][][],
+      crs: 'EPSG:3006',
+      featureType: 'annat-objekt',
+      properties: {},
+    }];
+
+    // Strict mode: should still block for real compliance errors.
+    await expect(
+      exportDocx(originalZip, docModel, invalidTags, 'strict.docx', {
+        config: buildDefaultConfig(),
+        geometries: invalidGeometries,
+        enforceCompliance: true,
+      })
+    ).rejects.toThrow(/PLANB-007/);
+
+    // Optional mode: should allow export
+    await expect(
+      exportDocx(originalZip, docModel, invalidTags, 'optional.docx', {
+        config: buildDefaultConfig(),
+        geometries: invalidGeometries,
+        enforceCompliance: false,
+      })
+    ).resolves.toBeUndefined();
+
+    expect(fileSaver.saveAs).toHaveBeenCalledTimes(1);
   });
 });

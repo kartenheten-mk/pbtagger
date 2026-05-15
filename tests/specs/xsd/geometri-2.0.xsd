@@ -1,0 +1,248 @@
+<?xml version="1.0" encoding="utf-8"?>
+<schema version="2.0" elementFormDefault="qualified"
+        targetNamespace="http://namespace.lantmateriet.se/distribution/geometri/v2"
+        xmlns="http://www.w3.org/2001/XMLSchema"
+        xmlns:lmg="http://namespace.lantmateriet.se/distribution/geometri/v2"
+        xmlns:gml="http://www.opengis.net/gml/3.2">
+
+  <import schemaLocation="http://namespace.lantmateriet.se/distribution/produkter/gml/gml-3.2.1/v1/geoaccess-gmlprofil-1.2.xsd" namespace="http://www.opengis.net/gml/3.2"/>
+
+  <element name="Geometri" type="lmg:GeometriType" abstract="true"/>
+  <complexType name="GeometriType" abstract="true">
+    <sequence>
+      <element name="absolutLagesosakerhetPlan" type="decimal" minOccurs="0"/>
+      <element name="absolutLagesosakerhetHojd" type="decimal" minOccurs="0"/>
+      <element name="hojdsystem" type="lmg:HojdsystemType" minOccurs="0"/>
+    </sequence>
+  </complexType>
+  <complexType name="GeometriPropertyType">
+    <sequence>
+      <element ref="lmg:Geometri"/>
+    </sequence>
+  </complexType>
+  <complexType name="GeometriArrayPropertyType">
+    <sequence maxOccurs="unbounded">
+      <element ref="lmg:Geometri"/>
+    </sequence>
+  </complexType>
+
+  <element name="Punkt" type="lmg:PunktType" substitutionGroup="lmg:Geometri"/>
+  <complexType name="PunktType">
+    <complexContent>
+      <extension base="lmg:GeometriType">
+        <sequence>
+          <element ref="gml:Point"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+  <complexType name="PunktPropertyType">
+    <sequence>
+      <element ref="lmg:Punkt"/>
+    </sequence>
+  </complexType>
+  <complexType name="PunktArrayPropertyType">
+    <sequence maxOccurs="unbounded">
+      <element ref="lmg:Punkt"/>
+    </sequence>
+  </complexType>
+
+  <element name="Linje" type="lmg:LinjeType" substitutionGroup="lmg:Geometri"/>
+  <complexType name="LinjeType">
+    <complexContent>
+      <extension base="lmg:GeometriType">
+        <sequence>
+          <element ref="gml:LineString"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+  <complexType name="LinjePropertyType">
+    <sequence>
+      <element ref="lmg:Linje"/>
+    </sequence>
+  </complexType>
+  <complexType name="LinjeArrayPropertyType">
+    <sequence maxOccurs="unbounded">
+      <element ref="lmg:Linje"/>
+    </sequence>
+  </complexType>
+
+  <element name="Yta" type="lmg:YtaType" substitutionGroup="lmg:Geometri"/>
+  <complexType name="YtaType">
+    <complexContent>
+      <extension base="lmg:GeometriType">
+        <sequence>
+          <element ref="gml:Polygon"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+  <complexType name="YtaPropertyType">
+    <sequence>
+      <element ref="lmg:Yta"/>
+    </sequence>
+  </complexType>
+  <complexType name="YtaArrayPropertyType">
+    <sequence maxOccurs="unbounded">
+      <element ref="lmg:Yta"/>
+    </sequence>
+  </complexType>
+
+  <element name="Kropp" type="lmg:KroppType" substitutionGroup="lmg:Geometri"/>
+  <complexType name="KroppType">
+    <complexContent>
+      <extension base="lmg:GeometriType">
+        <sequence>
+          <element ref="gml:Solid"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+  <complexType name="KroppPropertyType">
+    <sequence>
+      <element ref="lmg:Kropp"/>
+    </sequence>
+  </complexType>
+  <complexType name="KroppArrayPropertyType">
+    <sequence maxOccurs="unbounded">
+      <element ref="lmg:Kropp"/>
+    </sequence>
+  </complexType>
+
+  <element name="Multipunkt" type="lmg:MultipunktType" substitutionGroup="lmg:Geometri"/>
+  <complexType name="MultipunktType">
+    <complexContent>
+      <extension base="lmg:GeometriType">
+        <sequence>
+          <element ref="gml:MultiPoint"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+  <complexType name="MultipunktPropertyType">
+    <sequence>
+      <element ref="lmg:Multipunkt"/>
+    </sequence>
+  </complexType>
+  <complexType name="MultipunktArrayPropertyType">
+    <sequence maxOccurs="unbounded">
+      <element ref="lmg:Multipunkt"/>
+    </sequence>
+  </complexType>
+
+  <element name="Multilinje" type="lmg:MultilinjeType" substitutionGroup="lmg:Geometri"/>
+  <complexType name="MultilinjeType">
+    <complexContent>
+      <extension base="lmg:GeometriType">
+        <sequence>
+          <element ref="gml:MultiCurve"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+  <complexType name="MultilinjePropertyType">
+    <sequence>
+      <element ref="lmg:Multilinje"/>
+    </sequence>
+  </complexType>
+  <complexType name="MultilinjeArrayPropertyType">
+    <sequence maxOccurs="unbounded">
+      <element ref="lmg:Multilinje"/>
+    </sequence>
+  </complexType>
+
+  <element name="Multiyta" type="lmg:YtaType" substitutionGroup="lmg:Geometri"/>
+  <complexType name="MultiytaType">
+    <complexContent>
+      <extension base="lmg:GeometriType">
+        <sequence>
+          <element ref="gml:MultiSurface"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+  <complexType name="MultiytaPropertyType">
+    <sequence>
+      <element ref="lmg:Multiyta"/>
+    </sequence>
+  </complexType>
+  <complexType name="MultiytaArrayPropertyType">
+    <sequence maxOccurs="unbounded">
+      <element ref="lmg:Multiyta"/>
+    </sequence>
+  </complexType>
+
+  <element name="Multikropp" type="lmg:MultikroppType" substitutionGroup="lmg:Geometri"/>
+  <complexType name="MultikroppType">
+    <complexContent>
+      <extension base="lmg:GeometriType">
+        <sequence>
+          <element ref="gml:MultiSolid"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+  <complexType name="MultikroppPropertyType">
+    <sequence>
+      <element ref="lmg:Multikropp"/>
+    </sequence>
+  </complexType>
+  <complexType name="MultikroppArrayPropertyType">
+    <sequence maxOccurs="unbounded">
+      <element ref="lmg:Multikropp"/>
+    </sequence>
+  </complexType>
+
+  <element name="Multigeometri" type="lmg:MultigeometriType" substitutionGroup="lmg:Geometri"/>
+  <complexType name="MultigeometriType">
+    <complexContent>
+      <extension base="lmg:GeometriType">
+        <sequence>
+          <element ref="gml:MultiGeometry"/>
+        </sequence>
+      </extension>
+    </complexContent>
+  </complexType>
+  <complexType name="MultigeometriPropertyType">
+    <sequence>
+      <element ref="lmg:Multigeometri"/>
+    </sequence>
+  </complexType>
+  <complexType name="MultigeometriArrayPropertyType">
+    <sequence maxOccurs="unbounded">
+      <element ref="lmg:Multigeometri"/>
+    </sequence>
+  </complexType>
+
+  <simpleType name="KoordinatsystemPlanType">
+    <restriction base="string">
+      <enumeration value="EPSG:3006"/>
+      <enumeration value="EPSG:3007"/>
+      <enumeration value="EPSG:3008"/>
+      <enumeration value="EPSG:3009"/>
+      <enumeration value="EPSG:3010"/>
+      <enumeration value="EPSG:3011"/>
+      <enumeration value="EPSG:3012"/>
+      <enumeration value="EPSG:3013"/>
+      <enumeration value="EPSG:3014"/>
+      <enumeration value="EPSG:3015"/>
+      <enumeration value="EPSG:3016"/>
+      <enumeration value="EPSG:3017"/>
+      <enumeration value="EPSG:3018"/>
+    </restriction>
+  </simpleType>
+
+  <simpleType name="HojdsystemType">
+    <restriction base="string">
+      <enumeration value="RH 2000"/>
+    </restriction>
+  </simpleType>
+
+  <simpleType name="DimensionType">
+    <restriction base="int">
+      <enumeration value="2"/>
+      <enumeration value="3"/>
+    </restriction>
+  </simpleType>
+</schema>

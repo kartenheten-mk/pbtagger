@@ -195,4 +195,3 @@ export const ViewTagsPanel: React.FC<ViewTagsPanelProps> = ({
     </>
   );
 };
-

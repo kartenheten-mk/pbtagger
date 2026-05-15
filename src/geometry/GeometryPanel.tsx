@@ -13,12 +13,23 @@
  *   • A floating action bar at the bottom confirms or cancels the batch
  */
 
-import React, { useRef, useEffect, useCallback, useState } from 'react';
+import React, { useRef, useEffect, useCallback, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { Tag } from '../types';
 import { useDocumentStore } from '../store/useDocumentStore';
 import { MapView } from './MapView';
 import type { PickerItem } from './MapView';
+import { splitGeometriesBySource } from './geometrySource';
+import { buildMirroredDisplayLinks } from './tagLinkMirror';
+import {
+  buildHighlightedGeometryUuids,
+  buildFocusLinkedGeometryIdsByTagUuidForMode,
+  buildDisplayLinkedGeometryIdsByTagUuidForMode,
+  resolveActiveMapMainMode,
+  resolveFocusedGeometryForSelectedTag,
+  selectVisibleGeometries,
+  type MapMainMode,
+} from './mapDataMode';
 
 // ─── Feature type icons / colours ─────────────────────────────────────────────
 
@@ -26,12 +37,14 @@ const FEATURE_ICONS: Record<string, string> = {
   detaljplan: '🗺',
   'användningsbestämmelse': '🟩',
   'egenskapsbestämmelse': '🟣',
+  planbeskrivning: '🟧',
 };
 
 const FEATURE_COLORS: Record<string, string> = {
   detaljplan: '#3b82f6',
   'användningsbestämmelse': '#10b981',
   'egenskapsbestämmelse': '#8b5cf6',
+  planbeskrivning: '#f97316',
 };
 
 function featureIcon(featureType?: string): string {
@@ -39,6 +52,16 @@ function featureIcon(featureType?: string): string {
 }
 function featureColor(featureType?: string): string {
   return FEATURE_COLORS[featureType ?? ''] ?? '#6b7280';
+}
+
+function compareTagsByDocumentOrder(a: Tag, b: Tag): number {
+  return (
+    a.paragraphIndex - b.paragraphIndex ||
+    a.startOffset - b.startOffset ||
+    (a.endParagraphIndex ?? a.paragraphIndex) - (b.endParagraphIndex ?? b.paragraphIndex) ||
+    a.endOffset - b.endOffset ||
+    a.uuid.localeCompare(b.uuid)
+  );
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -58,12 +81,16 @@ export const GeometryPanel: React.FC = () => {
   } = useDocumentStore();
 
   const geometryListRef = useRef<HTMLDivElement>(null);
+  const previousSelectedTagUuidRef = useRef<string | null>(null);
+  const pendingManualFocusUuidRef = useRef<string | null>(null);
+  const tagSelectionSourceRef = useRef<'geometry' | 'tag' | null>(null);
   /** Ref to the map wrapper div — used for picker positioning */
   const mapWrapperRef = useRef<HTMLDivElement>(null);
   const [expandedGeoUuid, setExpandedGeoUuid] = useState<string | null>(null);
-  const [clickedGeoUuid, setClickedGeoUuid] = useState<string | null>(null);
+  const [manualFocusedGeometryUuid, setManualFocusedGeometryUuid] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTypeFilters, setActiveTypeFilters] = useState<Set<string>>(new Set());
+  const [mapMainMode, setMapMainMode] = useState<MapMainMode>('json');
 
   // ── Map maximize state ────────────────────────────────────────────────────
   const [isMapMaximized, setIsMapMaximized] = useState(false);
@@ -89,12 +116,115 @@ export const GeometryPanel: React.FC = () => {
 
   const isLinking = !!linkingTagUuid;
   const linkingTag = tags.find((t) => t.uuid === linkingTagUuid);
+  const activeMainMode = resolveActiveMapMainMode(mapMainMode, isLinking);
+
+  const { json: jsonGeometries, docxGml: importedDocxGeometries } =
+    splitGeometriesBySource(geometries);
+  const shouldShowAvailableGeometries = jsonGeometries.length > 0;
+  const shouldShowDocumentCheck = jsonGeometries.length === 0;
+  const visibleGeometries = selectVisibleGeometries(
+    activeMainMode,
+    jsonGeometries,
+    importedDocxGeometries
+  );
+
+  const jsonGeometryIdSet = useMemo(
+    () => new Set(jsonGeometries.map((g) => g.uuid)),
+    [jsonGeometries]
+  );
+  const importedDocxGeometryIdSet = useMemo(
+    () => new Set(importedDocxGeometries.map((g) => g.uuid)),
+    [importedDocxGeometries]
+  );
+  const importedDocxLinkedGeometryIdsByTagUuid = useMemo(() => {
+    const mirrored = buildMirroredDisplayLinks(tags, jsonGeometryIdSet, importedDocxGeometries);
+    const filtered = new Map<string, Set<string>>();
+
+    for (const [tagUuid, geometryIds] of mirrored.entries()) {
+      filtered.set(
+        tagUuid,
+        new Set(Array.from(geometryIds).filter((id) => importedDocxGeometryIdSet.has(id)))
+      );
+    }
+
+    return filtered;
+  }, [tags, jsonGeometryIdSet, importedDocxGeometries, importedDocxGeometryIdSet]);
+  const linkedJsonGeometryCount = useMemo(() => {
+    const linkedIds = new Set<string>();
+
+    for (const tag of tags) {
+      for (const geometryId of tag.geometryIds ?? []) {
+        if (jsonGeometryIdSet.has(geometryId)) {
+          linkedIds.add(geometryId);
+        }
+      }
+    }
+
+    return linkedIds.size;
+  }, [tags, jsonGeometryIdSet]);
+  const displayLinkedGeometryIdsByTagUuid = useMemo(() => {
+    return buildDisplayLinkedGeometryIdsByTagUuidForMode({
+      tags,
+      activeMainMode,
+      jsonGeometryIdSet,
+      importedDocxGeometryIdSet,
+      importedDocxLinkedGeometryIdsByTagUuid,
+    });
+  }, [
+    tags,
+    activeMainMode,
+    jsonGeometryIdSet,
+    importedDocxGeometryIdSet,
+    importedDocxLinkedGeometryIdsByTagUuid,
+  ]);
+  const focusLinkedGeometryIdsByTagUuid = useMemo(() => {
+    return buildFocusLinkedGeometryIdsByTagUuidForMode({
+      tags,
+      activeMainMode,
+      jsonGeometryIdSet,
+      importedDocxGeometryIdSet,
+      importedDocxLinkedGeometryIdsByTagUuid,
+    });
+  }, [
+    tags,
+    activeMainMode,
+    jsonGeometryIdSet,
+    importedDocxGeometryIdSet,
+    importedDocxLinkedGeometryIdsByTagUuid,
+  ]);
+  const linkedTagUuidsByGeometryUuid = useMemo(() => {
+    const map = new Map<string, string[]>();
+    for (const tag of tags) {
+      const linkedIds = displayLinkedGeometryIdsByTagUuid.get(tag.uuid);
+      if (!linkedIds) continue;
+      for (const geoId of linkedIds) {
+        const arr = map.get(geoId) ?? [];
+        arr.push(tag.uuid);
+        map.set(geoId, arr);
+      }
+    }
+    return map;
+  }, [tags, displayLinkedGeometryIdsByTagUuid]);
+  const tagByUuid = useMemo(() => new Map(tags.map((t) => [t.uuid, t])), [tags]);
+  const getLinkedTagsForGeometry = useCallback(
+    (geometryUuid: string): Tag[] => {
+      const ids = linkedTagUuidsByGeometryUuid.get(geometryUuid) ?? [];
+      return ids
+        .map((id) => tagByUuid.get(id))
+        .filter((tag): tag is Tag => !!tag)
+        .sort(compareTagsByDocumentOrder);
+    },
+    [linkedTagUuidsByGeometryUuid, tagByUuid]
+  );
+  const gmlEmptyTitle = 'Ingen GML hittad i importerad DOCX';
+  const gmlEmptySubtitle = 'Importera en DOCX med Planbeskrivning GML för att visa befintliga objekt';
 
   // ── Initialise staged set when linking starts ─────────────────────────────
   useEffect(() => {
     if (linkingTagUuid) {
       const tag = tags.find((t) => t.uuid === linkingTagUuid);
-      setStagedUuids(new Set(tag?.geometryIds ?? []));
+      const jsonLinked = (tag?.geometryIds ?? []).filter((id) => jsonGeometryIdSet.has(id));
+      setStagedUuids(new Set(jsonLinked));
     } else {
       setStagedUuids(new Set());
     }
@@ -102,9 +232,40 @@ export const GeometryPanel: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [linkingTagUuid]);
 
+  // Linking mode only edits JSON geometries.
+  useEffect(() => {
+    if (isLinking && mapMainMode !== 'json') {
+      setMapMainMode('json');
+    }
+  }, [isLinking, mapMainMode]);
+
+  // If the document has imported GML but no JSON layer, show the document check.
+  useEffect(() => {
+    if (isLinking) return;
+    if (jsonGeometries.length > 0 && mapMainMode !== 'json') {
+      setMapMainMode('json');
+      return;
+    }
+    if (shouldShowDocumentCheck && importedDocxGeometries.length > 0 && mapMainMode !== 'gml') {
+      setMapMainMode('gml');
+    }
+    if (shouldShowDocumentCheck && importedDocxGeometries.length === 0 && mapMainMode !== 'json') {
+      setMapMainMode('json');
+    }
+  }, [isLinking, shouldShowDocumentCheck, jsonGeometries.length, importedDocxGeometries.length, mapMainMode]);
+
+  // Reset type chips when source mode changes to avoid hidden stale filters.
+  useEffect(() => {
+    setActiveTypeFilters(new Set());
+    setExpandedGeoUuid(null);
+    setManualFocusedGeometryUuid(null);
+    setPicker(null);
+    setModalPicker(null);
+  }, [activeMainMode]);
+
   // ── Derive unique feature types for filter chips ──────────────────────────
   const allFeatureTypes = Array.from(
-    new Set(geometries.map((g) => g.featureType ?? 'okänd'))
+    new Set(visibleGeometries.map((g) => g.featureType ?? 'okänd'))
   );
 
   // ── Toggle a type filter chip ─────────────────────────────────────────────
@@ -118,7 +279,7 @@ export const GeometryPanel: React.FC = () => {
   };
 
   // ── Filtered geometries (used for both list and map) ──────────────────────
-  const filteredGeometries = geometries.filter((geo) => {
+  const filteredGeometries = visibleGeometries.filter((geo) => {
     if (activeTypeFilters.size > 0 && !activeTypeFilters.has(geo.featureType ?? 'okänd')) {
       return false;
     }
@@ -134,41 +295,117 @@ export const GeometryPanel: React.FC = () => {
     }
     return true;
   });
+  const gmlHeaderSummary = `${filteredGeometries.length} geometrier finns redan i dokumentet`;
 
-  // ── Derive which geometry UUIDs are "selected" from the selected tag ──────
-  const tagDerivedGeoUuids: string[] = selectedTagUuid
-    ? (tags.find((t) => t.uuid === selectedTagUuid)?.geometryIds ?? [])
-    : [];
-
-  // In normal mode: highlight tag-derived + user-clicked geometry
-  // In linking mode: highlight staged (pending) geometries in green
-  const selectedGeometryUuids = isLinking ? [] : [
-    ...tagDerivedGeoUuids,
-    ...(clickedGeoUuid && !tagDerivedGeoUuids.includes(clickedGeoUuid) ? [clickedGeoUuid] : []),
-  ];
+  const selectedGeometryUuids = buildHighlightedGeometryUuids({
+    isLinking,
+    manualFocusedGeometryUuid,
+    selectedTagUuid,
+    displayLinkedGeometryIdsByTagUuid,
+    visibleGeometries,
+  });
+  const selectedGeometryUuidSet = useMemo(
+    () => new Set(selectedGeometryUuids),
+    [selectedGeometryUuids]
+  );
   const pendingGeometryUuids = isLinking ? Array.from(stagedUuids) : [];
+
+  const selectTagFromExplicitAction = useCallback(
+    (tagUuid: string, geometryUuid: string) => {
+      pendingManualFocusUuidRef.current = geometryUuid;
+      tagSelectionSourceRef.current = 'tag';
+      setManualFocusedGeometryUuid(null);
+      selectTag(tagUuid);
+    },
+    [selectTag]
+  );
+  const selectTagFromGeometry = useCallback(
+    (tagUuid: string, geometryUuid: string) => {
+      setManualFocusedGeometryUuid(geometryUuid);
+      if (selectedTagUuid !== tagUuid) {
+        tagSelectionSourceRef.current = 'geometry';
+        selectTag(tagUuid);
+      }
+    },
+    [selectedTagUuid, selectTag]
+  );
 
   // ── Auto-expand and scroll to linked geometry when a tag is selected ───────
   useEffect(() => {
-    if (!selectedTagUuid || isLinking) return;
-    const tag = tags.find((t) => t.uuid === selectedTagUuid);
-    const firstGeoId = tag?.geometryIds?.[0];
-    if (firstGeoId) {
-      const geo = geometries.find((g) => g.uuid === firstGeoId);
+    const selectionSource = tagSelectionSourceRef.current;
+
+    if (!selectedTagUuid) {
+      if (selectionSource !== 'geometry') {
+        setManualFocusedGeometryUuid(null);
+      }
+      previousSelectedTagUuidRef.current = null;
+      return;
+    }
+
+    tagSelectionSourceRef.current = null;
+    const didTagChange = previousSelectedTagUuidRef.current !== selectedTagUuid;
+    previousSelectedTagUuidRef.current = selectedTagUuid;
+    if (selectionSource !== 'geometry') {
+      setManualFocusedGeometryUuid(null);
+    }
+    if (isLinking) return;
+
+    const pendingManualFocusUuid = pendingManualFocusUuidRef.current;
+    if (pendingManualFocusUuid) {
+      const isStillVisible = visibleGeometries.some((g) => g.uuid === pendingManualFocusUuid);
+      pendingManualFocusUuidRef.current = null;
+      if (isStillVisible) {
+        setExpandedGeoUuid(pendingManualFocusUuid);
+        const timer = setTimeout(() => {
+          const el = geometryListRef.current?.querySelector<HTMLElement>(
+            `[data-geometry-uuid="${pendingManualFocusUuid}"]`
+          );
+          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }, 100);
+        return () => clearTimeout(timer);
+      }
+    }
+
+    const focusGeoId = resolveFocusedGeometryForSelectedTag({
+      selectedTagUuid,
+      displayLinkedGeometryIdsByTagUuid: focusLinkedGeometryIdsByTagUuid,
+      visibleGeometries,
+      previousFocusedGeometryUuid: expandedGeoUuid,
+      allowVisiblePreviousFocus: !didTagChange,
+    });
+
+    if (focusGeoId) {
+      const geo = visibleGeometries.find((g) => g.uuid === focusGeoId);
       if (geo && activeTypeFilters.size > 0 && !activeTypeFilters.has(geo.featureType ?? 'okänd')) {
         setActiveTypeFilters(new Set());
       }
-      setExpandedGeoUuid(firstGeoId);
+      if (searchQuery.trim()) {
+        const selectedStillVisible = filteredGeometries.some((g) => g.uuid === focusGeoId);
+        if (!selectedStillVisible) {
+          setSearchQuery('');
+        }
+      }
+      setExpandedGeoUuid(focusGeoId);
       const timer = setTimeout(() => {
         const el = geometryListRef.current?.querySelector<HTMLElement>(
-          `[data-geometry-uuid="${firstGeoId}"]`
+          `[data-geometry-uuid="${focusGeoId}"]`
         );
         if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       }, 100);
       return () => clearTimeout(timer);
     }
-    setClickedGeoUuid(null);
-  }, [selectedTagUuid, tags, activeTypeFilters, geometries, isLinking]);
+    setExpandedGeoUuid(null);
+  }, [
+    selectedTagUuid,
+    focusLinkedGeometryIdsByTagUuid,
+    activeTypeFilters,
+    activeMainMode,
+    visibleGeometries,
+    filteredGeometries,
+    isLinking,
+    searchQuery,
+    expandedGeoUuid,
+  ]);
 
   // ── Toggle a geometry in the staged set (multi-select mode) ──────────────
   const toggleStaged = useCallback((uuid: string) => {
@@ -188,54 +425,128 @@ export const GeometryPanel: React.FC = () => {
     batchLinkGeometries(linkingTagUuid, Array.from(stagedUuids));
   }, [linkingTagUuid, batchLinkGeometries, stagedUuids]);
 
+  const focusGeometryFromInspection = useCallback(
+    (uuid: string) => {
+      tagSelectionSourceRef.current = 'geometry';
+      setManualFocusedGeometryUuid(uuid);
+      setExpandedGeoUuid(uuid);
+      const linkedTags = getLinkedTagsForGeometry(uuid);
+      if (linkedTags.length > 0) {
+        selectTagFromGeometry(linkedTags[0].uuid, uuid);
+      }
+    },
+    [getLinkedTagsForGeometry, selectTagFromGeometry]
+  );
+
   // ── Map feature click ──────────────────────────────────────────────────────
   const handleMapFeatureClick = useCallback(
     (uuid: string) => {
       if (isLinking) {
+        if (activeMainMode !== 'json') return;
         toggleStaged(uuid);
         return;
       }
-      const linkedTags = tags.filter((t) => t.geometryIds?.includes(uuid));
-      if (linkedTags.length > 0) {
-        selectTag(linkedTags[0].uuid);
-      }
-      setExpandedGeoUuid((prev) => (prev === uuid ? null : uuid));
+      focusGeometryFromInspection(uuid);
     },
-    [isLinking, toggleStaged, tags, selectTag]
+    [
+      isLinking,
+      activeMainMode,
+      toggleStaged,
+      focusGeometryFromInspection,
+    ]
   );
 
   // ── List item click ────────────────────────────────────────────────────────
   const handleListItemClick = useCallback(
     (uuid: string) => {
       if (isLinking) {
+        if (activeMainMode !== 'json') return;
         toggleStaged(uuid);
         return;
       }
-      setClickedGeoUuid((prev) => (prev === uuid ? null : uuid));
-      setExpandedGeoUuid((prev) => (prev === uuid ? null : uuid));
+      focusGeometryFromInspection(uuid);
     },
-    [isLinking, toggleStaged]
+    [
+      isLinking,
+      activeMainMode,
+      toggleStaged,
+      focusGeometryFromInspection,
+    ]
   );
 
   const handleTagSubClick = useCallback(
-    (e: React.MouseEvent, tag: Tag) => {
+    (e: React.MouseEvent, tag: Tag, geometryUuid: string) => {
       e.stopPropagation();
-      selectTag(tag.uuid);
+      setExpandedGeoUuid(geometryUuid);
+      selectTagFromExplicitAction(tag.uuid, geometryUuid);
     },
-    [selectTag]
+    [selectTagFromExplicitAction]
   );
 
   return (
     <div className="w-full bg-white flex flex-col h-full overflow-hidden">
 
       {/* ── Header ──────────────────────────────────────────────────────── */}
-      <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2">
-        <div className="min-w-0">
-          <h2 className="text-sm font-semibold text-gray-700 truncate">Karta</h2>
-          <p className="text-xs text-gray-400 mt-0.5">
-            {geometries.length} geometrier
-          </p>
+      <div className="px-4 py-3 border-b border-gray-100 space-y-2">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <h2 className="text-sm font-semibold text-gray-700 truncate">Karta</h2>
+            <p className="text-xs text-gray-400 mt-0.5">
+              {activeMainMode === 'json'
+                ? `JSON · ${filteredGeometries.length} visade`
+                : gmlHeaderSummary}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-1">
+            {shouldShowAvailableGeometries && (
+              <button
+                onClick={() => setMapMainMode('json')}
+                className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
+                  activeMainMode === 'json'
+                    ? 'border border-blue-100 bg-blue-50 text-blue-700'
+                    : 'border border-gray-200 bg-white text-gray-600 hover:text-gray-800 hover:bg-gray-50'
+                }`}
+                title="Visa importerad JSON-geometri"
+              >
+                Tillgängliga geometrier
+              </button>
+            )}
+            {shouldShowDocumentCheck && (
+              <button
+                onClick={() => setMapMainMode('gml')}
+                disabled={isLinking || importedDocxGeometries.length === 0}
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-xs font-medium transition-colors ${
+                  activeMainMode === 'gml'
+                    ? 'border-gray-300 bg-gray-100 text-gray-700'
+                    : 'border-gray-200 bg-white text-gray-600 hover:text-gray-800 hover:bg-gray-50'
+                } disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:text-gray-600`}
+                title={
+                  isLinking
+                    ? 'Länkning sker mot JSON-lagret'
+                    : 'Kontrollera geometrier i importerad DOCX'
+                }
+              >
+                <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M9 12l2 2 4-4m5 2a8 8 0 11-16 0 8 8 0 0116 0z" />
+                </svg>
+                Dokumentkontroll
+              </button>
+            )}
+          </div>
         </div>
+
+        {activeMainMode === 'json' && (
+          <div className="px-2.5 py-1.5 rounded-lg border border-blue-100 bg-blue-50/70">
+            <p className="text-xs text-blue-700">
+              <span className="font-semibold">{linkedJsonGeometryCount}</span>
+              {' av '}
+              <span className="font-semibold">{jsonGeometries.length}</span>
+              {' geometrier är länkade'}
+            </p>
+          </div>
+        )}
       </div>
 
       {/* ── Linking mode banner ──────────────────────────────────────────── */}
@@ -272,6 +583,16 @@ export const GeometryPanel: React.FC = () => {
           selectedGeometryUuids={selectedGeometryUuids}
           pendingGeometryUuids={pendingGeometryUuids}
           isLinking={isLinking}
+          emptyStateTitle={
+            activeMainMode === 'json'
+              ? 'Ingen JSON-geometri inläst'
+              : gmlEmptyTitle
+          }
+          emptyStateSubtitle={
+            activeMainMode === 'json'
+              ? 'Ladda upp en detaljplan-JSON'
+              : gmlEmptySubtitle
+          }
           onFeatureClick={handleMapFeatureClick}
           onMultiFeatureClick={(items, pixelX, pixelY) => {
             // pixelX/Y are relative to the inner map div (inside 12px padding)
@@ -368,7 +689,7 @@ export const GeometryPanel: React.FC = () => {
       </div>
 
       {/* ── Active geometry doc info ─────────────────────────────────────── */}
-      {activeGeometryDocId && (
+      {activeMainMode === 'json' && activeGeometryDocId && (
         <div className="mx-3 mb-2 px-3 py-1.5 bg-gray-50 rounded-lg border border-gray-100 flex items-center gap-2">
           <span className="text-xs">🗺</span>
           <p className="text-xs text-gray-600 truncate flex-1">
@@ -415,7 +736,7 @@ export const GeometryPanel: React.FC = () => {
       )}
 
       {/* ── Search input ────────────────────────────────────────────────── */}
-      {geometries.length > 0 && (
+      {visibleGeometries.length > 0 && (
         <div className="px-3 pb-2">
           <div className="relative">
             <svg
@@ -452,12 +773,16 @@ export const GeometryPanel: React.FC = () => {
         style={{ flex: isLinking ? '1 1 0' : '1 1 0' }}
         ref={geometryListRef}
       >
-        {geometries.length === 0 ? (
+        {visibleGeometries.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-8 text-center">
             <div className="text-3xl mb-2">🗺</div>
-            <p className="text-xs text-gray-400 font-medium">Ingen geometri inläst</p>
+            <p className="text-xs text-gray-400 font-medium">
+              {activeMainMode === 'json' ? 'Ingen JSON-geometri inläst' : gmlEmptyTitle}
+            </p>
             <p className="text-xs text-gray-300 mt-1">
-              Använd Data-menyn för att importera en detaljplan
+              {activeMainMode === 'json'
+                ? 'Använd Data-menyn för att importera en detaljplan'
+                : gmlEmptySubtitle}
             </p>
           </div>
         ) : filteredGeometries.length === 0 ? (
@@ -469,16 +794,12 @@ export const GeometryPanel: React.FC = () => {
         ) : (
           <ul className="space-y-1">
             {filteredGeometries.map((geo) => {
-              const linkedTags = tags.filter((t) => t.geometryIds?.includes(geo.uuid));
+              const linkedTags = getLinkedTagsForGeometry(geo.uuid);
               const linkedCount = linkedTags.length;
               const color = featureColor(geo.featureType);
               const icon = featureIcon(geo.featureType);
 
-              // In normal mode: highlight if tag or click-selected
-              const isSelected = !isLinking && (
-                tagDerivedGeoUuids.includes(geo.uuid) ||
-                clickedGeoUuid === geo.uuid
-              );
+              const isSelected = !isLinking && selectedGeometryUuidSet.has(geo.uuid);
               // In linking mode: checked means staged
               const isChecked = isLinking && stagedUuids.has(geo.uuid);
               const isExpanded = expandedGeoUuid === geo.uuid;
@@ -563,37 +884,53 @@ export const GeometryPanel: React.FC = () => {
                   {/* ── Linked tags sub-list (normal mode) ───────────────── */}
                   {!isLinking && isExpanded && linkedTags.length > 0 && (
                     <ul className="mt-1 ml-6 mr-2 space-y-0.5 border-l-2 border-gray-100 pl-3 pb-1">
-                      {linkedTags.map((tag) => (
-                        <li
-                          key={tag.uuid}
-                          onClick={(e) => handleTagSubClick(e, tag)}
-                          className={`flex items-center gap-2 px-2.5 py-1.5 rounded-md cursor-pointer transition-all text-xs ${
-                            selectedTagUuid === tag.uuid
-                              ? 'bg-blue-50 text-blue-700 ring-1 ring-blue-300'
-                              : 'text-gray-600 hover:bg-gray-50 hover:text-gray-800'
-                          }`}
-                        >
-                          <svg className="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                              d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
-                          </svg>
-                          <span className="truncate flex-1">
-                            {tag.text.length > 50 ? tag.text.slice(0, 50) + '…' : tag.text}
-                          </span>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              unlinkGeometry(tag.uuid, geo.uuid);
-                            }}
-                            className="text-gray-300 hover:text-red-400 transition-colors flex-shrink-0 ml-auto"
-                            title="Avlänka"
+                      {linkedTags.map((tag) => {
+                        const isExplicitLink = (tag.geometryIds ?? []).includes(geo.uuid);
+                        const canUnlink = activeMainMode === 'json' && isExplicitLink;
+                        return (
+                          <li
+                            key={tag.uuid}
+                            onClick={(e) => handleTagSubClick(e, tag, geo.uuid)}
+                            className={`flex items-center gap-2 px-2.5 py-1.5 rounded-md cursor-pointer transition-all text-xs ${
+                              selectedTagUuid === tag.uuid
+                                ? 'bg-blue-50 text-blue-700 ring-1 ring-blue-300'
+                                : 'text-gray-600 hover:bg-gray-50 hover:text-gray-800'
+                            }`}
                           >
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            <svg className="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                                d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
                             </svg>
-                          </button>
-                        </li>
-                      ))}
+                            <span className="truncate flex-1">
+                              {tag.text.length > 50 ? tag.text.slice(0, 50) + '…' : tag.text}
+                            </span>
+                            {!isExplicitLink && (
+                              <span className="text-[10px] text-orange-500 font-medium">
+                                Länk
+                              </span>
+                            )}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (canUnlink) {
+                                  unlinkGeometry(tag.uuid, geo.uuid);
+                                }
+                              }}
+                              disabled={!canUnlink}
+                              className="text-gray-300 hover:text-red-400 disabled:text-gray-200 disabled:cursor-not-allowed transition-colors flex-shrink-0 ml-auto"
+                              title={
+                                canUnlink
+                                  ? 'Avlänka'
+                                  : 'Redigera länkar i JSON-läge'
+                              }
+                            >
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          </li>
+                        );
+                      })}
                     </ul>
                   )}
                 </li>
@@ -652,7 +989,11 @@ export const GeometryPanel: React.FC = () => {
                 <span className="text-base">🗺</span>
                 <div>
                   <h2 className="text-sm font-semibold text-gray-700">Karta</h2>
-                  <p className="text-xs text-gray-400">{filteredGeometries.length} geometrier visade</p>
+                  <p className="text-xs text-gray-400">
+                    {activeMainMode === 'json'
+                      ? `JSON · ${filteredGeometries.length} geometrier visade`
+                      : gmlHeaderSummary}
+                  </p>
                 </div>
               </div>
               {isLinking && (
@@ -684,6 +1025,16 @@ export const GeometryPanel: React.FC = () => {
                 selectedGeometryUuids={selectedGeometryUuids}
                 pendingGeometryUuids={pendingGeometryUuids}
                 isLinking={isLinking}
+                emptyStateTitle={
+                  activeMainMode === 'json'
+                    ? 'Ingen JSON-geometri inläst'
+                    : gmlEmptyTitle
+                }
+                emptyStateSubtitle={
+                  activeMainMode === 'json'
+                    ? 'Ladda upp en detaljplan-JSON'
+                    : gmlEmptySubtitle
+                }
                 onFeatureClick={handleMapFeatureClick}
                 onMultiFeatureClick={(items, pixelX, pixelY) => {
                   setModalPicker({ items, x: pixelX + 12, y: pixelY + 12 });

@@ -2,7 +2,8 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { temporal } from 'zundo';
 import { v4 as uuidv4 } from 'uuid';
-import type { Tag, Geometry, DocModel, AppState, PendingSelection } from '../types';
+import type { Tag, Geometry, DocModel, AppState, PendingSelection, PlanbeskrivningConfig } from '../types';
+import { buildDefaultConfig } from '../docx/PlanbeskrivningXmlBuilder';
 import {
   saveDocument as dbSave,
   getDocument as dbGet,
@@ -16,6 +17,8 @@ import {
 } from '../geometry/geometryDb';
 import { parseDetaljplanJson } from '../geometry/detaljplanParser';
 import { exportGeometryDocAsString } from '../geometry/geoJsonConverter';
+import { normalizeGeometrySource } from '../geometry/geometrySource';
+import { replaceDocxGmlGeometriesInState } from './geometryMerge';
 import { saveAs } from 'file-saver';
 
 interface DocumentActions {
@@ -62,6 +65,8 @@ interface DocumentActions {
 
   // ─── Geometry management ────────────────────────────────────────────────
   addGeometry: (geometry: Geometry) => void;
+  /** Replace all DOCX-derived GML geometries with a fresh import set */
+  setDocxGmlGeometries: (geometries: Geometry[]) => void;
   updateGeometry: (uuid: string, changes: Partial<Geometry>) => void;
   removeGeometry: (uuid: string) => void;
 
@@ -98,6 +103,14 @@ interface DocumentActions {
 
   // ─── UI State ───────────────────────────────────────────────────────────
   toggleShowTags: () => void;
+
+  // ─── Planbeskrivning config ──────────────────────────────────────────────
+  /** Update one or more fields of the Planbeskrivning export config */
+  setPlanbeskrivningConfig: (config: Partial<PlanbeskrivningConfig>) => void;
+  /** Reset config to defaults (e.g. after loading a new document) */
+  resetPlanbeskrivningConfig: (detaljplansreferens?: string) => void;
+  /** Toggle whether compliance errors should block export */
+  togglePlanbeskrivningCompliance: () => void;
 }
 
 const initialState: AppState = {
@@ -112,6 +125,8 @@ const initialState: AppState = {
   pendingSelection: null,
   showTags: true,
   activeGeometryDocId: null,
+  planbeskrivningConfig: null,
+  enforcePlanbeskrivningCompliance: true,
 };
 
 // ─── Debounced auto-save to IndexedDB ──────────────────────────────────────
@@ -172,6 +187,8 @@ export const useDocumentStore = create<AppState & DocumentActions>()(
         ) => {
           const documentId = uuidv4();
           const now = new Date().toISOString();
+          const migratedTags = migrateTagsGeometryIds(tags);
+          const normalizedGeometries = geometries.map(normalizeGeometrySource);
 
           if (geometryDoc) {
              await saveGeometryDoc(geometryDoc);
@@ -182,8 +199,8 @@ export const useDocumentStore = create<AppState & DocumentActions>()(
             zipBuffer,
             docModel,
             fileName,
-            tags,
-            geometries,
+            tags: migratedTags,
+            geometries: normalizedGeometries,
             pendingSelection: null,
             showTags: true,
             activeGeometryDocId,
@@ -196,8 +213,8 @@ export const useDocumentStore = create<AppState & DocumentActions>()(
             fileName,
             zipBuffer,
             docModel,
-            tags,
-            geometries,
+            tags: migratedTags,
+            geometries: normalizedGeometries,
             createdAt: now,
             updatedAt: now,
           });
@@ -206,7 +223,7 @@ export const useDocumentStore = create<AppState & DocumentActions>()(
         setDocument: (zipBuffer, docModel, fileName, initialTags) => {
           const documentId = uuidv4();
           const now = new Date().toISOString();
-          const tags = initialTags ?? [];
+          const tags = migrateTagsGeometryIds(initialTags ?? []);
           set({ documentId, zipBuffer, docModel, fileName, tags, geometries: [], pendingSelection: null, showTags: true });
           // Clear undo/redo history — it belongs to the previous document
           useDocumentStore.temporal.getState().clear();
@@ -230,7 +247,8 @@ export const useDocumentStore = create<AppState & DocumentActions>()(
           const documentId = state.documentId;
           if (!documentId) return;
           const now = new Date().toISOString();
-          set({ zipBuffer, docModel, fileName, tags });
+          const migratedTags = migrateTagsGeometryIds(tags);
+          set({ zipBuffer, docModel, fileName, tags: migratedTags });
           // Clear undo history since the document structure changed
           useDocumentStore.temporal.getState().clear();
           // Persist to IndexedDB under the same ID
@@ -240,7 +258,7 @@ export const useDocumentStore = create<AppState & DocumentActions>()(
               fileName,
               zipBuffer,
               docModel,
-              tags,
+              tags: migratedTags,
               geometries: get().geometries,
               createdAt: existing?.createdAt ?? now,
               updatedAt: now,
@@ -266,7 +284,7 @@ export const useDocumentStore = create<AppState & DocumentActions>()(
             docModel: doc.docModel,
             fileName: doc.fileName,
             tags: migrateTagsGeometryIds(doc.tags),
-            geometries: doc.geometries,
+            geometries: doc.geometries.map(normalizeGeometrySource),
             selectedTagUuid: null,
             linkingTagUuid: null,
             pendingSelection: null,
@@ -329,12 +347,30 @@ export const useDocumentStore = create<AppState & DocumentActions>()(
             return next;
           }),
 
-        selectTag: (uuid) => set({ selectedTagUuid: uuid }),
+        selectTag: (uuid) =>
+          set((state) => {
+            if (uuid !== null && state.selectedTagUuid === uuid) {
+              queueMicrotask(() => set({ selectedTagUuid: uuid }));
+              return { selectedTagUuid: null };
+            }
+            return { selectedTagUuid: uuid };
+          }),
 
         // ─── Geometry management ────────────────────────────────────────────
         addGeometry: (geometry) =>
           set((state) => {
-            const next = { geometries: [...state.geometries, geometry] };
+            const next = { geometries: [...state.geometries, normalizeGeometrySource(geometry)] };
+            debouncedSave({ ...state, ...next });
+            return next;
+          }),
+
+        setDocxGmlGeometries: (geometries) =>
+          set((state) => {
+            const next = replaceDocxGmlGeometriesInState(
+              state.geometries,
+              state.tags,
+              geometries
+            );
             debouncedSave({ ...state, ...next });
             return next;
           }),
@@ -367,7 +403,8 @@ export const useDocumentStore = create<AppState & DocumentActions>()(
 
         // ─── Geometry document import / export ─────────────────────────────
         importGeometryJson: async (rawJson, fileName) => {
-          const { geometryDoc, geometries: newGeometries } = parseDetaljplanJson(rawJson, fileName);
+          const { geometryDoc, geometries } = parseDetaljplanJson(rawJson, fileName);
+          const newGeometries = geometries.map(normalizeGeometrySource);
 
           const prev = get().activeGeometryDocId;
 
@@ -408,10 +445,23 @@ export const useDocumentStore = create<AppState & DocumentActions>()(
               ? state.geometries.filter((g) => g.sourceDocId !== prev)
               : state.geometries;
 
+            // ── Auto-populate detaljplansreferens in Planbeskrivning config ──
+            // Only set it if the config is null or if the referens was previously
+            // pointing at the old plan doc (avoid overwriting manual edits).
+            const prevRef = state.planbeskrivningConfig?.detaljplansreferens ?? '';
+            const shouldUpdateRef = !state.planbeskrivningConfig || prevRef === '' || prevRef === prev;
+            const updatedConfig: PlanbeskrivningConfig | null = shouldUpdateRef
+              ? {
+                  ...(state.planbeskrivningConfig ?? buildDefaultConfig(geometryDoc.id)),
+                  detaljplansreferens: geometryDoc.id,
+                }
+              : state.planbeskrivningConfig;
+
             const nextState = {
               geometries: [...keptGeometries, ...newGeometries],
               activeGeometryDocId: geometryDoc.id,
               tags: updatedTags,
+              planbeskrivningConfig: updatedConfig,
             };
             debouncedSave({ ...state, ...nextState });
             return nextState;
@@ -512,6 +562,27 @@ export const useDocumentStore = create<AppState & DocumentActions>()(
 
         // ─── UI State ───────────────────────────────────────────────────────
         toggleShowTags: () => set((state) => ({ showTags: !state.showTags })),
+
+        // ─── Planbeskrivning config ─────────────────────────────────────────
+        setPlanbeskrivningConfig: (changes) =>
+          set((state) => {
+            const current =
+              state.planbeskrivningConfig ??
+              buildDefaultConfig(state.activeGeometryDocId ?? undefined);
+            return { planbeskrivningConfig: { ...current, ...changes } };
+          }),
+
+        resetPlanbeskrivningConfig: (detaljplansreferens) =>
+          set(() => ({
+            planbeskrivningConfig: buildDefaultConfig(detaljplansreferens),
+          })),
+
+        togglePlanbeskrivningCompliance: () =>
+          set((state) => ({
+            enforcePlanbeskrivningCompliance:
+              !state.enforcePlanbeskrivningCompliance,
+          })),
+
       }),
       {
         name: 'pb-tagger-storage',
@@ -521,6 +592,9 @@ export const useDocumentStore = create<AppState & DocumentActions>()(
           geometries: state.geometries,
           fileName: state.fileName,
           documentId: state.documentId,
+          planbeskrivningConfig: state.planbeskrivningConfig,
+          enforcePlanbeskrivningCompliance:
+            state.enforcePlanbeskrivningCompliance,
         }),
       },
     ),

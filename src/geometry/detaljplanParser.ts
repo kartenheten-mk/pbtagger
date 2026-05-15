@@ -187,6 +187,7 @@ export function parseDetaljplanJson(
       crs: firstGeom.crs,
       featureType,
       sourceDocId: planId,
+      source: 'json',
       color: colorForFeatureType(featureType),
       properties: props,
     });

@@ -17,7 +17,7 @@
 
 import PizZip from 'pizzip';
 import { saveAs } from 'file-saver';
-import type { Tag, DocModel } from '../types';
+import type { Tag, DocModel, Geometry, PlanbeskrivningConfig } from '../types';
 import { parseXml, serializeXml } from './XmlHelpers';
 import {
   buildCustomXmlItem,
@@ -28,8 +28,15 @@ import {
   updateDocumentRels,
   updateContentTypes,
   resolveCustomXmlSlot,
+  resolvePlanbeskrivningSlot,
+  buildPlanbeskrivningItemProps,
+  updateDocumentRelsForPlanbeskrivning,
 } from './zipUtils';
 import { findMaxBookmarkId } from './bookmarkUtils';
+import {
+  buildPlanbeskrivningXml,
+  validatePlanbeskrivning,
+} from './PlanbeskrivningXmlBuilder';
 import {
   collectParagraphsInOrder,
   injectBookmarkAroundRun,
@@ -42,13 +49,30 @@ import {
 const STORE_ITEM_ID = 'A1B2C3D4-E5F6-7890-ABCD-EF1234567890';
 
 /**
+ * Options for Planbeskrivning v2.0 XML generation during export.
+ */
+export interface PlanbeskrivningExportOptions {
+  config: PlanbeskrivningConfig;
+  geometries: Geometry[];
+  /** When true (default), compliance errors block export */
+  enforceCompliance?: boolean;
+}
+
+/**
  * Main export function. Clones the ZIP, injects tags, and downloads the file.
+ *
+ * @param originalZip      The original PizZip archive
+ * @param docModel         Parsed document model
+ * @param tags             All tags to export
+ * @param fileName         Original file name (used for download name)
+ * @param planbeskrivning  When provided, also injects the Planbeskrivning v2.0 XML
  */
 export async function exportDocx(
   originalZip: PizZip,
   docModel: DocModel,
   tags: Tag[],
-  fileName: string
+  fileName: string,
+  planbeskrivning?: PlanbeskrivningExportOptions
 ): Promise<void> {
   // 1. Clone the ZIP so we never mutate the in-memory original
   const zipData = originalZip.generate({ type: 'arraybuffer' });
@@ -106,10 +130,92 @@ export async function exportDocx(
   // 9. Update [Content_Types].xml
   updateContentTypes(zip, itemPath, propsPath);
 
-  // 10. Generate blob and trigger download
+  // ── 10. Optionally inject Planbeskrivning v2.0 XML (omfattningar.xml) ────
+  if (planbeskrivning) {
+    injectPlanbeskrivningXml(zip, itemNumber, tags, planbeskrivning);
+  }
+
+  // 11. Generate blob and trigger download
   const blob = zip.generate({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
   const exportName = fileName.replace(/\.docx$/i, '') + '_tagged.docx';
   saveAs(blob, exportName);
+}
+
+/**
+ * Inject the Planbeskrivning v2.0 XML (omfattningar.xml) as a second
+ * custom XML part into the ZIP archive.
+ */
+function injectPlanbeskrivningXml(
+  zip: PizZip,
+  tagMetadataItemNumber: number,
+  tags: Tag[],
+  opts: PlanbeskrivningExportOptions
+): void {
+  const validation = validatePlanbeskrivning(tags, opts.geometries);
+  const enforceCompliance = opts.enforceCompliance ?? true;
+  if (enforceCompliance && !validation.valid) {
+    const details = formatComplianceErrors(validation.errors, tags);
+    throw new Error(
+      `Kan inte exportera Planbeskrivning v2.0 eftersom vissa regler inte uppfylls:\n${details}`
+    );
+  }
+
+  // Resolve a slot that doesn't conflict with the tag-metadata slot
+  const {
+    itemPath: pbItemPath,
+    itemNumber: pbItemNumber,
+    propsPath: pbPropsPath,
+    relsPath: pbRelsPath,
+  } = resolvePlanbeskrivningSlot(zip, tagMetadataItemNumber);
+
+  // Build the XML content
+  const pbXml = buildPlanbeskrivningXml(opts.config, tags, opts.geometries);
+
+  // Write the XML part and its props
+  zip.file(pbItemPath, pbXml);
+  zip.file(pbPropsPath, buildPlanbeskrivningItemProps());
+
+  // Ensure the _rels file exists for this part
+  ensureCustomXmlRels(zip, pbRelsPath, pbItemNumber);
+
+  // Register in document.xml.rels and [Content_Types].xml
+  updateDocumentRelsForPlanbeskrivning(zip, pbItemPath);
+  updateContentTypes(zip, pbItemPath, pbPropsPath);
+}
+
+function formatComplianceErrors(
+  errors: Array<{ rule: string; message: string; tagUuid?: string }>,
+  tags: Tag[]
+): string {
+  const tagByUuid = new Map(tags.map((t) => [t.uuid, t]));
+  return errors
+    .map((e, idx) => {
+      const tag = e.tagUuid ? tagByUuid.get(e.tagUuid) : undefined;
+      const shortUuid = e.tagUuid ? e.tagUuid.slice(0, 8) : 'okänd';
+      const preview =
+        tag?.text
+          ?.replace(/\s+/g, ' ')
+          .trim()
+          .slice(0, 60) ?? '';
+      const clippedPreview =
+        preview.length === 60 ? `${preview}...` : preview;
+      const para =
+        tag?.paragraphIndex !== undefined ? `, stycke ${tag.paragraphIndex + 1}` : '';
+
+      const humanRule =
+        e.rule === 'PLANB-004'
+          ? 'Indelning (tema/grupp/undergrupp) måste vara giltig enligt BFS 2020:8.'
+          : e.rule === 'PLANB-007'
+            ? 'Objektreferens måste vara en beständig identifierare.'
+            : e.message;
+
+      const tagInfo = tag
+        ? `Tagg ${shortUuid}${para}${clippedPreview ? `, text: "${clippedPreview}"` : ''}`
+        : `Tagg ${shortUuid}`;
+
+      return `${idx + 1}. [${e.rule}] ${tagInfo}\n   ${humanRule}`;
+    })
+    .join('\n');
 }
 
 /**
