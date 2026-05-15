@@ -45,24 +45,15 @@ function makeTag(overrides: Partial<Tag> = {}): Tag {
 }
 
 describe('mapDataMode view-model helpers', () => {
-  it('selects correct dataset for JSON, GML-preview, and GML-imported', () => {
+  it('selects correct dataset for JSON and imported-DOCX GML', () => {
     const json = [makeGeometry('json-1', 'json')];
-    const preview = [makeGeometry('preview-1', 'docx_gml')];
     const imported = [makeGeometry('imported-1', 'docx_gml')];
 
-    const jsonVisible = selectVisibleGeometries('json', 'preview', json, preview, imported);
-    const gmlPreviewVisible = selectVisibleGeometries('gml', 'preview', json, preview, imported);
-    const gmlImportedVisible = selectVisibleGeometries(
-      'gml',
-      'imported_docx',
-      json,
-      preview,
-      imported
-    );
+    const jsonVisible = selectVisibleGeometries('json', json, imported);
+    const gmlVisible = selectVisibleGeometries('gml', json, imported);
 
     expect(jsonVisible.map((g) => g.uuid)).toEqual(['json-1']);
-    expect(gmlPreviewVisible.map((g) => g.uuid)).toEqual(['preview-1']);
-    expect(gmlImportedVisible.map((g) => g.uuid)).toEqual(['imported-1']);
+    expect(gmlVisible.map((g) => g.uuid)).toEqual(['imported-1']);
   });
 
   it('uses current explicit links only for Imported DOCX mode badges', () => {
@@ -74,10 +65,8 @@ describe('mapDataMode view-model helpers', () => {
     const links = buildDisplayLinkedGeometryIdsByTagUuidForMode({
       tags: [tag],
       activeMainMode: 'gml',
-      gmlViewMode: 'imported_docx',
       jsonGeometryIdSet: new Set(['json-1']),
       importedDocxGeometryIdSet: new Set(['imported-1']),
-      previewLinkedGeometryIdsByTagUuid: new Map([['tag-2', new Set(['preview-1'])]]),
       importedDocxLinkedGeometryIdsByTagUuid: new Map(),
     });
 
@@ -93,10 +82,8 @@ describe('mapDataMode view-model helpers', () => {
     const links = buildDisplayLinkedGeometryIdsByTagUuidForMode({
       tags: [tag],
       activeMainMode: 'gml',
-      gmlViewMode: 'imported_docx',
       jsonGeometryIdSet: new Set(['json-1']),
       importedDocxGeometryIdSet: new Set(['imported-1']),
-      previewLinkedGeometryIdsByTagUuid: new Map(),
       importedDocxLinkedGeometryIdsByTagUuid: new Map([
         ['tag-2b', new Set(['imported-1'])],
       ]),
@@ -105,7 +92,7 @@ describe('mapDataMode view-model helpers', () => {
     expect(Array.from(links.get('tag-2b') ?? [])).toEqual(['imported-1']);
   });
 
-  it('uses preview-derived links as focus source in GML preview mode', () => {
+  it('uses imported DOCX links as focus source in GML mode', () => {
     const tag = makeTag({
       uuid: 'tag-3',
       geometryIds: ['json-1', 'imported-1'],
@@ -114,14 +101,12 @@ describe('mapDataMode view-model helpers', () => {
     const links = buildFocusLinkedGeometryIdsByTagUuidForMode({
       tags: [tag],
       activeMainMode: 'gml',
-      gmlViewMode: 'preview',
       jsonGeometryIdSet: new Set(['json-1']),
       importedDocxGeometryIdSet: new Set(['imported-1']),
-      previewLinkedGeometryIdsByTagUuid: new Map([['tag-3', new Set(['preview-1'])]]),
       importedDocxLinkedGeometryIdsByTagUuid: new Map(),
     });
 
-    expect(Array.from(links.get('tag-3') ?? [])).toEqual(['preview-1']);
+    expect(Array.from(links.get('tag-3') ?? [])).toEqual(['imported-1']);
   });
 
   it('forces active map mode to JSON while linking', () => {
@@ -263,28 +248,6 @@ describe('mapDataMode view-model helpers', () => {
       })
     ).toBe('geo-a');
 
-    // GML preview mode: deterministic first visible linked geometry.
-    expect(
-      resolveFocusedGeometryForSelectedTag({
-        selectedTagUuid: 'tag-1',
-        displayLinkedGeometryIdsByTagUuid: links,
-        visibleGeometries: visible,
-        previousFocusedGeometryUuid: 'geo-c',
-        prioritizeFirstVisibleLinked: true,
-      })
-    ).toBe('geo-b');
-
-    // GML preview mode: previous unrelated focus must not block tag focus.
-    expect(
-      resolveFocusedGeometryForSelectedTag({
-        selectedTagUuid: 'tag-1',
-        displayLinkedGeometryIdsByTagUuid: links,
-        visibleGeometries: visible,
-        previousFocusedGeometryUuid: 'geo-a',
-        prioritizeFirstVisibleLinked: true,
-      })
-    ).toBe('geo-b');
-
     // Otherwise select first linked geometry in visible order.
     expect(
       resolveFocusedGeometryForSelectedTag({
@@ -305,15 +268,5 @@ describe('mapDataMode view-model helpers', () => {
       })
     ).toBeNull();
 
-    // GML preview mode: no linked preview geometry => null.
-    expect(
-      resolveFocusedGeometryForSelectedTag({
-        selectedTagUuid: 'tag-1',
-        displayLinkedGeometryIdsByTagUuid: new Map([['tag-1', new Set()]]),
-        visibleGeometries: visible,
-        previousFocusedGeometryUuid: 'geo-a',
-        prioritizeFirstVisibleLinked: true,
-      })
-    ).toBeNull();
   });
 });

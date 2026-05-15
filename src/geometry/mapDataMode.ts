@@ -1,7 +1,6 @@
 import type { Geometry, Tag } from '../types';
 
 export type MapMainMode = 'json' | 'gml';
-export type GmlViewMode = 'preview' | 'imported_docx';
 
 export function resolveActiveMapMainMode(
   requestedMode: MapMainMode,
@@ -12,13 +11,11 @@ export function resolveActiveMapMainMode(
 
 export function selectVisibleGeometries(
   activeMainMode: MapMainMode,
-  gmlViewMode: GmlViewMode,
   jsonGeometries: Geometry[],
-  previewGeometries: Geometry[],
   importedDocxGeometries: Geometry[]
 ): Geometry[] {
   if (activeMainMode === 'json') return jsonGeometries;
-  return gmlViewMode === 'preview' ? previewGeometries : importedDocxGeometries;
+  return importedDocxGeometries;
 }
 
 interface BuildHighlightedGeometryUuidsArgs {
@@ -68,11 +65,6 @@ interface ResolveFocusedGeometryArgs {
    * even if it is not linked to the selected tag.
    */
   allowVisiblePreviousFocus?: boolean;
-  /**
-   * When true, always choose the first visible linked geometry and ignore
-   * previous focus. Used by GML preview for deterministic single-select focus.
-   */
-  prioritizeFirstVisibleLinked?: boolean;
 }
 
 /**
@@ -90,7 +82,6 @@ export function resolveFocusedGeometryForSelectedTag(
     visibleGeometries,
     previousFocusedGeometryUuid,
     allowVisiblePreviousFocus = false,
-    prioritizeFirstVisibleLinked = false,
   } = args;
   if (!selectedTagUuid) return null;
 
@@ -104,15 +95,6 @@ export function resolveFocusedGeometryForSelectedTag(
       visibleIds.has(previousFocusedGeometryUuid)
     ) {
       return previousFocusedGeometryUuid;
-    }
-    return null;
-  }
-
-  if (prioritizeFirstVisibleLinked) {
-    for (const geo of visibleGeometries) {
-      if (linkedForTag.has(geo.uuid)) {
-        return geo.uuid;
-      }
     }
     return null;
   }
@@ -135,26 +117,15 @@ export function resolveFocusedGeometryForSelectedTag(
 interface BuildDisplayLinksArgs {
   tags: Tag[];
   activeMainMode: MapMainMode;
-  gmlViewMode: GmlViewMode;
   jsonGeometryIdSet: Set<string>;
   importedDocxGeometryIdSet: Set<string>;
-  previewLinkedGeometryIdsByTagUuid: Map<string, Set<string>>;
   importedDocxLinkedGeometryIdsByTagUuid: Map<string, Set<string>>;
-}
-
-function cloneLinkMap(source: Map<string, Set<string>>): Map<string, Set<string>> {
-  const copy = new Map<string, Set<string>>();
-  for (const [tagUuid, ids] of source.entries()) {
-    copy.set(tagUuid, new Set(ids));
-  }
-  return copy;
 }
 
 /**
  * Returns geometry IDs to treat as linked for UI display in the active mode.
  * - JSON mode: explicit JSON links only
- * - GML preview mode: derived preview links only
- * - Imported DOCX mode: explicit DOCX links OR mirrored DOCX links derived
+ * - GML mode: explicit DOCX links OR mirrored DOCX links derived
  *   from matching JSON-linked tags when the imported DOCX contains the same
  *   logical GML tag
  */
@@ -164,10 +135,8 @@ export function buildDisplayLinkedGeometryIdsByTagUuidForMode(
   const {
     tags,
     activeMainMode,
-    gmlViewMode,
     jsonGeometryIdSet,
     importedDocxGeometryIdSet,
-    previewLinkedGeometryIdsByTagUuid,
     importedDocxLinkedGeometryIdsByTagUuid,
   } = args;
 
@@ -176,14 +145,6 @@ export function buildDisplayLinkedGeometryIdsByTagUuidForMode(
     if (activeMainMode === 'json') {
       const jsonLinks = (tag.geometryIds ?? []).filter((id) => jsonGeometryIdSet.has(id));
       result.set(tag.uuid, new Set(jsonLinks));
-      continue;
-    }
-
-    if (gmlViewMode === 'preview') {
-      result.set(
-        tag.uuid,
-        new Set(previewLinkedGeometryIdsByTagUuid.get(tag.uuid) ?? [])
-      );
       continue;
     }
 
@@ -201,15 +162,10 @@ export function buildDisplayLinkedGeometryIdsByTagUuidForMode(
 /**
  * Returns geometry IDs to use for tag-driven focus behavior in the active mode.
  * - JSON mode: explicit JSON links only
- * - GML preview mode: derived preview links only (export preview source of truth)
- * - Imported DOCX mode: explicit or mirrored imported DOCX links
+ * - GML mode: explicit or mirrored imported DOCX links
  */
 export function buildFocusLinkedGeometryIdsByTagUuidForMode(
   args: BuildDisplayLinksArgs
 ): Map<string, Set<string>> {
-  const { activeMainMode, gmlViewMode, previewLinkedGeometryIdsByTagUuid } = args;
-  if (activeMainMode === 'gml' && gmlViewMode === 'preview') {
-    return cloneLinkMap(previewLinkedGeometryIdsByTagUuid);
-  }
   return buildDisplayLinkedGeometryIdsByTagUuidForMode(args);
 }

@@ -17,11 +17,9 @@ import React, { useRef, useEffect, useCallback, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom';
 import type { Tag } from '../types';
 import { useDocumentStore } from '../store/useDocumentStore';
-import { buildDefaultConfig } from '../docx/PlanbeskrivningXmlBuilder';
 import { MapView } from './MapView';
 import type { PickerItem } from './MapView';
 import { splitGeometriesBySource } from './geometrySource';
-import { buildGmlExportPreview } from './gmlExportPreview';
 import { buildMirroredDisplayLinks } from './tagLinkMirror';
 import {
   buildHighlightedGeometryUuids,
@@ -30,7 +28,6 @@ import {
   resolveActiveMapMainMode,
   resolveFocusedGeometryForSelectedTag,
   selectVisibleGeometries,
-  type GmlViewMode,
   type MapMainMode,
 } from './mapDataMode';
 
@@ -66,7 +63,6 @@ export const GeometryPanel: React.FC = () => {
     linkingTagUuid,
     selectedTagUuid,
     activeGeometryDocId,
-    planbeskrivningConfig,
     finishLinking,
     batchLinkGeometries,
     cancelLinking,
@@ -85,7 +81,6 @@ export const GeometryPanel: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTypeFilters, setActiveTypeFilters] = useState<Set<string>>(new Set());
   const [mapMainMode, setMapMainMode] = useState<MapMainMode>('json');
-  const [gmlViewMode, setGmlViewMode] = useState<GmlViewMode>('preview');
 
   // ── Map maximize state ────────────────────────────────────────────────────
   const [isMapMaximized, setIsMapMaximized] = useState(false);
@@ -115,20 +110,11 @@ export const GeometryPanel: React.FC = () => {
 
   const { json: jsonGeometries, docxGml: importedDocxGeometries } =
     splitGeometriesBySource(geometries);
-  const previewConfig = useMemo(
-    () => planbeskrivningConfig ?? buildDefaultConfig(activeGeometryDocId ?? undefined),
-    [planbeskrivningConfig, activeGeometryDocId]
-  );
-  const gmlPreview = useMemo(
-    () => buildGmlExportPreview(previewConfig, tags, jsonGeometries),
-    [previewConfig, tags, jsonGeometries]
-  );
-  const gmlPreviewGeometries = gmlPreview.geometries;
+  const shouldShowAvailableGeometries = jsonGeometries.length > 0;
+  const shouldShowDocumentCheck = jsonGeometries.length === 0;
   const visibleGeometries = selectVisibleGeometries(
     activeMainMode,
-    gmlViewMode,
     jsonGeometries,
-    gmlPreviewGeometries,
     importedDocxGeometries
   );
 
@@ -170,38 +156,30 @@ export const GeometryPanel: React.FC = () => {
     return buildDisplayLinkedGeometryIdsByTagUuidForMode({
       tags,
       activeMainMode,
-      gmlViewMode,
       jsonGeometryIdSet,
       importedDocxGeometryIdSet,
-      previewLinkedGeometryIdsByTagUuid: gmlPreview.linkedGeometryIdsByTagUuid,
       importedDocxLinkedGeometryIdsByTagUuid,
     });
   }, [
     tags,
     activeMainMode,
-    gmlViewMode,
     jsonGeometryIdSet,
     importedDocxGeometryIdSet,
-    gmlPreview.linkedGeometryIdsByTagUuid,
     importedDocxLinkedGeometryIdsByTagUuid,
   ]);
   const focusLinkedGeometryIdsByTagUuid = useMemo(() => {
     return buildFocusLinkedGeometryIdsByTagUuidForMode({
       tags,
       activeMainMode,
-      gmlViewMode,
       jsonGeometryIdSet,
       importedDocxGeometryIdSet,
-      previewLinkedGeometryIdsByTagUuid: gmlPreview.linkedGeometryIdsByTagUuid,
       importedDocxLinkedGeometryIdsByTagUuid,
     });
   }, [
     tags,
     activeMainMode,
-    gmlViewMode,
     jsonGeometryIdSet,
     importedDocxGeometryIdSet,
-    gmlPreview.linkedGeometryIdsByTagUuid,
     importedDocxLinkedGeometryIdsByTagUuid,
   ]);
   const linkedTagUuidsByGeometryUuid = useMemo(() => {
@@ -227,15 +205,8 @@ export const GeometryPanel: React.FC = () => {
     },
     [linkedTagUuidsByGeometryUuid, tagByUuid]
   );
-  const gmlModeLabel = gmlViewMode === 'preview' ? 'GML-preview' : 'GML-importerad';
-  const gmlEmptyTitle =
-    gmlViewMode === 'preview'
-      ? 'Ingen exportbar GML än'
-      : 'Ingen GML hittad i importerad DOCX';
-  const gmlEmptySubtitle =
-    gmlViewMode === 'preview'
-      ? 'Länka taggar till JSON-geometrier för att förhandsgranska export'
-      : 'Importera en DOCX med Planbeskrivning GML för att visa befintliga objekt';
+  const gmlEmptyTitle = 'Ingen GML hittad i importerad DOCX';
+  const gmlEmptySubtitle = 'Importera en DOCX med Planbeskrivning GML för att visa befintliga objekt';
 
   // ── Initialise staged set when linking starts ─────────────────────────────
   useEffect(() => {
@@ -257,6 +228,21 @@ export const GeometryPanel: React.FC = () => {
     }
   }, [isLinking, mapMainMode]);
 
+  // If the document has imported GML but no JSON layer, show the document check.
+  useEffect(() => {
+    if (isLinking) return;
+    if (jsonGeometries.length > 0 && mapMainMode !== 'json') {
+      setMapMainMode('json');
+      return;
+    }
+    if (shouldShowDocumentCheck && importedDocxGeometries.length > 0 && mapMainMode !== 'gml') {
+      setMapMainMode('gml');
+    }
+    if (shouldShowDocumentCheck && importedDocxGeometries.length === 0 && mapMainMode !== 'json') {
+      setMapMainMode('json');
+    }
+  }, [isLinking, shouldShowDocumentCheck, jsonGeometries.length, importedDocxGeometries.length, mapMainMode]);
+
   // Reset type chips when source mode changes to avoid hidden stale filters.
   useEffect(() => {
     setActiveTypeFilters(new Set());
@@ -264,7 +250,7 @@ export const GeometryPanel: React.FC = () => {
     setManualFocusedGeometryUuid(null);
     setPicker(null);
     setModalPicker(null);
-  }, [activeMainMode, gmlViewMode]);
+  }, [activeMainMode]);
 
   // ── Derive unique feature types for filter chips ──────────────────────────
   const allFeatureTypes = Array.from(
@@ -298,10 +284,7 @@ export const GeometryPanel: React.FC = () => {
     }
     return true;
   });
-  const gmlHeaderSummary =
-    gmlViewMode === 'preview'
-      ? `${filteredGeometries.length} geometrier kommer att exporteras till dokumentet`
-      : `${filteredGeometries.length} geometrier finns redan i dokumentet`;
+  const gmlHeaderSummary = `${filteredGeometries.length} geometrier finns redan i dokumentet`;
 
   const selectedGeometryUuids = buildHighlightedGeometryUuids({
     isLinking,
@@ -378,7 +361,6 @@ export const GeometryPanel: React.FC = () => {
       visibleGeometries,
       previousFocusedGeometryUuid: expandedGeoUuid,
       allowVisiblePreviousFocus: !didTagChange,
-      prioritizeFirstVisibleLinked: activeMainMode === 'gml' && gmlViewMode === 'preview',
     });
 
     if (focusGeoId) {
@@ -407,7 +389,6 @@ export const GeometryPanel: React.FC = () => {
     focusLinkedGeometryIdsByTagUuid,
     activeTypeFilters,
     activeMainMode,
-    gmlViewMode,
     visibleGeometries,
     filteredGeometries,
     isLinking,
@@ -506,59 +487,44 @@ export const GeometryPanel: React.FC = () => {
             </p>
           </div>
 
-          <div className="flex items-center gap-1 p-0.5 rounded-lg border border-gray-200 bg-gray-50">
-            <button
-              onClick={() => setMapMainMode('json')}
-              className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
-                activeMainMode === 'json'
-                  ? 'bg-white text-blue-700 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
-              }`}
-              title="Visa importerad JSON-geometri"
-            >
-              Tillgängliga geometrier
-            </button>
-            <button
-              onClick={() => setMapMainMode('gml')}
-              disabled={isLinking}
-              className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
-                activeMainMode === 'gml'
-                  ? 'bg-white text-orange-700 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-700'
-              } disabled:opacity-50 disabled:cursor-not-allowed`}
-              title={isLinking ? 'Länkning sker mot JSON-lagret' : 'Visa GML-lager'}
-            >
-              Geometrier i dokument
-            </button>
+          <div className="flex items-center gap-1">
+            {shouldShowAvailableGeometries && (
+              <button
+                onClick={() => setMapMainMode('json')}
+                className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
+                  activeMainMode === 'json'
+                    ? 'border border-blue-100 bg-blue-50 text-blue-700'
+                    : 'border border-gray-200 bg-white text-gray-600 hover:text-gray-800 hover:bg-gray-50'
+                }`}
+                title="Visa importerad JSON-geometri"
+              >
+                Tillgängliga geometrier
+              </button>
+            )}
+            {shouldShowDocumentCheck && (
+              <button
+                onClick={() => setMapMainMode('gml')}
+                disabled={isLinking || importedDocxGeometries.length === 0}
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-xs font-medium transition-colors ${
+                  activeMainMode === 'gml'
+                    ? 'border-gray-300 bg-gray-100 text-gray-700'
+                    : 'border-gray-200 bg-white text-gray-600 hover:text-gray-800 hover:bg-gray-50'
+                } disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:text-gray-600`}
+                title={
+                  isLinking
+                    ? 'Länkning sker mot JSON-lagret'
+                    : 'Kontrollera geometrier i importerad DOCX'
+                }
+              >
+                <svg className="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M9 12l2 2 4-4m5 2a8 8 0 11-16 0 8 8 0 0116 0z" />
+                </svg>
+                Dokumentkontroll
+              </button>
+            )}
           </div>
         </div>
-
-        {activeMainMode === 'gml' && (
-          <div className="flex items-center gap-1 p-0.5 rounded-lg border border-orange-200 bg-orange-50/60">
-            <button
-              onClick={() => setGmlViewMode('preview')}
-              className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
-                gmlViewMode === 'preview'
-                  ? 'bg-white text-orange-700 shadow-sm'
-                  : 'text-orange-500 hover:text-orange-700'
-              }`}
-              title="Visa live exportpreview från JSON-länkning"
-            >
-              Preview
-            </button>
-            <button
-              onClick={() => setGmlViewMode('imported_docx')}
-              className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
-                gmlViewMode === 'imported_docx'
-                  ? 'bg-white text-orange-700 shadow-sm'
-                  : 'text-orange-500 hover:text-orange-700'
-              }`}
-              title="Visa GML som importerats från DOCX"
-            >
-              Imported DOCX
-            </button>
-          </div>
-        )}
 
         {activeMainMode === 'json' && (
           <div className="px-2.5 py-1.5 rounded-lg border border-blue-100 bg-blue-50/70">
@@ -910,8 +876,6 @@ export const GeometryPanel: React.FC = () => {
                       {linkedTags.map((tag) => {
                         const isExplicitLink = (tag.geometryIds ?? []).includes(geo.uuid);
                         const canUnlink = activeMainMode === 'json' && isExplicitLink;
-                        const isPreviewVirtualLink =
-                          activeMainMode === 'gml' && gmlViewMode === 'preview' && !isExplicitLink;
                         return (
                           <li
                             key={tag.uuid}
@@ -931,7 +895,7 @@ export const GeometryPanel: React.FC = () => {
                             </span>
                             {!isExplicitLink && (
                               <span className="text-[10px] text-orange-500 font-medium">
-                                {isPreviewVirtualLink ? 'Preview' : 'Länk'}
+                                Länk
                               </span>
                             )}
                             <button
@@ -946,9 +910,7 @@ export const GeometryPanel: React.FC = () => {
                               title={
                                 canUnlink
                                   ? 'Avlänka'
-                                  : isPreviewVirtualLink
-                                    ? 'Visas via exportpreview'
-                                    : 'Redigera länkar i JSON-läge'
+                                  : 'Redigera länkar i JSON-läge'
                               }
                             >
                               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">

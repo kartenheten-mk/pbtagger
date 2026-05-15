@@ -87,6 +87,14 @@ function makeGeometry(uuid: string, name: string): Geometry {
   };
 }
 
+function makeDocxGmlGeometry(uuid: string, name: string): Geometry {
+  return {
+    ...makeGeometry(uuid, name),
+    source: 'docx_gml',
+    featureType: 'planbeskrivning',
+  };
+}
+
 function makeTag(overrides: Partial<Tag> = {}): Tag {
   return {
     uuid: 'tag-1',
@@ -140,6 +148,10 @@ function hasExactText(expected: string) {
   return (_: string, element: Element | null) =>
     element?.textContent === expected &&
     Array.from(element.children).every((child) => child.textContent !== expected);
+}
+
+function openDocumentGeometryCheck() {
+  fireEvent.click(screen.getByRole('button', { name: 'Dokumentkontroll' }));
 }
 
 describe('GeometryPanel unlinked geometry selection', () => {
@@ -217,6 +229,8 @@ describe('GeometryPanel unlinked geometry selection', () => {
 
     expect(screen.getByText(hasExactText('2 av 3 geometrier är länkade'))).toBeTruthy();
     expect(screen.getByText(hasExactText('JSON · 3 visade'))).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Fler geometrier' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Dokumentkontroll' })).toBeNull();
     expect(screen.queryByText('GML PREVIEW')).toBeNull();
     expect(screen.queryByText('GML DOCX')).toBeNull();
     expect(container.textContent).not.toContain('Delta');
@@ -225,41 +239,51 @@ describe('GeometryPanel unlinked geometry selection', () => {
     expect(container.textContent).not.toContain('Preview-GML');
   });
 
-  it('hides the JSON linked summary in GML mode while keeping GML header controls intact', () => {
+  it('hides the JSON linked summary in document-check mode without preview controls', () => {
     resetStore(
       [
-        makeGeometry('geo-a', 'Linked A'),
-        makeGeometry('geo-b', 'Linked B'),
+        makeDocxGmlGeometry('docx-1', 'Imported A'),
       ],
       {
-        tags: [makeTag({ geometryIds: ['geo-a'] })],
+        tags: [makeTag({ geometryIds: ['docx-1'] })],
       }
     );
 
     render(<GeometryPanel />);
 
-    expect(screen.getByText(hasExactText('1 av 2 geometrier är länkade'))).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Tillgängliga geometrier' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Dokumentkontroll' })).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Geometrier i dokument' }));
-
-    expect(screen.queryByText(hasExactText('1 av 2 geometrier är länkade'))).toBeNull();
-    expect(screen.getByRole('button', { name: 'Preview' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Imported DOCX' })).toBeTruthy();
+    expect(screen.queryByText(hasExactText('0 av 0 geometrier är länkade'))).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Preview' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Imported DOCX' })).toBeNull();
     expect(
-      screen.getByText(hasExactText('1 geometrier kommer att exporteras till dokumentet'))
+      screen.getByText(hasExactText('1 geometrier finns redan i dokumentet'))
     ).toBeTruthy();
   });
 
-  it('shows imported-docx header copy when using the imported GML view', () => {
+  it('auto-selects document-check mode when only imported DOCX GML exists', () => {
+    resetStore([
+      makeDocxGmlGeometry('docx-1', 'Imported A'),
+    ]);
+
+    render(<GeometryPanel />);
+
+    expect(screen.queryByRole('button', { name: 'Tillgängliga geometrier' })).toBeNull();
+    expect(screen.queryByText(hasExactText('0 av 0 geometrier är länkade'))).toBeNull();
+    expect(screen.getByText(hasExactText('1 geometrier finns redan i dokumentet'))).toBeTruthy();
+    expect(screen.getByText('map-select-docx-1')).toBeTruthy();
+  });
+
+  it('shows imported-docx header copy when using document-check mode', () => {
     resetStore(
       [
-        makeGeometry('geo-a', 'Linked A'),
-        makeGeometry('geo-b', 'Linked B'),
+        makeDocxGmlGeometry('docx-1', 'Imported A'),
       ],
       {
         tags: [
           makeTag({
-            geometryIds: ['geo-a', 'docx-1'],
+            geometryIds: ['docx-1'],
           }),
         ],
       }
@@ -267,32 +291,30 @@ describe('GeometryPanel unlinked geometry selection', () => {
 
     render(<GeometryPanel />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Geometrier i dokument' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Imported DOCX' }));
+    openDocumentGeometryCheck();
 
     expect(
-      screen.getByText(hasExactText('0 geometrier finns redan i dokumentet'))
+      screen.getByText(hasExactText('1 geometrier finns redan i dokumentet'))
     ).toBeTruthy();
   });
 
   it('uses the same GML copy in the maximized modal header', () => {
     resetStore(
       [
-        makeGeometry('geo-a', 'Linked A'),
-        makeGeometry('geo-b', 'Linked B'),
+        makeDocxGmlGeometry('docx-1', 'Imported A'),
       ],
       {
-        tags: [makeTag({ geometryIds: ['geo-a'] })],
+        tags: [makeTag({ geometryIds: ['docx-1'] })],
       }
     );
 
     render(<GeometryPanel />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Geometrier i dokument' }));
+    openDocumentGeometryCheck();
     fireEvent.click(screen.getByTitle('Maximera karta'));
 
     expect(
-      screen.getAllByText(hasExactText('1 geometrier kommer att exporteras till dokumentet'))
+      screen.getAllByText(hasExactText('1 geometrier finns redan i dokumentet'))
     ).toHaveLength(2);
   });
 });
