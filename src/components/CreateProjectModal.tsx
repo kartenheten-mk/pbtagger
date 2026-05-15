@@ -27,7 +27,7 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
         const file = e.target.files?.[0];
         if (file) {
             if (!file.name.toLowerCase().endsWith('.docx')) {
-                setError('Only .docx files are supported for the document.');
+                setError('Endast .docx-filer stöds för dokumentet.');
                 return;
             }
             setDocxFile(file);
@@ -39,7 +39,7 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
         const file = e.target.files?.[0];
         if (file) {
             if (!file.name.toLowerCase().endsWith('.json')) {
-                setError('Only .json files are supported for geometry.');
+                setError('Endast .json-filer stöds för geometri.');
                 return;
             }
             setJsonFile(file);
@@ -50,7 +50,7 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         if (!docxFile) {
-            setError('A .docx file is required.');
+            setError('En .docx-fil krävs.');
             return;
         }
         onSubmit(projectName.trim(), docxFile, jsonFile);
@@ -60,7 +60,7 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-sm">
             <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col">
                 <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-                    <h2 className="text-xl font-semibold text-gray-800">Create New Project</h2>
+                    <h2 className="text-xl font-semibold text-gray-800">Skapa nytt projekt</h2>
                     <button
                         onClick={onClose}
                         className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
@@ -77,23 +77,23 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
                         {/* Project Name */}
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">
-                                Project Name <span className="text-gray-400 font-normal">(optional)</span>
+                                Projektnamn <span className="text-gray-400 font-normal">(valfritt)</span>
                             </label>
                             <input
                                 type="text"
                                 value={projectName}
                                 onChange={(e) => setProjectName(e.target.value)}
-                                placeholder="Enter project name..."
+                                placeholder="Ange projektnamn..."
                                 className="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-sm"
                                 disabled={isLoading}
                             />
-                            <p className="text-xs text-gray-500 mt-1">If left blank, the .docx filename will be used.</p>
+                            <p className="text-xs text-gray-500 mt-1">Om fältet lämnas tomt används .docx-filens namn.</p>
                         </div>
 
                         {/* Docx File Upload */}
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">
-                                Document File <span className="text-red-500">*</span>
+                                Dokumentfil <span className="text-red-500">*</span>
                             </label>
                             <div
                                 onClick={() => docxInputRef.current?.click()}
@@ -117,7 +117,7 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
                                     </div>
                                 ) : (
                                     <div className="text-gray-500">
-                                        <p className="text-sm font-medium text-gray-700">Click to select .docx file</p>
+                                        <p className="text-sm font-medium text-gray-700">Klicka för att välja .docx-fil</p>
                                     </div>
                                 )}
                             </div>
@@ -126,7 +126,7 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
                         {/* Json File Upload */}
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">
-                                Geometry File <span className="text-gray-400 font-normal">(optional)</span>
+                                Geometrifil <span className="text-gray-400 font-normal">(valfritt)</span>
                             </label>
                             <div
                                 onClick={() => jsonInputRef.current?.click()}
@@ -150,7 +150,7 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
                                     </div>
                                 ) : (
                                     <div className="text-gray-500">
-                                        <p className="text-sm font-medium text-gray-700">Click to select .json file</p>
+                                        <p className="text-sm font-medium text-gray-700">Klicka för att välja .json-fil</p>
                                     </div>
                                 )}
                             </div>
@@ -174,7 +174,7 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
                         disabled={isLoading}
                         className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200 bg-gray-100 rounded-lg transition-colors"
                     >
-                        Cancel
+                        Avbryt
                     </button>
                     <button
                         onClick={handleSubmit}
@@ -184,10 +184,10 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
                         {isLoading ? (
                             <>
                                 <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
-                                <span>Creating...</span>
+                                <span>Skapar...</span>
                             </>
                         ) : (
-                            'Create Project'
+                            'Skapa projekt'
                         )}
                     </button>
                 </div>

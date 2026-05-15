@@ -15,7 +15,7 @@
  *  └───────────┴──────────────────────────┴───────────────┘
  */
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
 import { DocumentList } from './components/DocumentList';
@@ -40,8 +40,38 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [parseError, setParseError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [projectMenuOpen, setProjectMenuOpen] = useState(false);
 
-  const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const projectMenuButtonRef = useRef<HTMLButtonElement>(null);
+  const projectMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!projectMenuOpen) return;
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setProjectMenuOpen(false);
+    };
+
+    const onMouse = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (
+        projectMenuRef.current &&
+        !projectMenuRef.current.contains(target) &&
+        projectMenuButtonRef.current &&
+        !projectMenuButtonRef.current.contains(target)
+      ) {
+        setProjectMenuOpen(false);
+      }
+    };
+
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('mousedown', onMouse);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('mousedown', onMouse);
+    };
+  }, [projectMenuOpen]);
 
   const handleImportProject = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -63,7 +93,7 @@ export default function App() {
       );
     } catch (err) {
       console.error('Failed to import project:', err);
-      setParseError(err instanceof Error ? err.message : 'Failed to import the project.');
+      setParseError(err instanceof Error ? err.message : 'Kunde inte importera projektet.');
     } finally {
       setIsLoading(false);
       // reset file input
@@ -108,7 +138,7 @@ export default function App() {
             } catch (err) {
                 console.error('Failed to parse .json:', err);
                 // We don't abort document loading if JSON fails, but we show a warning
-                setParseError('Project created, but failed to load geometry file. You can try adding it again later.');
+                setParseError('Projektet skapades, men geometrifilen kunde inte läsas in. Du kan försöka lägga till den igen senare.');
             }
         }
 
@@ -118,7 +148,7 @@ export default function App() {
         setParseError(
           err instanceof Error
             ? err.message
-            : 'Failed to parse the document. Is it a valid .docx file?'
+            : 'Kunde inte läsa dokumentet. Är det en giltig .docx-fil?'
         );
       } finally {
         setIsLoading(false);
@@ -147,30 +177,12 @@ export default function App() {
                 </div>
                 <h1 className="text-3xl font-bold text-gray-800">Planbeskrivning Tagger</h1>
                 <p className="text-gray-500 text-base mt-2 max-w-lg mx-auto">
-                    Tag and link planning documents to spatial geometries.
+                    Tagga och länka planbeskrivningar till geometrier.
                 </p>
             </div>
 
-            {/* Action Buttons */}
-            <div className="flex flex-col sm:flex-row gap-6 w-full max-w-2xl justify-center">
-                {/* Create Project Button */}
-                <button
-                    onClick={() => setIsModalOpen(true)}
-                    className="flex-1 group relative flex flex-col items-center justify-center bg-white border-2 border-dashed border-gray-300 rounded-2xl p-8 hover:border-blue-400 hover:bg-blue-50/50 transition-all focus:outline-none focus:ring-4 focus:ring-blue-500/20"
-                >
-                    <div className="w-16 h-16 bg-blue-50 text-blue-500 rounded-full flex items-center justify-center mb-4 group-hover:bg-blue-100 transition-colors shadow-sm">
-                        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                        </svg>
-                    </div>
-                    <h2 className="text-xl font-semibold text-gray-800 group-hover:text-blue-700 transition-colors">Create New Project</h2>
-                    <p className="text-sm text-gray-500 mt-2 text-center">
-                        Upload your .docx file to get started
-                    </p>
-                </button>
-
-                {/* Import Project Button */}
-                <div className="flex-1 flex">
+            {/* Project action */}
+            <div className="relative w-full max-w-md">
                     <input
                         type="file"
                         accept=".pbproject"
@@ -179,28 +191,91 @@ export default function App() {
                         onChange={handleImportProject}
                     />
                     <button
-                        onClick={() => fileInputRef.current?.click()}
+                        ref={projectMenuButtonRef}
+                        onClick={() => setProjectMenuOpen((open) => !open)}
                         disabled={isLoading}
-                        className="w-full group relative flex flex-col items-center justify-center bg-white border-2 border-dashed border-gray-300 rounded-2xl p-8 hover:border-green-400 hover:bg-green-50/50 transition-all focus:outline-none focus:ring-4 focus:ring-green-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                        aria-haspopup="menu"
+                        aria-expanded={projectMenuOpen}
+                        className="w-full group relative flex flex-col items-center justify-center bg-white border-2 border-dashed border-gray-300 rounded-2xl p-8 hover:border-blue-400 hover:bg-blue-50/50 transition-all focus:outline-none focus:ring-4 focus:ring-blue-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         {isLoading ? (
                             <div className="w-16 h-16 rounded-full flex items-center justify-center mb-4">
-                                <div className="w-8 h-8 border-4 border-green-500/30 border-t-green-500 rounded-full animate-spin" />
+                                <div className="w-8 h-8 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin" />
                             </div>
                         ) : (
-                            <div className="w-16 h-16 bg-green-50 text-green-500 rounded-full flex items-center justify-center mb-4 group-hover:bg-green-100 transition-colors shadow-sm">
+                            <div className="w-16 h-16 bg-blue-50 text-blue-500 rounded-full flex items-center justify-center mb-4 group-hover:bg-blue-100 transition-colors shadow-sm">
                                 <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                                 </svg>
                             </div>
                         )}
-                        <h2 className="text-xl font-semibold text-gray-800 group-hover:text-green-700 transition-colors">Import Project</h2>
+                        <div className="flex items-center gap-2">
+                            <h2 className="text-xl font-semibold text-gray-800 group-hover:text-blue-700 transition-colors">Skapa projekt</h2>
+                            <svg
+                                className={`w-4 h-4 text-gray-400 transition-transform ${projectMenuOpen ? 'rotate-180' : ''}`}
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                            >
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+                            </svg>
+                        </div>
                         <p className="text-sm text-gray-500 mt-2 text-center">
-                            Load a previously saved .pbproject file
+                            Starta nytt eller importera ett sparat projekt
                         </p>
                     </button>
+
+                    {projectMenuOpen && (
+                        <div
+                            ref={projectMenuRef}
+                            role="menu"
+                            className="absolute left-0 right-0 top-full mt-3 bg-white border border-gray-200 rounded-2xl shadow-xl z-40 overflow-hidden"
+                            style={{ animation: 'fadeSlideDown 0.15s ease-out' }}
+                        >
+                            <button
+                                type="button"
+                                role="menuitem"
+                                onClick={() => {
+                                    setProjectMenuOpen(false);
+                                    setIsModalOpen(true);
+                                }}
+                                className="w-full flex items-start gap-3 px-4 py-4 text-left hover:bg-blue-50 focus:outline-none focus:bg-blue-50 transition-colors"
+                            >
+                                <div className="w-9 h-9 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center flex-shrink-0">
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                    </svg>
+                                </div>
+                                <div className="min-w-0">
+                                    <p className="text-sm font-semibold text-blue-700">Skapa nytt projekt</p>
+                                    <p className="text-xs text-gray-500 mt-0.5">Ladda upp en .docx-fil och börja tagga.</p>
+                                </div>
+                            </button>
+
+                            <div className="border-t border-gray-100" />
+
+                            <button
+                                type="button"
+                                role="menuitem"
+                                onClick={() => {
+                                    setProjectMenuOpen(false);
+                                    fileInputRef.current?.click();
+                                }}
+                                className="w-full flex items-start gap-3 px-4 py-4 text-left hover:bg-green-50 focus:outline-none focus:bg-green-50 transition-colors"
+                            >
+                                <div className="w-9 h-9 rounded-lg bg-green-100 text-green-600 flex items-center justify-center flex-shrink-0">
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                                    </svg>
+                                </div>
+                                <div className="min-w-0">
+                                    <p className="text-sm font-semibold text-green-700">Importera existerande projekt</p>
+                                    <p className="text-xs text-gray-500 mt-0.5">Öppna en tidigare sparad .pbproject-fil.</p>
+                                </div>
+                            </button>
+                        </div>
+                    )}
                 </div>
-            </div>
 
             <div className="w-full mt-12 border-t border-gray-200 pt-8">
                 <DocumentList />

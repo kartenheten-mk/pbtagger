@@ -43,7 +43,7 @@ export const DocumentList: React.FC = () => {
 
     const handleDelete = async (e: React.MouseEvent, id: string, fileName: string) => {
         e.stopPropagation();
-        if (!window.confirm(`Delete "${fileName}" and all its tags? This cannot be undone.`)) return;
+        if (!window.confirm(`Ta bort "${fileName}" och alla taggar? Det går inte att ångra.`)) return;
         try {
             await deleteDocument(id);
             setDocs((prev) => prev.filter((d) => d.id !== id));
@@ -73,7 +73,7 @@ export const DocumentList: React.FC = () => {
 
     if (docs.length === 0) return (
         <div className="w-full text-center py-12 text-gray-500">
-            No projects found. Create one to get started!
+            Inga projekt hittades. Skapa ett för att komma igång!
         </div>
     );
 
@@ -86,7 +86,7 @@ export const DocumentList: React.FC = () => {
                         d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
                 </svg>
                 <h2 className="text-base font-semibold text-gray-700 tracking-wide">
-                    Project Gallery
+                    Projektgalleri
                 </h2>
             </div>
 
@@ -99,13 +99,13 @@ export const DocumentList: React.FC = () => {
                     >
                         {/* Hover Overlay for stats */}
                         <div className="absolute inset-0 bg-white/95 z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-200 p-4 flex flex-col justify-center items-center text-center pointer-events-none">
-                            <p className="text-xs text-gray-500 font-medium uppercase tracking-wider mb-2">Project Stats</p>
+                            <p className="text-xs text-gray-500 font-medium uppercase tracking-wider mb-2">Projektstatistik</p>
                             <div className="space-y-1">
-                                <p className="text-sm text-gray-700"><span className="font-semibold text-gray-900">{doc.tagCount}</span> Tags</p>
-                                <p className="text-sm text-gray-700"><span className="font-semibold text-gray-900">{doc.geometryCount || 0}</span> Geometries</p>
+                                <p className="text-sm text-gray-700"><span className="font-semibold text-gray-900">{doc.tagCount}</span> taggar</p>
+                                <p className="text-sm text-gray-700"><span className="font-semibold text-gray-900">{doc.geometryCount || 0}</span> geometrier</p>
                             </div>
                             <div className="mt-4 text-xs text-gray-400">
-                                Created: {formatDate(doc.createdAt)}
+                                Skapat: {formatDate(doc.createdAt)}
                             </div>
                         </div>
 
@@ -153,7 +153,7 @@ export const DocumentList: React.FC = () => {
                         <button
                             onClick={(e) => handleDelete(e, doc.id, doc.fileName)}
                             className="absolute top-2 right-2 z-20 p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
-                            title="Delete project"
+                            title="Ta bort projekt"
                         >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
