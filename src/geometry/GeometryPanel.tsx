@@ -968,15 +968,6 @@ export const GeometryPanel: React.FC = () => {
         </div>
       )}
 
-      {/* ── Footer (normal mode) ────────────────────────────────────────── */}
-      {!isLinking && (
-        <div className="px-4 py-2 border-t border-gray-100 bg-gray-50">
-          <p className="text-xs text-gray-400 text-center">
-            OpenLayers · OSM · EPSG:3009→4326
-          </p>
-        </div>
-      )}
-
       {/* ── Maximized map modal ──────────────────────────────────────────── */}
       {isMapMaximized && createPortal(
         <div className="fixed inset-0 z-[1000] flex flex-col bg-black/60 backdrop-blur-sm">
@@ -1114,8 +1105,8 @@ export const GeometryPanel: React.FC = () => {
               })()}
             </div>
 
-            {/* Modal footer / linking action bar */}
-            {isLinking ? (
+            {/* Modal linking action bar */}
+            {isLinking && (
               <div className="px-4 py-3 border-t border-gray-100 bg-white flex-shrink-0">
                 <div className="flex items-center gap-3 px-4 py-2.5 bg-gray-50 rounded-xl border border-gray-200">
                   <div className="flex-1 min-w-0">
@@ -1139,12 +1130,6 @@ export const GeometryPanel: React.FC = () => {
                     Länka
                   </button>
                 </div>
-              </div>
-            ) : (
-              <div className="px-4 py-2 border-t border-gray-100 bg-gray-50 flex-shrink-0">
-                <p className="text-xs text-gray-400 text-center">
-                  OpenLayers · OSM · EPSG:3009→4326
-                </p>
               </div>
             )}
           </div>
