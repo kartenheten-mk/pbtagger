@@ -736,7 +736,7 @@ export function buildDefaultConfig(
     versionGiltigFran: now,
     detaljplansreferens: detaljplansreferens ?? '',
     programvara: 'PB Tagger',
-    programvaruversion: '0.0.0',
+    programvaruversion: '0.0.1',
     arkividentitetKommun: '',
   };
 }

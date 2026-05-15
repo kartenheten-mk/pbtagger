@@ -166,8 +166,8 @@ function extractConfig(root: Element): PlanbeskrivningConfig {
       ? getChildText(objektmetadata, 'programvara') || 'PB Tagger'
       : 'PB Tagger',
     programvaruversion: objektmetadata
-      ? getChildText(objektmetadata, 'programvaruversion') || '0.0.0'
-      : '0.0.0',
+      ? getChildText(objektmetadata, 'programvaruversion') || '0.0.1'
+      : '0.0.1',
     arkividentitetKommun: getChildText(root, 'arkividentitetKommun') || '',
   };
 }
