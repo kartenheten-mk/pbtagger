@@ -295,8 +295,6 @@ export const GeometryPanel: React.FC = () => {
     }
     return true;
   });
-  const gmlHeaderSummary = `${filteredGeometries.length} geometrier finns redan i dokumentet`;
-
   const selectedGeometryUuids = buildHighlightedGeometryUuids({
     isLinking,
     manualFocusedGeometryUuid,
@@ -491,11 +489,6 @@ export const GeometryPanel: React.FC = () => {
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <h2 className="text-sm font-semibold text-gray-700 truncate">Karta</h2>
-            <p className="text-xs text-gray-400 mt-0.5">
-              {activeMainMode === 'json'
-                ? `JSON · ${filteredGeometries.length} visade`
-                : gmlHeaderSummary}
-            </p>
           </div>
 
           <div className="flex items-center gap-1">
@@ -980,11 +973,6 @@ export const GeometryPanel: React.FC = () => {
                 <span className="text-base">🗺</span>
                 <div>
                   <h2 className="text-sm font-semibold text-gray-700">Karta</h2>
-                  <p className="text-xs text-gray-400">
-                    {activeMainMode === 'json'
-                      ? `JSON · ${filteredGeometries.length} geometrier visade`
-                      : gmlHeaderSummary}
-                  </p>
                 </div>
               </div>
               {isLinking && (
