@@ -3,11 +3,16 @@ import type { Category, Tag, Geometry } from '../../types';
 import { TagBadge } from '../TagBadge';
 import { getCategoryLabel } from '../../data/categoryUtils';
 
+export interface LinkedGeometryView {
+  geometry: Geometry;
+  canUnlink: boolean;
+}
+
 export interface TagListItemProps {
   tag: Tag;
   category?: Category;
-  /** All geometries linked to this tag */
-  linkedGeometries: Geometry[];
+  /** Geometries to show as linked in the sidebar */
+  linkedGeometries: LinkedGeometryView[];
   isSelected: boolean;
   onSelect: () => void;
   onRemove: () => void;
@@ -37,8 +42,8 @@ export const TagListItem: React.FC<TagListItemProps> = ({
   const hasGeometries = linkedGeometries.length > 0;
 
   // Show first 2 chips inline, rest collapsed
-  const visibleGeos = linkedGeometries.slice(0, 2);
-  const hiddenCount = linkedGeometries.length - visibleGeos.length;
+  const visibleLinks = linkedGeometries.slice(0, 2);
+  const hiddenCount = linkedGeometries.length - visibleLinks.length;
 
   return (
     <li
@@ -104,27 +109,30 @@ export const TagListItem: React.FC<TagListItemProps> = ({
           <div className="space-y-1">
             {/* Linked geometry chips */}
             <div className="flex flex-wrap gap-1">
-              {visibleGeos.map((geo) => (
+              {visibleLinks.map(({ geometry: geo, canUnlink }) => (
                 <div
                   key={geo.uuid}
                   className="flex items-center gap-1 px-2 py-0.5 bg-green-50 border border-green-200 rounded-full max-w-full"
+                  title={canUnlink ? geo.name : `${geo.name} (importerad DOCX-GML)`}
                 >
                   <span className="w-1.5 h-1.5 rounded-full bg-green-400 flex-shrink-0" />
                   <span className="text-xs text-green-700 font-medium truncate max-w-[120px]">
                     {geo.name}
                   </span>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onUnlinkGeometry(geo.uuid);
-                    }}
-                    className="text-green-300 hover:text-red-400 transition-colors flex-shrink-0 ml-0.5"
-                    title={`Avlänka ${geo.name}`}
-                  >
-                    <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
+                  {canUnlink && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onUnlinkGeometry(geo.uuid);
+                      }}
+                      className="text-green-300 hover:text-red-400 transition-colors flex-shrink-0 ml-0.5"
+                      title={`Avlänka ${geo.name}`}
+                    >
+                      <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  )}
                 </div>
               ))}
               {hiddenCount > 0 && (

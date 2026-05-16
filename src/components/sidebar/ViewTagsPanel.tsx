@@ -1,6 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import type { Tema, Tag, Category, Geometry } from '../../types';
-import { TagListItem } from './TagListItem';
+import { splitGeometriesBySource } from '../../geometry/geometrySource';
+import { buildMirroredDisplayLinks } from '../../geometry/tagLinkMirror';
+import { TagListItem, type LinkedGeometryView } from './TagListItem';
 import { hexToRgba } from './utils';
 
 export interface ViewTagsPanelProps {
@@ -15,6 +17,57 @@ export interface ViewTagsPanelProps {
   onLinkGeometry: (tagUuid: string) => void;
   /** Unlink a specific geometry UUID from a tag */
   onUnlinkGeometry: (tagUuid: string, geometryUuid: string) => void;
+}
+
+interface BuildLinkedGeometryViewsArgs {
+  tag: Tag;
+  geometryByUuid: Map<string, Geometry>;
+  jsonGeometryIdSet: Set<string>;
+  docxGmlGeometryIdSet: Set<string>;
+  mirroredDocxGeometryIds: Set<string>;
+}
+
+export function buildLinkedGeometryViewsForSidebar({
+  tag,
+  geometryByUuid,
+  jsonGeometryIdSet,
+  docxGmlGeometryIdSet,
+  mirroredDocxGeometryIds,
+}: BuildLinkedGeometryViewsArgs): LinkedGeometryView[] {
+  const explicitGeometryIds = tag.geometryIds ?? [];
+
+  const buildViews = (ids: string[], canUnlink: boolean): LinkedGeometryView[] => {
+    const seen = new Set<string>();
+    const views: LinkedGeometryView[] = [];
+
+    for (const id of ids) {
+      if (seen.has(id)) continue;
+      const geometry = geometryByUuid.get(id);
+      if (!geometry) continue;
+
+      seen.add(id);
+      views.push({ geometry, canUnlink });
+    }
+
+    return views;
+  };
+
+  const explicitJsonGeometryIds = explicitGeometryIds.filter((id) =>
+    jsonGeometryIdSet.has(id)
+  );
+  if (explicitJsonGeometryIds.length > 0) {
+    return buildViews(explicitJsonGeometryIds, true);
+  }
+
+  const explicitLoadedGeometryViews = buildViews(explicitGeometryIds, true);
+  if (explicitLoadedGeometryViews.length > 0) {
+    return explicitLoadedGeometryViews;
+  }
+
+  const mirroredDocxIds = Array.from(mirroredDocxGeometryIds).filter((id) =>
+    docxGmlGeometryIdSet.has(id)
+  );
+  return buildViews(mirroredDocxIds, false);
 }
 
 export const ViewTagsPanel: React.FC<ViewTagsPanelProps> = ({
@@ -32,6 +85,31 @@ export const ViewTagsPanel: React.FC<ViewTagsPanelProps> = ({
   const [filterTemaId, setFilterTemaId] = useState<string>('all');
   const [isFilterExpanded, setIsFilterExpanded] = useState(true);
   const listContainerRef = useRef<HTMLDivElement>(null);
+
+  const { json: jsonGeometries, docxGml: docxGmlGeometries } = useMemo(
+    () => splitGeometriesBySource(geometries),
+    [geometries]
+  );
+
+  const geometryByUuid = useMemo(
+    () => new Map(geometries.map((geometry) => [geometry.uuid, geometry])),
+    [geometries]
+  );
+
+  const jsonGeometryIdSet = useMemo(
+    () => new Set(jsonGeometries.map((geometry) => geometry.uuid)),
+    [jsonGeometries]
+  );
+
+  const docxGmlGeometryIdSet = useMemo(
+    () => new Set(docxGmlGeometries.map((geometry) => geometry.uuid)),
+    [docxGmlGeometries]
+  );
+
+  const mirroredDisplayLinksByTagUuid = useMemo(
+    () => buildMirroredDisplayLinks(tags, jsonGeometryIdSet, docxGmlGeometries),
+    [tags, jsonGeometryIdSet, docxGmlGeometries]
+  );
 
   // ── Auto-scroll to selected tag ──────────────────────────────────────────
   useEffect(() => {
@@ -171,9 +249,15 @@ export const ViewTagsPanel: React.FC<ViewTagsPanelProps> = ({
         ) : (
           <ul className="divide-y divide-gray-50 py-1">
             {filteredTags.map((tag) => {
-              const linkedGeometries = (tag.geometryIds ?? [])
-                .map((gid) => geometries.find((g) => g.uuid === gid))
-                .filter(Boolean) as import('../../types').Geometry[];
+              const linkedGeometries = buildLinkedGeometryViewsForSidebar({
+                tag,
+                geometryByUuid,
+                jsonGeometryIdSet,
+                docxGmlGeometryIdSet,
+                mirroredDocxGeometryIds:
+                  mirroredDisplayLinksByTagUuid.get(tag.uuid) ?? new Set<string>(),
+              });
+
               return (
                 <TagListItem
                   key={tag.uuid}
