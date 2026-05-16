@@ -38,26 +38,97 @@
 }
 
 .ProseMirror .pb-toc-item {
-  margin-bottom: 0.2rem;
-  color: #1f2937;
+  margin-bottom: 0.16rem;
+  color: #111827;
+  line-height: 1.35;
 }
 
 .ProseMirror .pb-toc-item.pb-toc-page-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  column-gap: 0.75rem;
+  display: flex;
+  gap: 0.35rem;
   align-items: baseline;
+  padding-left: calc(var(--pb-toc-level, 0) * 1.85rem);
 }
 
-.ProseMirror .pb-toc-main {
+.ProseMirror .pb-toc-marker {
+  flex: 0 0 3.15rem;
+  color: #000;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.ProseMirror .pb-toc-no-marker .pb-toc-marker {
+  color: transparent;
+}
+
+.ProseMirror .pb-toc-entry-title {
   min-width: 0;
+  color: #000;
+  overflow-wrap: anywhere;
+}
+
+.ProseMirror .pb-toc-leader {
+  flex: 1 1 1.5rem;
+  min-width: 1.5rem;
+  border-bottom: 2px dotted #000;
+  transform: translateY(-0.25em);
 }
 
 .ProseMirror .pb-toc-page {
+  flex: 0 0 auto;
   white-space: nowrap;
   text-align: right;
-  color: #334155;
+  color: #000;
   font-variant-numeric: tabular-nums;
+}
+
+.ProseMirror .pb-heading-layout {
+  display: grid;
+  grid-template-columns: 0 5.75rem 0 minmax(0, 1fr);
+  align-items: baseline;
+  justify-content: start;
+  color: #000;
+  text-align: left !important;
+}
+
+.ProseMirror .pb-heading-marker {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.ProseMirror .pb-heading-separator {
+  width: 0;
+  overflow: hidden;
+  white-space: pre;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.ProseMirror .pb-heading-title {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.ProseMirror h1.pb-heading-layout {
+  font-size: 2.15rem;
+  font-weight: 700;
+  margin-top: 1.1em;
+  margin-bottom: 0.45em;
+}
+
+.ProseMirror h1.pb-heading-layout .pb-heading-title {
+  text-transform: uppercase;
+}
+
+.ProseMirror h2.pb-heading-layout {
+  font-size: 1.55rem;
+  font-weight: 700;
+  margin-top: 0.9em;
+  margin-bottom: 0.35em;
+}
+
+.ProseMirror h2.pb-heading-level-2 {
+  font-weight: 600;
 }
 
 .ProseMirror .pb-tab-right-layout {

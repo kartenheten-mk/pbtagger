@@ -17,7 +17,9 @@ import Image from '@tiptap/extension-image';
 import { TagMark } from './extensions/TagMark';
 import { SearchBar } from './SearchBar';
 import { useDocumentStore } from '../store/useDocumentStore';
-import type { Category, DocModel, DocParagraph, Tag, PendingSelection } from '../types';
+import { parseNumberedHeading, type NumberedHeading } from './headingLayout';
+import { buildTocDecorations, type TocEntry } from './tocLayout';
+import type { Category, DocModel, Tag, PendingSelection } from '../types';
 import { getCategoryLabel } from '../data/categoryUtils';
 
 const OBJECT_ALT_PREFIX = '__pb_obj__';
@@ -630,34 +632,43 @@ export const DocViewer: React.FC<DocViewerProps> = ({ docModel, categories }) =>
     const tocDecorations = buildTocDecorations(docModel.paragraphs);
 
     allParaEls.forEach((el, index) => {
+      const paragraph = docModel.paragraphs[index];
       el.classList.remove(
         'pb-toc-title',
         'pb-toc-item',
         'pb-list-item',
         'pb-toc-page-layout',
-        'pb-tab-right-layout'
+        'pb-tab-right-layout',
+        'pb-toc-no-marker',
+        'pb-heading-layout',
+        'pb-heading-level-1',
+        'pb-heading-level-2'
       );
       el.removeAttribute('data-list-marker');
       el.style.removeProperty('--pb-list-level');
+      el.style.removeProperty('--pb-toc-level');
+      delete el.dataset.pbTocLayout;
+      delete el.dataset.pbHeadingLayout;
 
-      alignTabbedParagraph(el);
+      if (!paragraph) return;
 
       if (tocDecorations.titleIndices.has(index)) {
         el.classList.add('pb-toc-title');
       }
 
-      const marker = tocDecorations.itemMarkers.get(index);
-      if (!marker) return;
-
-      const level = Math.max(0, docModel.paragraphs[index]?.listLevel ?? 0);
-      el.classList.add('pb-toc-item', 'pb-list-item');
-      el.style.setProperty('--pb-list-level', String(level));
-      el.setAttribute('data-list-marker', marker);
-
-      // Fallback for ToC lines where a page number exists without an explicit tab run.
-      if (el.dataset.pbTabAligned !== '1') {
-        alignTocPageNumber(el, docModel.paragraphs[index]);
+      const entry = tocDecorations.entries.get(index);
+      if (entry) {
+        renderTocEntry(el, entry);
+        return;
       }
+
+      const heading = parseNumberedHeading(paragraph);
+      if (heading) {
+        renderNumberedHeading(el, heading);
+        return;
+      }
+
+      alignTabbedParagraph(el);
     });
   }, [docModel, tags, showTags, selectedTagUuid]);
 
@@ -1124,52 +1135,77 @@ function hexToRgba(hex: string, alpha: number): string {
 
   return `rgba(${r},${g},${b},${alpha})`;
 }
-function buildTocDecorations(paragraphs: DocParagraph[]): {
-  titleIndices: Set<number>;
-  itemMarkers: Map<number, string>;
-} {
-  const titleIndices = new Set<number>();
-  const itemMarkers = new Map<number, string>();
 
-  for (let i = 0; i < paragraphs.length; i++) {
-    if (!isTocTitle(getParagraphText(paragraphs[i]))) continue;
-
-    titleIndices.add(i);
-
-    const counters: number[] = [];
-    let foundAnyItems = false;
-
-    for (let j = i + 1; j < paragraphs.length; j++) {
-      const para = paragraphs[j];
-      if (para.listLevel === undefined) {
-        if (foundAnyItems) break;
-        continue;
-      }
-
-      foundAnyItems = true;
-      const level = Math.max(0, para.listLevel);
-      counters[level] = (counters[level] ?? 0) + 1;
-      counters.length = level + 1;
-      const marker = counters.map((value) => value || 1).join('.') + '.';
-      itemMarkers.set(j, marker);
-    }
+function renderTocEntry(element: HTMLElement, entry: TocEntry): void {
+  // Keep tagged / interactive paragraphs untouched.
+  if (element.querySelector('.tag-mark, .tag-badge-widget, img, table')) {
+    return;
   }
 
-  return { titleIndices, itemMarkers };
+  element.textContent = '';
+  element.classList.add('pb-toc-item', 'pb-toc-page-layout');
+  element.style.setProperty('--pb-toc-level', String(entry.level));
+  element.dataset.pbTocLayout = '1';
+
+  if (!entry.marker) {
+    element.classList.add('pb-toc-no-marker');
+  }
+
+  const markerSpan = document.createElement('span');
+  markerSpan.className = 'pb-toc-marker';
+  markerSpan.textContent = entry.marker;
+
+  const titleSpan = document.createElement('span');
+  titleSpan.className = 'pb-toc-entry-title';
+  titleSpan.textContent = entry.title;
+
+  const leaderSpan = document.createElement('span');
+  leaderSpan.className = 'pb-toc-leader';
+  leaderSpan.setAttribute('aria-hidden', 'true');
+
+  const pageSpan = document.createElement('span');
+  pageSpan.className = 'pb-toc-page';
+  pageSpan.textContent = entry.page;
+
+  element.appendChild(markerSpan);
+  element.appendChild(titleSpan);
+  element.appendChild(leaderSpan);
+  element.appendChild(pageSpan);
 }
 
-function getParagraphText(para: DocParagraph): string {
-  return para.runs.map((run) => run.text).join('').trim();
-}
+function renderNumberedHeading(element: HTMLElement, heading: NumberedHeading): void {
+  // Keep tagged / interactive headings untouched.
+  if (element.querySelector('.tag-mark, .tag-badge-widget, img, table')) {
+    return;
+  }
 
-function isTocTitle(value: string): boolean {
-  const normalized = value.toLowerCase().replace(/\s+/g, ' ').trim();
-  return (
-    normalized === 'innehallsforteckning' ||
-    normalized === 'innehallsförteckning' ||
-    normalized === 'table of contents' ||
-    normalized === 'contents'
+  element.textContent = '';
+  element.classList.add(
+    'pb-heading-layout',
+    heading.level === 0 ? 'pb-heading-level-1' : 'pb-heading-level-2'
   );
+  element.dataset.pbHeadingLayout = '1';
+
+  const leadingSpan = document.createElement('span');
+  leadingSpan.className = 'pb-heading-separator';
+  leadingSpan.textContent = heading.leadingText;
+
+  const markerSpan = document.createElement('span');
+  markerSpan.className = 'pb-heading-marker';
+  markerSpan.textContent = heading.marker;
+
+  const separatorSpan = document.createElement('span');
+  separatorSpan.className = 'pb-heading-separator';
+  separatorSpan.textContent = heading.separatorText;
+
+  const titleSpan = document.createElement('span');
+  titleSpan.className = 'pb-heading-title';
+  titleSpan.textContent = heading.title;
+
+  element.appendChild(leadingSpan);
+  element.appendChild(markerSpan);
+  element.appendChild(separatorSpan);
+  element.appendChild(titleSpan);
 }
 
 function alignTabbedParagraph(element: HTMLElement): void {
@@ -1212,63 +1248,6 @@ function alignTabbedParagraph(element: HTMLElement): void {
   element.appendChild(rightSpan);
   element.classList.add('pb-tab-right-layout');
   element.dataset.pbTabAligned = '1';
-}
-
-function alignTocPageNumber(element: HTMLElement, paragraph: DocParagraph | undefined): void {
-  if (!paragraph) return;
-
-  if (element.dataset.pbTocPageAligned === '1') {
-    element.classList.add('pb-toc-page-layout');
-    return;
-  }
-
-  // Keep tagged / interactive paragraphs untouched.
-  if (element.querySelector('.tag-mark, .tag-badge-widget, img, table')) {
-    return;
-  }
-
-  const nonEmptyRuns = paragraph.runs
-    .map((run) => run.text)
-    .filter((text) => text.length > 0);
-
-  if (nonEmptyRuns.length < 2) return;
-
-  const pageToken = nonEmptyRuns[nonEmptyRuns.length - 1].trim();
-  if (!isLikelyPageNumber(pageToken)) return;
-
-  const paragraphText = getCleanTextContent(element);
-  const splitRegex = new RegExp(`^([\\s\\S]*?)(${escapeRegex(pageToken)})(\\s*)$`);
-  const match = paragraphText.match(splitRegex);
-  if (!match) return;
-
-  const leftText = match[1];
-  const rightText = `${match[2]}${match[3]}`;
-
-  if (!leftText.trim()) return;
-
-  element.textContent = '';
-
-  const leftSpan = document.createElement('span');
-  leftSpan.className = 'pb-toc-main';
-  leftSpan.textContent = leftText;
-
-  const rightSpan = document.createElement('span');
-  rightSpan.className = 'pb-toc-page';
-  rightSpan.textContent = rightText;
-
-  element.appendChild(leftSpan);
-  element.appendChild(rightSpan);
-  element.classList.add('pb-toc-page-layout');
-  element.dataset.pbTocPageAligned = '1';
-}
-
-function isLikelyPageNumber(value: string): boolean {
-  if (!value) return false;
-  return /^\d{1,4}$/.test(value) || /^[IVXLCDMivxlcdm]{1,10}$/.test(value);
-}
-
-function escapeRegex(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 /**

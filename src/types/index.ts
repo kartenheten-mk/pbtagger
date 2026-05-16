@@ -165,6 +165,8 @@ export interface DocParagraph {
   headingLevel: number;
   /** Alignment: left | center | right | justify */
   alignment?: string;
+  /** Raw Word paragraph style id, e.g. Heading1, Rubrik1, TOC1, Innehll2 */
+  styleId?: string;
   /** Numbering list info */
   listLevel?: number;
   /** Present when this paragraph belongs to a table */

@@ -23,6 +23,7 @@ import {
   getHeadingLevel,
   getParagraphAlignment,
   getListLevel,
+  getParagraphStyleId,
   NS,
 } from './XmlHelpers';
 
@@ -294,6 +295,7 @@ function parseParagraph(
 ): DocParagraph {
   const headingLevel = getHeadingLevel(para);
   const alignment = getParagraphAlignment(para);
+  const styleId = getParagraphStyleId(para);
   const listLevel = getListLevel(para);
   const runs = extractRuns(para, index, zip, relsMap, extractedBookmarks, activeBookmarks);
 
@@ -302,6 +304,7 @@ function parseParagraph(
     runs,
     headingLevel,
     alignment,
+    styleId,
     listLevel,
   };
 

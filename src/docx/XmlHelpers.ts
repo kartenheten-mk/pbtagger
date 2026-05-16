@@ -115,17 +115,25 @@ export function cloneDoc(doc: Document): Document {
  * Returns 0 for normal paragraphs.
  */
 export function getHeadingLevel(para: Element): number {
-  const pPr = wChild(para, 'pPr');
-  if (!pPr) return 0;
-  const pStyle = wChild(pPr, 'pStyle');
-  if (!pStyle) return 0;
-  const val = wAttr(pStyle, 'val').toLowerCase();
+  const styleId = getParagraphStyleId(para);
+  if (!styleId) return 0;
+
+  const val = styleId.toLowerCase();
   const match = val.match(/^heading(\d)$/);
   if (match) return parseInt(match[1], 10);
   // Swedish / other locales use "Rubrik 1" etc.
   const matchRubrik = val.match(/^rubrik\s*(\d)$/);
   if (matchRubrik) return parseInt(matchRubrik[1], 10);
   return 0;
+}
+
+/** Return the raw paragraph style id from <w:pStyle w:val="..."/> */
+export function getParagraphStyleId(para: Element): string | undefined {
+  const pPr = wChild(para, 'pPr');
+  if (!pPr) return undefined;
+  const pStyle = wChild(pPr, 'pStyle');
+  if (!pStyle) return undefined;
+  return wAttr(pStyle, 'val') || undefined;
 }
 
 /** Return paragraph alignment from <w:jc w:val="..."/> */
