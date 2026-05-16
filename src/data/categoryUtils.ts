@@ -5,14 +5,12 @@
  * (Tema → Grupp → Undergrupp) stored in categories.json.
  *
  * The main export is `flattenCategories`, which converts the
- * hierarchy into a flat Category[] array. Each leaf in the tree
- * becomes one Category, keeping Tag.categoryId as a plain string id.
+ * hierarchy into a flat Category[] array. Each selectable group and
+ * undergrupp becomes one Category, keeping Tag.categoryId as a plain string id.
  *
- * Leaf rules:
- *  - If a Grupp has NO Undergrupper → the Grupp is the leaf
- *    (id = "<temaId>--<gruppId>")
- *  - If a Grupp HAS Undergrupper → each Undergrupp is a leaf
- *    (id = "<temaId>--<gruppId>--<undergruppId>")
+ * Selectable id rules:
+ *  - Grupp → id = "<temaId>--<gruppId>"
+ *  - Undergrupp → id = "<temaId>--<gruppId>--<undergruppId>"
  */
 
 import type { Category, Tema } from '../types';
@@ -22,31 +20,30 @@ export function flattenCategories(teman: Tema[]): Category[] {
 
   for (const tema of teman) {
     for (const grupp of tema.grupper) {
-      if (grupp.undergrupper.length === 0) {
-        // Grupp itself is the leaf
+      categories.push({
+        id: `${tema.id}--${grupp.id}`,
+        name: grupp.name,
+        level: 'grupp',
+        color: tema.color,
+        temaId: tema.id,
+        temaName: tema.name,
+        gruppId: grupp.id,
+        gruppName: grupp.name,
+      });
+
+      for (const ug of grupp.undergrupper) {
         categories.push({
-          id: `${tema.id}--${grupp.id}`,
-          name: grupp.name,
+          id: `${tema.id}--${grupp.id}--${ug.id}`,
+          name: ug.name,
+          level: 'undergrupp',
           color: tema.color,
           temaId: tema.id,
           temaName: tema.name,
           gruppId: grupp.id,
           gruppName: grupp.name,
+          undergruppId: ug.id,
+          undergruppName: ug.name,
         });
-      } else {
-        // Each undergrupp is a leaf
-        for (const ug of grupp.undergrupper) {
-          categories.push({
-            id: `${tema.id}--${grupp.id}--${ug.id}`,
-            name: ug.name,
-            color: tema.color,
-            temaId: tema.id,
-            temaName: tema.name,
-            gruppId: grupp.id,
-            gruppName: grupp.name,
-            undergruppName: ug.name,
-          });
-        }
       }
     }
   }

@@ -18,18 +18,19 @@ export interface Tema {
   grupper: Grupp[];
 }
 
-// ─── Category (flattened leaf, derived from the hierarchy) ───────────────────
+// ─── Category (flattened selectable level, derived from the hierarchy) ───────
 //
-// Each leaf in the Tema → Grupp → Undergrupp tree becomes one Category.
-// If a Grupp has no Undergrupper, the Grupp itself is the leaf.
-// If a Grupp has Undergrupper, each Undergrupp is a leaf.
+// Each selectable Tema → Grupp or Tema → Grupp → Undergrupp path becomes one
+// Category. Group-level categories are valid even when a group has undergrupper.
 // This keeps Tag.categoryId as a simple string reference.
 
 export interface Category {
-  /** Unique id for this leaf, used by Tag.categoryId */
+  /** Unique id for this selectable level, used by Tag.categoryId */
   id: string;
   /** The most specific display name (undergrupp name, or grupp name) */
   name: string;
+  /** Selected category depth */
+  level: 'grupp' | 'undergrupp';
   /** Hex colour inherited from the parent Tema */
   color: string;
   /** Parent tema id */
@@ -40,7 +41,9 @@ export interface Category {
   gruppId: string;
   /** Parent grupp display name */
   gruppName: string;
-  /** Set when this leaf is an undergrupp */
+  /** Set when this category is an undergrupp */
+  undergruppId?: string;
+  /** Set when this category is an undergrupp */
   undergruppName?: string;
 }
 

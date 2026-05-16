@@ -18,6 +18,7 @@ import { TagMark } from './extensions/TagMark';
 import { SearchBar } from './SearchBar';
 import { useDocumentStore } from '../store/useDocumentStore';
 import type { Category, DocModel, DocParagraph, Tag, PendingSelection } from '../types';
+import { getCategoryLabel } from '../data/categoryUtils';
 
 const OBJECT_ALT_PREFIX = '__pb_obj__';
 const GRAPH_PLACEHOLDER_SRC = createGraphPlaceholderDataUri();
@@ -135,7 +136,7 @@ function docModelToTipTap(model: DocModel, tags: Tag[], categories: Category[]):
       for (const tag of overlappingTags) {
         const cat = categories.find((c) => c.id === tag.categoryId);
         const color = cat?.color ?? '#3b82f6';
-        const label = cat ? `${cat.temaName}: ${cat.name}` : tag.categoryId;
+        const label = cat ? getCategoryLabel(cat) : tag.categoryId;
 
         const tagStartInRun = Math.max(0, tag.startOffset - runStart);
         const tagEndInRun = Math.min(runText.length, tag.endOffset - runStart);
@@ -1066,13 +1067,13 @@ function getObjectTitle(tag: Tag | undefined, categories: Category[], fallback: 
   if (!tag) return fallback;
   const category = categories.find((c) => c.id === tag.categoryId);
   if (!category) return `${fallback} (taggad)`;
-  return `${fallback} - ${category.temaName}: ${category.name}`;
+  return `${fallback} - ${getCategoryLabel(category)}`;
 }
 
 function getObjectTagLabel(tag: Tag, categories: Category[]): string {
   const category = categories.find((c) => c.id === tag.categoryId);
   if (!category) return tag.categoryId;
-  return `${category.temaName}: ${category.name}`;
+  return getCategoryLabel(category);
 }
 
 function buildObjectImageAttrs(

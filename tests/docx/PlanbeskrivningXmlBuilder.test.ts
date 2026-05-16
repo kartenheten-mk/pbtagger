@@ -527,6 +527,19 @@ describe('<Indelning> classification', () => {
     expect(xml).toContain('<Indelning>');
   });
 
+  it('exports a group-level category without <undergrupp>', () => {
+    const tag = makeTag({
+      uuid: 'abcdef12-3456-7890-abcd-ef1234567890',
+      categoryId: 'genomforandefragor--fastighetsrattsliga-fragor',
+    });
+
+    const xml = buildPlanbeskrivningXml(makeConfig(), [tag], []);
+
+    expect(xml).toContain('<tema>genomförandefrågor</tema>');
+    expect(xml).toContain('<grupp>fastighetsrättsliga frågor</grupp>');
+    expect(xml).not.toContain('<undergrupp>');
+  });
+
   it('excludes unknown categoryId from Planbeskrivning XML instead of emitting fallback indelning', () => {
     const tag = makeTag({ uuid: 'unknown-cat', categoryId: 'completely-unknown-category' });
     const xml = buildPlanbeskrivningXml(makeConfig(), [tag], []);

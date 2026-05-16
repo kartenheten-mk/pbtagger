@@ -437,6 +437,7 @@ function buildOmfattningBlocks(
   const resolvedCategory: Category = category ?? {
     id: tag.categoryId,
     name: tag.categoryId,
+    level: 'grupp',
     color: '#999',
     temaId: 'okänd',
     temaName: 'okänd',
