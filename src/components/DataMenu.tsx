@@ -12,14 +12,14 @@
  *   - Click-outside / Escape to close
  */
 
-import React, { useRef, useState, useEffect, useCallback } from 'react';
-import PizZip from 'pizzip';
+import React, { Suspense, lazy, useRef, useState, useEffect, useCallback } from 'react';
 import { useDocumentStore } from '../store/useDocumentStore';
-import { exportDocx } from '../docx/DocxExporter';
-import { exportProject } from '../project/ProjectManager';
-import { parseDocx } from '../docx/DocxParser';
-import { PlanbeskrivningConfigPanel } from './PlanbeskrivningConfigPanel';
-import { buildDefaultConfig } from '../docx/PlanbeskrivningXmlBuilder';
+
+const PlanbeskrivningConfigPanel = lazy(() =>
+  import('./PlanbeskrivningConfigPanel').then((mod) => ({
+    default: mod.PlanbeskrivningConfigPanel,
+  }))
+);
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -168,6 +168,11 @@ export const DataMenu: React.FC = () => {
     setExportingDocx(true);
     setError(null);
     try {
+      const [{ default: PizZip }, { buildDefaultConfig }, { exportDocx }] = await Promise.all([
+        import('pizzip'),
+        import('../docx/PlanbeskrivningXmlBuilder'),
+        import('../docx/DocxExporter'),
+      ]);
       const zip = new PizZip(zipBuffer);
       const pbOpts = {
         config: planbeskrivningConfig ?? buildDefaultConfig(activeGeometryDocId ?? undefined),
@@ -212,6 +217,7 @@ export const DataMenu: React.FC = () => {
     setExportingProject(true);
     setError(null);
     try {
+      const { exportProject } = await import('../project/ProjectManager');
       const bufferCopy = zipBuffer.slice(0);
       await exportProject(fileName, bufferCopy, tags, geometries, activeGeometryDocId);
       setSuccess('Projekt exporterat!');
@@ -243,6 +249,7 @@ export const DataMenu: React.FC = () => {
       setImportingDocx(true);
       setError(null);
       try {
+        const { parseDocx } = await import('../docx/DocxParser');
         const buffer = await file.arrayBuffer();
         const { zip, docModel: newModel, tags: embeddedTags, planbeskrivning } = await parseDocx(buffer);
         const zipBytes = zip.generate({ type: 'arraybuffer' });
@@ -607,7 +614,9 @@ export const DataMenu: React.FC = () => {
 
       {/* Planbeskrivning config modal */}
       {showPbConfig && (
-        <PlanbeskrivningConfigPanel onClose={() => setShowPbConfig(false)} />
+        <Suspense fallback={null}>
+          <PlanbeskrivningConfigPanel onClose={() => setShowPbConfig(false)} />
+        </Suspense>
       )}
     </div>
   );

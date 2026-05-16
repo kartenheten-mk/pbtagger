@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Geometry, Tag } from '../../src/types';
 import {
   buildFocusLinkedGeometryIdsByTagUuidForMode,
+  buildGeometryTagStatusIndex,
   buildHighlightedGeometryUuids,
   buildDisplayLinkedGeometryIdsByTagUuidForMode,
   countGeometriesByTagStatus,
@@ -83,6 +84,18 @@ describe('mapDataMode view-model helpers', () => {
       tagged: 2,
       untagged: 1,
     });
+
+    const index = buildGeometryTagStatusIndex(visible, displayedLinks);
+    expect(index.counts).toEqual({
+      all: 3,
+      tagged: 2,
+      untagged: 1,
+    });
+    expect(Array.from(index.linkedGeometryIds).sort()).toEqual([
+      'geo-a',
+      'geo-c',
+      'missing-geo',
+    ]);
   });
 
   it('uses current explicit links only for Imported DOCX mode badges', () => {

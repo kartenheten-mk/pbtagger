@@ -29,7 +29,9 @@ import OSM from 'ol/source/OSM';
 import GeoJSON from 'ol/format/GeoJSON';
 import { fromLonLat } from 'ol/proj';
 import { Style, Fill, Stroke, Circle as CircleStyle } from 'ol/style';
+import type OlFeature from 'ol/Feature';
 import type { FeatureLike } from 'ol/Feature';
+import type OlGeometry from 'ol/geom/Geometry';
 import type { Extent } from 'ol/extent';
 import { isEmpty, extend as extendExtent, createEmpty } from 'ol/extent';
 
@@ -186,6 +188,51 @@ function buildUuidSetFromKey(key: string): Set<string> {
   return new Set(key ? key.split('\u0000') : []);
 }
 
+interface PreparedFeatureSet {
+  features: OlFeature<OlGeometry>[];
+  featureByUuid: globalThis.Map<string, OlFeature<OlGeometry>>;
+  extent: Extent;
+}
+
+const geoJsonFormat = new GeoJSON();
+const featureSetCache = new globalThis.Map<string, PreparedFeatureSet>();
+const MAX_FEATURE_SET_CACHE_SIZE = 8;
+
+function cachePreparedFeatureSet(key: string, prepared: PreparedFeatureSet) {
+  if (featureSetCache.size >= MAX_FEATURE_SET_CACHE_SIZE) {
+    const oldestKey = featureSetCache.keys().next().value as string | undefined;
+    if (oldestKey) featureSetCache.delete(oldestKey);
+  }
+  featureSetCache.set(key, prepared);
+}
+
+function prepareFeatureSet(geometries: Geometry[], geometryDataKey: string): PreparedFeatureSet {
+  const cached = featureSetCache.get(geometryDataKey);
+  if (cached) return cached;
+
+  const geoJsonData = geometriesToGeoJson(geometries);
+  const features = geoJsonFormat.readFeatures(geoJsonData, {
+    dataProjection: 'EPSG:4326',
+    featureProjection: 'EPSG:3857',
+  }) as OlFeature<OlGeometry>[];
+  const featureByUuid = new globalThis.Map<string, OlFeature<OlGeometry>>();
+  const extent = createEmpty();
+
+  for (const feature of features) {
+    const uuid = feature.get('uuid') as string | undefined;
+    if (uuid) featureByUuid.set(uuid, feature);
+
+    const geometry = feature.getGeometry();
+    if (geometry) {
+      extendExtent(extent, geometry.getExtent());
+    }
+  }
+
+  const prepared = { features, featureByUuid, extent };
+  cachePreparedFeatureSet(geometryDataKey, prepared);
+  return prepared;
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export const MapView: React.FC<MapViewProps> = ({
@@ -203,6 +250,7 @@ export const MapView: React.FC<MapViewProps> = ({
   const mapRef = useRef<Map | null>(null);
   const vectorSourceRef = useRef<VectorSource | null>(null);
   const vectorLayerRef = useRef<VectorImageLayer | null>(null);
+  const featureByUuidRef = useRef(new globalThis.Map<string, OlFeature<OlGeometry>>());
 
   const selectedGeometryKey = useMemo(
     () => buildUuidSetKey(selectedGeometryUuids),
@@ -356,20 +404,16 @@ export const MapView: React.FC<MapViewProps> = ({
     if (!source) return;
     const currentGeometries = geometriesRef.current;
 
-    source.clear();
+    source.clear(true);
+    featureByUuidRef.current = new globalThis.Map();
     if (currentGeometries.length === 0) return;
 
-    const geoJsonData = geometriesToGeoJson(currentGeometries);
-    const format = new GeoJSON();
-    const features = format.readFeatures(geoJsonData, {
-      dataProjection: 'EPSG:4326',
-      featureProjection: 'EPSG:3857',
-    });
-    source.addFeatures(features);
+    const prepared = prepareFeatureSet(currentGeometries, geometryDataKey);
+    featureByUuidRef.current = prepared.featureByUuid;
+    source.addFeatures(prepared.features);
 
-    const extent = source.getExtent() as Extent;
-    if (!isEmpty(extent)) {
-      mapRef.current?.getView().fit(extent, {
+    if (!isEmpty(prepared.extent)) {
+      mapRef.current?.getView().fit(prepared.extent, {
         padding: [40, 40, 40, 40],
         maxZoom: 18,
         duration: 500,
@@ -400,9 +444,7 @@ export const MapView: React.FC<MapViewProps> = ({
     const combined = createEmpty();
     let found = false;
     for (const uuid of uuids) {
-      const feature = vectorSourceRef.current
-        .getFeatures()
-        .find((f) => f.get('uuid') === uuid);
+      const feature = featureByUuidRef.current.get(uuid);
       if (!feature) continue;
       const geom = feature.getGeometry();
       if (!geom) continue;

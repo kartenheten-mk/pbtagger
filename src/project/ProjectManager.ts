@@ -1,7 +1,6 @@
 import PizZip from 'pizzip';
 import { saveAs } from 'file-saver';
 import { getGeometryDoc } from '../geometry/geometryDb';
-import { parseDocx } from '../docx/DocxParser';
 import type { Tag, Geometry, GeometryDoc, DocModel } from '../types';
 
 /**
@@ -84,6 +83,7 @@ export async function importProject(file: File): Promise<ImportedProject> {
     const docxBuffer = docxFile.asArrayBuffer();
 
     // 3. Parse the .docx to build the DocModel
+    const { parseDocx } = await import('../docx/DocxParser');
     const { docModel } = await parseDocx(docxBuffer);
 
     // 4. Extract geometry doc if it exists

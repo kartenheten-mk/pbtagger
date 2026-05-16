@@ -10,7 +10,7 @@
  * verbatim, export is simply returning it — no reconstruction needed.
  */
 
-import proj4 from 'proj4';
+import proj4, { type Converter } from 'proj4';
 import type { Geometry, GeometryDoc } from '../types';
 
 // ─── proj4 CRS definitions ────────────────────────────────────────────────────
@@ -58,13 +58,23 @@ proj4.defs([
 
 // ─── Coordinate reprojection ──────────────────────────────────────────────────
 
+const converterCache = new Map<string, Converter>();
+
+function getConverter(fromCrs: string): Converter {
+  const cached = converterCache.get(fromCrs);
+  if (cached) return cached;
+  const converter = proj4(fromCrs, 'EPSG:4326');
+  converterCache.set(fromCrs, converter);
+  return converter;
+}
+
 /**
  * Reprojects a single [x, y] coordinate pair from `fromCrs` to EPSG:4326.
  * Returns [longitude, latitude].
  */
 function reprojectPoint(xy: number[], fromCrs: string): [number, number] {
   if (fromCrs === 'EPSG:4326') return [xy[0], xy[1]];
-  const [lon, lat] = proj4(fromCrs, 'EPSG:4326', [xy[0], xy[1]]);
+  const [lon, lat] = getConverter(fromCrs).forward([xy[0], xy[1]]);
   return [lon, lat];
 }
 

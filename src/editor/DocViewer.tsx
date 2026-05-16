@@ -9,7 +9,7 @@
  *  - Apply TagMark decorations for existing text tags
  */
 
-import React, { useEffect, useRef, useCallback, useState } from 'react';
+import React, { useEffect, useRef, useCallback, useMemo, useState } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Image from '@tiptap/extension-image';
@@ -19,11 +19,12 @@ import { SearchBar } from './SearchBar';
 import { useDocumentStore } from '../store/useDocumentStore';
 import { parseNumberedHeading, type NumberedHeading } from './headingLayout';
 import { buildTocDecorations, type TocEntry } from './tocLayout';
-import type { Category, DocModel, Tag, PendingSelection } from '../types';
+import type { Category, DocModel, DocRun, Tag, PendingSelection } from '../types';
 import { getCategoryLabel } from '../data/categoryUtils';
 
 const OBJECT_ALT_PREFIX = '__pb_obj__';
 const GRAPH_PLACEHOLDER_SRC = createGraphPlaceholderDataUri();
+const imageDataUriCache = new WeakMap<Uint8Array, string>();
 
 // ─── DocModel → TipTap JSON ───────────────────────────────────────────────────
 
@@ -57,7 +58,7 @@ interface ParaTagSegment {
   endOffset: number; // Number.MAX_SAFE_INTEGER → clamp to paragraph length
 }
 
-function docModelToTipTap(model: DocModel, tags: Tag[], categories: Category[]): TipTapDoc {
+function docModelToTipTap(model: DocModel, tags: Tag[], categoryById: Map<string, Category>): TipTapDoc {
   // Build quick lookups, expanding multi-paragraph tags across all spanned
   // paragraphs so the rendering loop stays per-paragraph.
   const textTagsByPara = new Map<number, ParaTagSegment[]>();
@@ -109,21 +110,22 @@ function docModelToTipTap(model: DocModel, tags: Tag[], categories: Category[]):
     let globalCursor = 0; // Text offset in the paragraph
 
     for (const run of para.runs) {
-      if (run.isImage && run.imageUrl) {
+      const imageSrc = run.isImage ? getRunImageSrc(run) : null;
+      if (imageSrc) {
         const alt = encodeObjectAlt('image', para.index, run.id);
         const tag = objectTagByKey.get(buildObjectKey('image', para.index, run.id));
-        const title = getObjectTitle(tag, categories, 'Bild');
+        const title = getObjectTitle(tag, categoryById, 'Bild');
 
-        paraNodes.push({ type: 'image', attrs: buildObjectImageAttrs(run.imageUrl, alt, title, tag, categories) });
+        paraNodes.push({ type: 'image', attrs: buildObjectImageAttrs(imageSrc, alt, title, tag, categoryById) });
         continue;
       }
 
       if (run.isGraph) {
         const alt = encodeObjectAlt('graph', para.index, run.id);
         const tag = objectTagByKey.get(buildObjectKey('graph', para.index, run.id));
-        const title = getObjectTitle(tag, categories, 'Diagram');
+        const title = getObjectTitle(tag, categoryById, 'Diagram');
 
-        paraNodes.push({ type: 'image', attrs: buildObjectImageAttrs(GRAPH_PLACEHOLDER_SRC, alt, title, tag, categories) });
+        paraNodes.push({ type: 'image', attrs: buildObjectImageAttrs(GRAPH_PLACEHOLDER_SRC, alt, title, tag, categoryById) });
         continue;
       }
 
@@ -136,7 +138,7 @@ function docModelToTipTap(model: DocModel, tags: Tag[], categories: Category[]):
       const overlappingTags = paraTags.filter((t) => t.startOffset < runEnd && t.endOffset > runStart);
 
       for (const tag of overlappingTags) {
-        const cat = categories.find((c) => c.id === tag.categoryId);
+        const cat = categoryById.get(tag.categoryId);
         const color = cat?.color ?? '#3b82f6';
         const label = cat ? getCategoryLabel(cat) : tag.categoryId;
 
@@ -199,6 +201,25 @@ function docModelToTipTap(model: DocModel, tags: Tag[], categories: Category[]):
   return { type: 'doc', content };
 }
 
+function buildTagRenderKey(tags: Tag[]): string {
+  return tags
+    .map((tag) =>
+      [
+        tag.uuid,
+        tag.categoryId,
+        tag.targetType ?? 'text',
+        tag.text,
+        tag.paragraphIndex,
+        tag.startOffset,
+        tag.endOffset,
+        tag.endParagraphIndex ?? '',
+        tag.runId ?? '',
+        tag.tableId ?? '',
+      ].join('\u0001')
+    )
+    .join('\u0002');
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 interface DocViewerProps {
@@ -218,7 +239,6 @@ export const DocViewer: React.FC<DocViewerProps> = ({ docModel, categories }) =>
   } = useDocumentStore();
 
   const editorContainerRef = useRef<HTMLDivElement>(null);
-  const lastUpdateRef = useRef({ tags, docModel, showTags, selectedTagUuid });
 
   // ── Search state ─────────────────────────────────────────────────────────
   const [searchOpen, setSearchOpen] = useState(false);
@@ -229,8 +249,28 @@ export const DocViewer: React.FC<DocViewerProps> = ({ docModel, categories }) =>
   const searchRangesRef = useRef<Range[]>([]);
 
   // ── Build TipTap initial content ─────────────────────────────────────────
-  const visibleTags = showTags ? tags : tags.filter((t) => t.uuid === selectedTagUuid);
-  const initialContent = docModelToTipTap(docModel, visibleTags, categories);
+  const categoryById = useMemo(
+    () => new Map(categories.map((category) => [category.id, category])),
+    [categories]
+  );
+  const visibleTags = useMemo(
+    () => (showTags ? tags : tags.filter((t) => t.uuid === selectedTagUuid)),
+    [showTags, tags, selectedTagUuid]
+  );
+  const visibleTagRenderKey = useMemo(
+    () => buildTagRenderKey(visibleTags),
+    [visibleTags]
+  );
+  const initialContent = useMemo(
+    () => docModelToTipTap(docModel, visibleTags, categoryById),
+    [docModel, visibleTags, categoryById]
+  );
+  const lastUpdateRef = useRef({
+    tagRenderKey: visibleTagRenderKey,
+    docModel,
+    showTags,
+    categoryById,
+  });
 
   const editor = useEditor({
     extensions: [
@@ -268,26 +308,28 @@ export const DocViewer: React.FC<DocViewerProps> = ({ docModel, categories }) =>
     if (!editor) return;
 
     const prev = lastUpdateRef.current;
-    lastUpdateRef.current = { tags, docModel, showTags, selectedTagUuid };
+    lastUpdateRef.current = {
+      tagRenderKey: visibleTagRenderKey,
+      docModel,
+      showTags,
+      categoryById,
+    };
 
-    // Don't rebuild TipTap content if ONLY the selectedTagUuid changed AND showTags is true.
-    // (This prevents the DOM from reloading, which ruins smooth scrolling).
+    // Geometry links/notes can update tag objects without changing document marks.
     if (
-      showTags &&
       prev.showTags === showTags &&
-      prev.tags === tags &&
       prev.docModel === docModel &&
-      prev.selectedTagUuid !== selectedTagUuid
+      prev.categoryById === categoryById &&
+      prev.tagRenderKey === visibleTagRenderKey
     ) {
       return;
     }
 
-    const visibleTags = showTags ? tags : tags.filter((t) => t.uuid === selectedTagUuid);
-    const newContent = docModelToTipTap(docModel, visibleTags, categories);
+    const newContent = docModelToTipTap(docModel, visibleTags, categoryById);
 
     // TipTap setContent replaces the DOM synchronously.
     editor.commands.setContent(newContent, { emitUpdate: false });
-  }, [editor, tags, docModel, categories, showTags, selectedTagUuid]);
+  }, [editor, visibleTags, visibleTagRenderKey, docModel, categoryById, showTags]);
 
   // ── Persistent object highlight + badges for tagged images/graphs ────────
   useEffect(() => {
@@ -299,10 +341,9 @@ export const DocViewer: React.FC<DocViewerProps> = ({ docModel, categories }) =>
     // Rebuild object badges from current tag state to avoid duplicates.
     container.querySelectorAll('.pb-object-tag-badge').forEach((el) => el.remove());
 
-    const activeTags = showTags ? tags : tags.filter((t) => t.uuid === selectedTagUuid);
     const objectTagByKey = new Map<string, Tag>();
 
-    for (const tag of activeTags) {
+    for (const tag of visibleTags) {
       const targetType = tag.targetType ?? 'text';
       if ((targetType === 'image' || targetType === 'graph') && tag.runId) {
         objectTagByKey.set(buildObjectKey(targetType, tag.paragraphIndex, tag.runId), tag);
@@ -323,7 +364,7 @@ export const DocViewer: React.FC<DocViewerProps> = ({ docModel, categories }) =>
       const tag = objectTagByKey.get(buildObjectKey(parsed.type, parsed.paragraphIndex, parsed.runId));
       if (!tag) continue;
 
-      const color = getObjectTagColor(tag, categories);
+      const color = getObjectTagColor(tag, categoryById);
       img.classList.add('pb-object-tagged');
       img.style.setProperty('--tag-color', color);
       img.style.setProperty('--tag-bg', hexToRgba(color, 0.18));
@@ -340,7 +381,7 @@ export const DocViewer: React.FC<DocViewerProps> = ({ docModel, categories }) =>
 
       const labelSpan = document.createElement('span');
       labelSpan.className = 'tag-badge-label';
-      labelSpan.textContent = getObjectTagLabel(tag, categories).toUpperCase();
+      labelSpan.textContent = getObjectTagLabel(tag, categoryById).toUpperCase();
 
       const closeBtn = document.createElement('button');
       closeBtn.className = 'tag-badge-close';
@@ -384,7 +425,7 @@ export const DocViewer: React.FC<DocViewerProps> = ({ docModel, categories }) =>
         parent.appendChild(badge);
       }
     }
-  }, [tags, showTags, selectedTagUuid, categories, docModel, selectTag, removeTag]);
+  }, [visibleTags, selectedTagUuid, categoryById, docModel, selectTag, removeTag]);
 
   // ── Highlight and scroll to selected tag ───────────────────────────────────
   useEffect(() => {
@@ -1074,15 +1115,41 @@ function parseObjectAlt(rawAlt: string | null): { type: 'image' | 'graph'; parag
   };
 }
 
-function getObjectTitle(tag: Tag | undefined, categories: Category[], fallback: string): string {
+function getRunImageSrc(run: DocRun): string | null {
+  if (run.imageUrl) return run.imageUrl;
+  if (!run.imageData) return null;
+
+  const cached = imageDataUriCache.get(run.imageData);
+  if (cached) return cached;
+
+  const mime = run.imageMime ?? 'image/jpeg';
+  const src = `data:${mime};base64,${uint8ArrayToBase64(run.imageData)}`;
+  imageDataUriCache.set(run.imageData, src);
+  return src;
+}
+
+function uint8ArrayToBase64(data: Uint8Array): string {
+  const chunks: string[] = [];
+  const chunkSize = 0x8000;
+
+  for (let i = 0; i < data.length; i += chunkSize) {
+    const chunk = data.subarray(i, i + chunkSize);
+    chunks.push(String.fromCharCode(...chunk));
+  }
+
+  const binary = chunks.join('');
+  return typeof window !== 'undefined' ? window.btoa(binary) : btoa(binary);
+}
+
+function getObjectTitle(tag: Tag | undefined, categoryById: Map<string, Category>, fallback: string): string {
   if (!tag) return fallback;
-  const category = categories.find((c) => c.id === tag.categoryId);
+  const category = categoryById.get(tag.categoryId);
   if (!category) return `${fallback} (taggad)`;
   return `${fallback} - ${getCategoryLabel(category)}`;
 }
 
-function getObjectTagLabel(tag: Tag, categories: Category[]): string {
-  const category = categories.find((c) => c.id === tag.categoryId);
+function getObjectTagLabel(tag: Tag, categoryById: Map<string, Category>): string {
+  const category = categoryById.get(tag.categoryId);
   if (!category) return tag.categoryId;
   return getCategoryLabel(category);
 }
@@ -1092,7 +1159,7 @@ function buildObjectImageAttrs(
   alt: string,
   title: string,
   tag: Tag | undefined,
-  categories: Category[]
+  categoryById: Map<string, Category>
 ): { src: string; alt: string; title: string; class: string; style?: string; 'data-tag-uuid'?: string; 'data-tag-color'?: string } {
   if (!tag) {
     return {
@@ -1103,7 +1170,7 @@ function buildObjectImageAttrs(
     };
   }
 
-  const color = getObjectTagColor(tag, categories);
+  const color = getObjectTagColor(tag, categoryById);
   const tagBg = hexToRgba(color, 0.18);
   const tagBorder = hexToRgba(color, 0.45);
 
@@ -1118,8 +1185,8 @@ function buildObjectImageAttrs(
   };
 }
 
-function getObjectTagColor(tag: Tag, categories: Category[]): string {
-  const category = categories.find((c) => c.id === tag.categoryId);
+function getObjectTagColor(tag: Tag, categoryById: Map<string, Category>): string {
+  const category = categoryById.get(tag.categoryId);
   return category?.color ?? '#3b82f6';
 }
 

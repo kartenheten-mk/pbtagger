@@ -153,6 +153,8 @@ export interface DocRun {
   fontFamily?: string;
   isImage?: boolean;
   imageUrl?: string; // Base64 Data URI
+  imageData?: Uint8Array; // Raw image bytes, converted to a Data URI by the viewer
+  imageMime?: string;
   isGraph?: boolean;
   graphRelId?: string;
 }

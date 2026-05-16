@@ -15,17 +15,11 @@
  *  └───────────┴──────────────────────────┴───────────────┘
  */
 
-import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { Header } from './components/Header';
-import { Sidebar } from './components/Sidebar';
+import React, { Suspense, lazy, useState, useCallback, useEffect, useRef } from 'react';
 import { DocumentList } from './components/DocumentList';
 import { CreateProjectModal } from './components/CreateProjectModal';
-import { DocViewer } from './editor/DocViewer';
-import { GeometryPanel } from './geometry/GeometryPanel';
 import { ResizablePanel } from './components/ResizablePanel';
 import { useDocumentStore } from './store/useDocumentStore';
-import { parseDocx } from './docx/DocxParser';
-import { importProject } from './project/ProjectManager';
 import type { Category, Tema } from './types';
 import { flattenCategories } from './data/categoryUtils';
 
@@ -34,6 +28,27 @@ import categoriesData from './data/categories.json';
 
 const teman: Tema[] = (categoriesData as { teman: Tema[] }).teman;
 const categories: Category[] = flattenCategories(teman);
+
+const Header = lazy(() =>
+  import('./components/Header').then((mod) => ({ default: mod.Header }))
+);
+const Sidebar = lazy(() =>
+  import('./components/Sidebar').then((mod) => ({ default: mod.Sidebar }))
+);
+const DocViewer = lazy(() =>
+  import('./editor/DocViewer').then((mod) => ({ default: mod.DocViewer }))
+);
+const GeometryPanel = lazy(() =>
+  import('./geometry/GeometryPanel').then((mod) => ({ default: mod.GeometryPanel }))
+);
+
+function LoadingPanel({ label }: { label: string }) {
+  return (
+    <div className="h-full w-full flex items-center justify-center bg-white text-xs text-gray-400">
+      {label}
+    </div>
+  );
+}
 
 export default function App() {
   const { docModel, setDocument, clearDocument, importGeometryJson, restoreProject, setPlanbeskrivningConfig, setDocxGmlGeometries } = useDocumentStore();
@@ -81,6 +96,7 @@ export default function App() {
     setParseError(null);
 
     try {
+      const { importProject } = await import('./project/ProjectManager');
       const imported = await importProject(file);
       await restoreProject(
         imported.zipBuffer,
@@ -108,6 +124,7 @@ export default function App() {
       setIsLoading(true);
       setParseError(null);
       try {
+        const { parseDocx } = await import('./docx/DocxParser');
         const buffer = await docxFile.arrayBuffer();
         const { zip, docModel: model, tags: embeddedTags, planbeskrivning } = await parseDocx(buffer);
 
@@ -311,7 +328,9 @@ export default function App() {
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-gray-100">
       {/* Top header */}
-      <Header onClearDocument={handleClearDocument} />
+      <Suspense fallback={<div className="h-14 shrink-0 bg-white border-b border-gray-200" />}>
+        <Header onClearDocument={handleClearDocument} />
+      </Suspense>
 
       {/* Three-panel body */}
       <div className="flex flex-1 overflow-hidden">
@@ -321,12 +340,16 @@ export default function App() {
           defaultWidth={288} // w-72 equivalent
           storageKey="sidebar_width"
         >
-          <Sidebar teman={teman} categories={categories} />
+          <Suspense fallback={<LoadingPanel label="Laddar sidopanel..." />}>
+            <Sidebar teman={teman} categories={categories} />
+          </Suspense>
         </ResizablePanel>
 
         {/* Centre: document viewer */}
         <main className="flex-1 overflow-y-auto bg-white border-l border-r border-gray-200">
-          <DocViewer docModel={docModel} categories={categories} />
+          <Suspense fallback={<LoadingPanel label="Laddar dokumentvy..." />}>
+            <DocViewer docModel={docModel} categories={categories} />
+          </Suspense>
         </main>
 
         {/* Right: geometry panel */}
@@ -335,7 +358,9 @@ export default function App() {
           defaultWidth={320} // w-80 equivalent
           storageKey="geometry_panel_width"
         >
-          <GeometryPanel />
+          <Suspense fallback={<LoadingPanel label="Laddar karta..." />}>
+            <GeometryPanel />
+          </Suspense>
         </ResizablePanel>
       </div>
     </div>

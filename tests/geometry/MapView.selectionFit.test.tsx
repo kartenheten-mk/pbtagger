@@ -5,8 +5,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render } from '@testing-library/react';
 import type { Geometry } from '../../src/types';
 
-const { fitMock } = vi.hoisted(() => ({
+const { fitMock, getFeaturesMock, readFeaturesMock } = vi.hoisted(() => ({
   fitMock: vi.fn(),
+  getFeaturesMock: vi.fn(),
+  readFeaturesMock: vi.fn(),
 }));
 
 vi.mock('ol/Map', () => ({
@@ -85,6 +87,7 @@ vi.mock('ol/source/Vector', () => ({
     }
 
     getFeatures() {
+      getFeaturesMock();
       return this.features;
     }
 
@@ -110,6 +113,7 @@ vi.mock('ol/format/GeoJSON', () => ({
         properties: Record<string, unknown>;
       }>;
     }) {
+      readFeaturesMock();
       return data.features.map((feature, index) => ({
         get: (key: string) => feature.properties[key],
         getGeometry: () => ({
@@ -179,6 +183,8 @@ const noop = () => {};
 describe('MapView selected geometry auto-fit', () => {
   beforeEach(() => {
     fitMock.mockClear();
+    getFeaturesMock.mockClear();
+    readFeaturesMock.mockClear();
     vi.stubGlobal(
       'ResizeObserver',
       class MockResizeObserver {
@@ -292,5 +298,48 @@ describe('MapView selected geometry auto-fit', () => {
     );
 
     expect(fitMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses the uuid feature index when fitting selected geometries', () => {
+    render(
+      <MapView
+        geometries={[makeGeometry('geo-index-a'), makeGeometry('geo-index-b')]}
+        selectedGeometryUuids={['geo-index-b']}
+        isLinking={false}
+        onFeatureClick={noop}
+        onMultiFeatureClick={noop}
+      />
+    );
+
+    expect(fitMock).toHaveBeenCalledTimes(2);
+    expect(getFeaturesMock).not.toHaveBeenCalled();
+  });
+
+  it('reuses prepared features across map remounts for unchanged geometry content', () => {
+    const geometries = [makeGeometry('geo-cache-a'), makeGeometry('geo-cache-b')];
+    const first = render(
+      <MapView
+        geometries={geometries}
+        selectedGeometryUuids={[]}
+        isLinking={false}
+        onFeatureClick={noop}
+        onMultiFeatureClick={noop}
+      />
+    );
+
+    expect(readFeaturesMock).toHaveBeenCalledTimes(1);
+    first.unmount();
+
+    render(
+      <MapView
+        geometries={geometries}
+        selectedGeometryUuids={[]}
+        isLinking={false}
+        onFeatureClick={noop}
+        onMultiFeatureClick={noop}
+      />
+    );
+
+    expect(readFeaturesMock).toHaveBeenCalledTimes(1);
   });
 });

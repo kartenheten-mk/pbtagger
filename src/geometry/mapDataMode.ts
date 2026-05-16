@@ -9,6 +9,11 @@ export interface GeometryTagStatusCounts {
   untagged: number;
 }
 
+export interface GeometryTagStatusIndex {
+  linkedGeometryIds: Set<string>;
+  counts: GeometryTagStatusCounts;
+}
+
 export function resolveActiveMapMainMode(
   requestedMode: MapMainMode,
   isLinking: boolean
@@ -39,18 +44,32 @@ function buildLinkedGeometryIdSet(
   return linkedGeometryIds;
 }
 
+export function buildGeometryTagStatusIndex(
+  geometries: Geometry[],
+  displayLinkedGeometryIdsByTagUuid: Map<string, Set<string>>
+): GeometryTagStatusIndex {
+  const linkedGeometryIds = buildLinkedGeometryIdSet(displayLinkedGeometryIdsByTagUuid);
+  let tagged = 0;
+
+  for (const geometry of geometries) {
+    if (linkedGeometryIds.has(geometry.uuid)) tagged += 1;
+  }
+
+  return {
+    linkedGeometryIds,
+    counts: {
+      all: geometries.length,
+      tagged,
+      untagged: geometries.length - tagged,
+    },
+  };
+}
+
 export function countGeometriesByTagStatus(
   geometries: Geometry[],
   displayLinkedGeometryIdsByTagUuid: Map<string, Set<string>>
 ): GeometryTagStatusCounts {
-  const linkedGeometryIds = buildLinkedGeometryIdSet(displayLinkedGeometryIdsByTagUuid);
-  const tagged = geometries.filter((geometry) => linkedGeometryIds.has(geometry.uuid)).length;
-
-  return {
-    all: geometries.length,
-    tagged,
-    untagged: geometries.length - tagged,
-  };
+  return buildGeometryTagStatusIndex(geometries, displayLinkedGeometryIdsByTagUuid).counts;
 }
 
 export function filterGeometriesByTagStatus(
@@ -61,6 +80,16 @@ export function filterGeometriesByTagStatus(
   if (tagStatusFilter === 'all') return geometries;
 
   const linkedGeometryIds = buildLinkedGeometryIdSet(displayLinkedGeometryIdsByTagUuid);
+  return filterGeometriesByTagStatusIndex(geometries, linkedGeometryIds, tagStatusFilter);
+}
+
+export function filterGeometriesByTagStatusIndex(
+  geometries: Geometry[],
+  linkedGeometryIds: Set<string>,
+  tagStatusFilter: GeometryTagStatusFilter
+): Geometry[] {
+  if (tagStatusFilter === 'all') return geometries;
+
   return geometries.filter((geometry) => {
     const isTagged = linkedGeometryIds.has(geometry.uuid);
     return tagStatusFilter === 'tagged' ? isTagged : !isTagged;

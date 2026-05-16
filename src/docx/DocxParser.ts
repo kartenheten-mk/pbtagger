@@ -479,18 +479,12 @@ function parseRun(runEl: Element, paraIndex: number, runIndex: number, zip: PizZ
       else if (ext === 'gif') mime = 'image/gif';
       else if (ext === 'svg') mime = 'image/svg+xml';
 
-      let binary = '';
-      const len = data.byteLength;
-      for (let i = 0; i < len; i++) {
-        binary += String.fromCharCode(data[i]);
-      }
-      const base64 = typeof window !== 'undefined' ? window.btoa(binary) : btoa(binary);
-
       return {
         id: runId,
         text: '',
         isImage: true,
-        imageUrl: `data:${mime};base64,${base64}`
+        imageData: data,
+        imageMime: mime,
       };
     }
   }

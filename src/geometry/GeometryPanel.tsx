@@ -26,8 +26,8 @@ import {
   buildHighlightedGeometryUuids,
   buildFocusLinkedGeometryIdsByTagUuidForMode,
   buildDisplayLinkedGeometryIdsByTagUuidForMode,
-  countGeometriesByTagStatus,
-  filterGeometriesByTagStatus,
+  buildGeometryTagStatusIndex,
+  filterGeometriesByTagStatusIndex,
   resolveActiveMapMainMode,
   resolveFocusedGeometryForSelectedTag,
   selectVisibleGeometries,
@@ -230,29 +230,23 @@ export const GeometryPanel: React.FC = () => {
     importedDocxGeometryIdSet,
     importedDocxLinkedGeometryIdsByTagUuid,
   ]);
-  const linkedTagUuidsByGeometryUuid = useMemo(() => {
-    const map = new Map<string, string[]>();
-    for (const tag of tags) {
+  const linkedTagsByGeometryUuid = useMemo(() => {
+    const map = new Map<string, Tag[]>();
+    const sortedTags = [...tags].sort(compareTagsByDocumentOrder);
+    for (const tag of sortedTags) {
       const linkedIds = displayLinkedGeometryIdsByTagUuid.get(tag.uuid);
       if (!linkedIds) continue;
       for (const geoId of linkedIds) {
         const arr = map.get(geoId) ?? [];
-        arr.push(tag.uuid);
+        arr.push(tag);
         map.set(geoId, arr);
       }
     }
     return map;
   }, [tags, displayLinkedGeometryIdsByTagUuid]);
-  const tagByUuid = useMemo(() => new Map(tags.map((t) => [t.uuid, t])), [tags]);
   const getLinkedTagsForGeometry = useCallback(
-    (geometryUuid: string): Tag[] => {
-      const ids = linkedTagUuidsByGeometryUuid.get(geometryUuid) ?? [];
-      return ids
-        .map((id) => tagByUuid.get(id))
-        .filter((tag): tag is Tag => !!tag)
-        .sort(compareTagsByDocumentOrder);
-    },
-    [linkedTagUuidsByGeometryUuid, tagByUuid]
+    (geometryUuid: string): Tag[] => linkedTagsByGeometryUuid.get(geometryUuid) ?? [],
+    [linkedTagsByGeometryUuid]
   );
   const gmlEmptyTitle = 'Ingen GML hittad i importerad DOCX';
   const gmlEmptySubtitle = 'Importera en DOCX med Planbeskrivning GML för att visa befintliga objekt';
@@ -303,18 +297,19 @@ export const GeometryPanel: React.FC = () => {
     setModalPicker(null);
   }, [activeMainMode]);
 
-  const tagStatusCounts = useMemo(
-    () => countGeometriesByTagStatus(visibleGeometries, displayLinkedGeometryIdsByTagUuid),
+  const tagStatusIndex = useMemo(
+    () => buildGeometryTagStatusIndex(visibleGeometries, displayLinkedGeometryIdsByTagUuid),
     [visibleGeometries, displayLinkedGeometryIdsByTagUuid]
   );
+  const tagStatusCounts = tagStatusIndex.counts;
   const statusFilteredGeometries = useMemo(
     () =>
-      filterGeometriesByTagStatus(
+      filterGeometriesByTagStatusIndex(
         visibleGeometries,
-        displayLinkedGeometryIdsByTagUuid,
+        tagStatusIndex.linkedGeometryIds,
         tagStatusFilter
       ),
-    [visibleGeometries, displayLinkedGeometryIdsByTagUuid, tagStatusFilter]
+    [visibleGeometries, tagStatusIndex, tagStatusFilter]
   );
   const tagStatusFilterOptions: Array<{
     value: GeometryTagStatusFilter;
