@@ -88,6 +88,7 @@ export const GeometryPanel: React.FC = () => {
   const mapWrapperRef = useRef<HTMLDivElement>(null);
   const [expandedGeoUuid, setExpandedGeoUuid] = useState<string | null>(null);
   const [manualFocusedGeometryUuid, setManualFocusedGeometryUuid] = useState<string | null>(null);
+  const [hoveredPickerGeometryUuid, setHoveredPickerGeometryUuid] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTypeFilters, setActiveTypeFilters] = useState<Set<string>>(new Set());
   const [mapMainMode, setMapMainMode] = useState<MapMainMode>('json');
@@ -259,6 +260,7 @@ export const GeometryPanel: React.FC = () => {
     setActiveTypeFilters(new Set());
     setExpandedGeoUuid(null);
     setManualFocusedGeometryUuid(null);
+    setHoveredPickerGeometryUuid(null);
     setPicker(null);
     setModalPicker(null);
   }, [activeMainMode]);
@@ -489,6 +491,11 @@ export const GeometryPanel: React.FC = () => {
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <h2 className="text-sm font-semibold text-gray-700 truncate">Karta</h2>
+            <p className="text-[10px] text-gray-400 mt-0.5">
+              {activeMainMode === 'json'
+                ? `JSON · ${filteredGeometries.length} visade`
+                : `${visibleGeometries.length} geometrier finns redan i dokumentet`}
+            </p>
           </div>
 
           <div className="flex items-center gap-1">
@@ -575,6 +582,7 @@ export const GeometryPanel: React.FC = () => {
           geometries={filteredGeometries}
           selectedGeometryUuids={selectedGeometryUuids}
           pendingGeometryUuids={pendingGeometryUuids}
+          previewGeometryUuid={hoveredPickerGeometryUuid}
           isLinking={isLinking}
           emptyStateTitle={
             activeMainMode === 'json'
@@ -589,6 +597,7 @@ export const GeometryPanel: React.FC = () => {
           onFeatureClick={handleMapFeatureClick}
           onMultiFeatureClick={(items, pixelX, pixelY) => {
             // pixelX/Y are relative to the inner map div (inside 12px padding)
+            setHoveredPickerGeometryUuid(null);
             setPicker({ items, x: pixelX + 12, y: pixelY + 12 });
           }}
         />
@@ -623,7 +632,13 @@ export const GeometryPanel: React.FC = () => {
           return (
             <>
               {/* Backdrop */}
-              <div className="absolute inset-0 z-40" onClick={() => setPicker(null)} />
+              <div
+                className="absolute inset-0 z-40"
+                onClick={() => {
+                  setHoveredPickerGeometryUuid(null);
+                  setPicker(null);
+                }}
+              />
               <div
                 className="absolute z-50 bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden"
                 style={{ left, top, width: POPUP_W }}
@@ -635,7 +650,11 @@ export const GeometryPanel: React.FC = () => {
                     {picker.items.length} geometrier
                   </span>
                   <button
-                    onClick={() => setPicker(null)}
+                    onClick={() => {
+                      setHoveredPickerGeometryUuid(null);
+                      setPicker(null);
+                    }}
+                    aria-label="Stäng geometriväljare"
                     className="text-gray-300 hover:text-gray-500 transition-colors"
                   >
                     <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -644,13 +663,21 @@ export const GeometryPanel: React.FC = () => {
                   </button>
                 </div>
                 {/* Scrollable list */}
-                <ul style={{ maxHeight: MAX_VISIBLE * ITEM_H, overflowY: 'auto' }}>
+                <ul
+                  style={{ maxHeight: MAX_VISIBLE * ITEM_H, overflowY: 'auto' }}
+                  onPointerLeave={() => setHoveredPickerGeometryUuid(null)}
+                >
                   {picker.items.map((item) => (
                     <li key={item.uuid}>
                       <button
                         className={`w-full flex items-center gap-1.5 px-2.5 py-1.5 text-left transition-colors hover:bg-gray-50 ${item.isChecked ? 'bg-blue-50' : ''}`}
                         style={{ height: ITEM_H }}
+                        onPointerEnter={() => setHoveredPickerGeometryUuid(item.uuid)}
+                        onPointerLeave={() => setHoveredPickerGeometryUuid(null)}
+                        onFocus={() => setHoveredPickerGeometryUuid(item.uuid)}
+                        onBlur={() => setHoveredPickerGeometryUuid(null)}
                         onClick={() => {
+                          setHoveredPickerGeometryUuid(null);
                           handleMapFeatureClick(item.uuid);
                           setPicker(null);
                         }}
@@ -973,6 +1000,11 @@ export const GeometryPanel: React.FC = () => {
                 <span className="text-base">🗺</span>
                 <div>
                   <h2 className="text-sm font-semibold text-gray-700">Karta</h2>
+                  <p className="text-[10px] text-gray-400 mt-0.5">
+                    {activeMainMode === 'json'
+                      ? `JSON · ${filteredGeometries.length} visade`
+                      : `${visibleGeometries.length} geometrier finns redan i dokumentet`}
+                  </p>
                 </div>
               </div>
               {isLinking && (
@@ -984,7 +1016,11 @@ export const GeometryPanel: React.FC = () => {
                 </div>
               )}
               <button
-                onClick={() => { setIsMapMaximized(false); setModalPicker(null); }}
+                onClick={() => {
+                  setHoveredPickerGeometryUuid(null);
+                  setIsMapMaximized(false);
+                  setModalPicker(null);
+                }}
                 className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-all"
                 title="Stäng"
               >
@@ -1003,6 +1039,7 @@ export const GeometryPanel: React.FC = () => {
                 geometries={filteredGeometries}
                 selectedGeometryUuids={selectedGeometryUuids}
                 pendingGeometryUuids={pendingGeometryUuids}
+                previewGeometryUuid={hoveredPickerGeometryUuid}
                 isLinking={isLinking}
                 emptyStateTitle={
                   activeMainMode === 'json'
@@ -1016,6 +1053,7 @@ export const GeometryPanel: React.FC = () => {
                 }
                 onFeatureClick={handleMapFeatureClick}
                 onMultiFeatureClick={(items, pixelX, pixelY) => {
+                  setHoveredPickerGeometryUuid(null);
                   setModalPicker({ items, x: pixelX + 12, y: pixelY + 12 });
                 }}
               />
@@ -1037,7 +1075,13 @@ export const GeometryPanel: React.FC = () => {
 
                 return (
                   <>
-                    <div className="absolute inset-0 z-40" onClick={() => setModalPicker(null)} />
+                    <div
+                      className="absolute inset-0 z-40"
+                      onClick={() => {
+                        setHoveredPickerGeometryUuid(null);
+                        setModalPicker(null);
+                      }}
+                    />
                     <div
                       className="absolute z-50 bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden"
                       style={{ left, top, width: POPUP_W }}
@@ -1048,7 +1092,11 @@ export const GeometryPanel: React.FC = () => {
                           {modalPicker.items.length} geometrier
                         </span>
                         <button
-                          onClick={() => setModalPicker(null)}
+                          onClick={() => {
+                            setHoveredPickerGeometryUuid(null);
+                            setModalPicker(null);
+                          }}
+                          aria-label="Stäng geometriväljare"
                           className="text-gray-300 hover:text-gray-500 transition-colors"
                         >
                           <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1056,13 +1104,21 @@ export const GeometryPanel: React.FC = () => {
                           </svg>
                         </button>
                       </div>
-                      <ul style={{ maxHeight: MAX_VISIBLE * ITEM_H, overflowY: 'auto' }}>
+                      <ul
+                        style={{ maxHeight: MAX_VISIBLE * ITEM_H, overflowY: 'auto' }}
+                        onPointerLeave={() => setHoveredPickerGeometryUuid(null)}
+                      >
                         {modalPicker.items.map((item) => (
                           <li key={item.uuid}>
                             <button
                               className={`w-full flex items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-gray-50 ${item.isChecked ? 'bg-blue-50' : ''}`}
                               style={{ height: ITEM_H }}
+                              onPointerEnter={() => setHoveredPickerGeometryUuid(item.uuid)}
+                              onPointerLeave={() => setHoveredPickerGeometryUuid(null)}
+                              onFocus={() => setHoveredPickerGeometryUuid(item.uuid)}
+                              onBlur={() => setHoveredPickerGeometryUuid(null)}
                               onClick={() => {
+                                setHoveredPickerGeometryUuid(null);
                                 handleMapFeatureClick(item.uuid);
                                 setModalPicker(null);
                               }}

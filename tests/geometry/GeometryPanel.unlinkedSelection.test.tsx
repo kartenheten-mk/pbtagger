@@ -12,11 +12,13 @@ vi.mock('../../src/geometry/MapView', () => ({
   MapView: ({
     geometries,
     selectedGeometryUuids,
+    previewGeometryUuid,
     onFeatureClick,
     onMultiFeatureClick,
   }: {
     geometries: Geometry[];
     selectedGeometryUuids: string[];
+    previewGeometryUuid?: string | null;
     onFeatureClick: (uuid: string) => void;
     onMultiFeatureClick: (
       items: Array<{
@@ -33,6 +35,7 @@ vi.mock('../../src/geometry/MapView', () => ({
     <div
       data-testid="mock-map-view"
       data-selected-uuids={selectedGeometryUuids.join(',')}
+      data-preview-uuid={previewGeometryUuid ?? ''}
     >
       {geometries.map((geometry) => (
         <button
@@ -208,6 +211,35 @@ describe('GeometryPanel unlinked geometry selection', () => {
     );
     expect(getGeometryRow('geo-b', container).className).toContain('bg-blue-50');
     expect(useDocumentStore.getState().selectedTagUuid).toBeNull();
+  });
+
+  it('previews an overlap picker geometry on hover without selecting it', () => {
+    render(<GeometryPanel />);
+
+    fireEvent.click(screen.getByText('open-overlap-picker'));
+    fireEvent.pointerEnter(screen.getByRole('button', { name: /Unlinked B/ }));
+
+    const map = screen.getByTestId('mock-map-view');
+    expect(map.getAttribute('data-preview-uuid')).toBe('geo-b');
+    expect(map.getAttribute('data-selected-uuids')).toBe('');
+    expect(useDocumentStore.getState().selectedTagUuid).toBeNull();
+  });
+
+  it('clears the overlap picker preview on pointer leave and close', () => {
+    render(<GeometryPanel />);
+
+    fireEvent.click(screen.getByText('open-overlap-picker'));
+    const unlinkedB = screen.getByRole('button', { name: /Unlinked B/ });
+    fireEvent.pointerEnter(unlinkedB);
+    fireEvent.pointerLeave(unlinkedB);
+
+    expect(screen.getByTestId('mock-map-view').getAttribute('data-preview-uuid')).toBe('');
+
+    fireEvent.pointerEnter(screen.getByRole('button', { name: /Unlinked A/ }));
+    expect(screen.getByTestId('mock-map-view').getAttribute('data-preview-uuid')).toBe('geo-a');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Stäng geometriväljare' }));
+    expect(screen.getByTestId('mock-map-view').getAttribute('data-preview-uuid')).toBe('');
   });
 
   it('shows a JSON linked summary using unique linked geometry count', () => {

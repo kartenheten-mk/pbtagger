@@ -17,7 +17,7 @@
  *   featureProjection:'EPSG:3857' → displayed on OSM map (EPSG:3857)
  */
 
-import React, { useEffect, useRef, useCallback } from 'react';
+import React, { useEffect, useRef } from 'react';
 
 // OpenLayers core
 import Map from 'ol/Map';
@@ -59,6 +59,8 @@ interface MapViewProps {
   selectedGeometryUuids: string[];
   /** UUIDs of features being staged for batch-link (shown with checkbox style) */
   pendingGeometryUuids?: string[];
+  /** UUID of a feature being previewed from an overlap picker hover */
+  previewGeometryUuid?: string | null;
   isLinking: boolean;
   /** Single-feature click — always fires when exactly one feature is at the pixel */
   onFeatureClick: (uuid: string) => void;
@@ -80,24 +82,29 @@ function makeStyle(
   color: string,
   selected: boolean,
   pending: boolean,
+  preview: boolean,
   linking: boolean
 ): Style {
-  const fillAlpha = selected ? '20' : '15';
-  const strokeWidth = selected ? 4 : pending ? 3 : linking ? 2 : 1.5;
+  const fillAlpha = selected ? '20' : preview ? '18' : '15';
+  const strokeWidth = selected ? 4 : pending ? 3 : preview ? 3 : linking ? 2 : 1.5;
   const strokeColor = selected
     ? '#facc15'
     : pending
       ? '#10b981'
-      : linking
-        ? '#2563eb'
-        : color;
+      : preview
+        ? '#f59e0b'
+        : linking
+          ? '#2563eb'
+          : color;
+  const zIndex = selected ? 100 : pending ? 75 : preview ? 60 : 0;
+  const radius = selected ? 8 : pending ? 7 : preview ? 7 : 6;
 
   return new Style({
-    zIndex: selected ? 100 : pending ? 50 : 0,
+    zIndex,
     fill: new Fill({ color: color + fillAlpha }),
     stroke: new Stroke({ color: strokeColor, width: strokeWidth }),
     image: new CircleStyle({
-      radius: selected ? 8 : pending ? 7 : 6,
+      radius,
       fill: new Fill({ color: color + fillAlpha }),
       stroke: new Stroke({ color: strokeColor, width: strokeWidth }),
     }),
@@ -108,13 +115,33 @@ function styleFunction(
   feature: FeatureLike,
   selectedUuids: string[],
   pendingUuids: string[],
+  previewUuid: string | null | undefined,
   isLinking: boolean
 ): Style {
   const uuid = feature.get('uuid') as string;
   const color: string = feature.get('color') ?? '#6b7280';
   const selected = selectedUuids.includes(uuid);
   const pending = !selected && pendingUuids.includes(uuid);
-  return makeStyle(color, selected, pending, isLinking && !selected && !pending);
+  const preview = !selected && !pending && previewUuid === uuid;
+  return makeStyle(color, selected, pending, preview, isLinking && !selected && !pending && !preview);
+}
+
+function buildGeometryDataKey(geometries: Geometry[]): string {
+  return JSON.stringify(
+    geometries.map((geometry) => [
+      geometry.uuid,
+      geometry.name,
+      geometry.type,
+      geometry.crs,
+      geometry.featureType,
+      geometry.source,
+      geometry.sourceDocId,
+      geometry.color,
+      geometry.coordinates,
+      geometry.properties?.['bestammelseformulering'],
+      geometry.properties?.['kategori'],
+    ])
+  );
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -123,6 +150,7 @@ export const MapView: React.FC<MapViewProps> = ({
   geometries,
   selectedGeometryUuids,
   pendingGeometryUuids = [],
+  previewGeometryUuid = null,
   isLinking,
   onFeatureClick,
   onMultiFeatureClick,
@@ -143,6 +171,12 @@ export const MapView: React.FC<MapViewProps> = ({
   pendingUuidsRef.current = pendingGeometryUuids;
   const selectedUuidsRef = useRef(selectedGeometryUuids);
   selectedUuidsRef.current = selectedGeometryUuids;
+  const geometriesRef = useRef(geometries);
+  geometriesRef.current = geometries;
+  const selectedGeometryKey = selectedGeometryUuids.length === 0
+    ? ''
+    : [...selectedGeometryUuids].sort().join('\u0000');
+  const geometryDataKey = buildGeometryDataKey(geometries);
 
   // ── Initialise map once ───────────────────────────────────────────────────
   useEffect(() => {
@@ -154,7 +188,13 @@ export const MapView: React.FC<MapViewProps> = ({
     const vectorLayer = new VectorLayer({
       source: vectorSource,
       style: (feature) =>
-        styleFunction(feature, selectedGeometryUuids, pendingGeometryUuids, isLinking),
+        styleFunction(
+          feature,
+          selectedGeometryUuids,
+          pendingGeometryUuids,
+          previewGeometryUuid,
+          isLinking
+        ),
     });
     vectorLayerRef.current = vectorLayer;
 
@@ -228,11 +268,12 @@ export const MapView: React.FC<MapViewProps> = ({
   useEffect(() => {
     const source = vectorSourceRef.current;
     if (!source) return;
+    const currentGeometries = geometriesRef.current;
 
     source.clear();
-    if (geometries.length === 0) return;
+    if (currentGeometries.length === 0) return;
 
-    const geoJsonData = geometriesToGeoJson(geometries);
+    const geoJsonData = geometriesToGeoJson(currentGeometries);
     const format = new GeoJSON();
     const features = format.readFeatures(geoJsonData, {
       dataProjection: 'EPSG:4326',
@@ -248,20 +289,26 @@ export const MapView: React.FC<MapViewProps> = ({
         duration: 500,
       });
     }
-  }, [geometries]);
+  }, [geometryDataKey]);
 
   // ── Refresh style when selection / pending / linking mode changes ─────────
   useEffect(() => {
     const layer = vectorLayerRef.current;
     if (!layer) return;
     layer.setStyle((feature) =>
-      styleFunction(feature, selectedGeometryUuids, pendingGeometryUuids, isLinking)
+      styleFunction(
+        feature,
+        selectedGeometryUuids,
+        pendingGeometryUuids,
+        previewGeometryUuid,
+        isLinking
+      )
     );
-  }, [selectedGeometryUuids, pendingGeometryUuids, isLinking]);
+  }, [selectedGeometryUuids, pendingGeometryUuids, previewGeometryUuid, isLinking]);
 
   // ── Pan to fit all selected features ─────────────────────────────────────
-  const panToSelected = useCallback(() => {
-    const uuids = selectedGeometryUuids;
+  useEffect(() => {
+    const uuids = selectedUuidsRef.current;
     if (uuids.length === 0 || !vectorSourceRef.current || !mapRef.current) return;
 
     const combined = createEmpty();
@@ -283,11 +330,7 @@ export const MapView: React.FC<MapViewProps> = ({
       maxZoom: 18,
       duration: 400,
     });
-  }, [selectedGeometryUuids]);
-
-  useEffect(() => {
-    panToSelected();
-  }, [panToSelected]);
+  }, [selectedGeometryKey]);
 
   return (
     <div className="relative w-full h-full rounded-xl overflow-hidden border border-gray-200">
