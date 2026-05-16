@@ -1,6 +1,13 @@
 import type { Geometry, Tag } from '../types';
 
 export type MapMainMode = 'json' | 'gml';
+export type GeometryTagStatusFilter = 'all' | 'tagged' | 'untagged';
+
+export interface GeometryTagStatusCounts {
+  all: number;
+  tagged: number;
+  untagged: number;
+}
 
 export function resolveActiveMapMainMode(
   requestedMode: MapMainMode,
@@ -16,6 +23,48 @@ export function selectVisibleGeometries(
 ): Geometry[] {
   if (activeMainMode === 'json') return jsonGeometries;
   return importedDocxGeometries;
+}
+
+function buildLinkedGeometryIdSet(
+  displayLinkedGeometryIdsByTagUuid: Map<string, Set<string>>
+): Set<string> {
+  const linkedGeometryIds = new Set<string>();
+
+  for (const geometryIds of displayLinkedGeometryIdsByTagUuid.values()) {
+    for (const geometryId of geometryIds) {
+      linkedGeometryIds.add(geometryId);
+    }
+  }
+
+  return linkedGeometryIds;
+}
+
+export function countGeometriesByTagStatus(
+  geometries: Geometry[],
+  displayLinkedGeometryIdsByTagUuid: Map<string, Set<string>>
+): GeometryTagStatusCounts {
+  const linkedGeometryIds = buildLinkedGeometryIdSet(displayLinkedGeometryIdsByTagUuid);
+  const tagged = geometries.filter((geometry) => linkedGeometryIds.has(geometry.uuid)).length;
+
+  return {
+    all: geometries.length,
+    tagged,
+    untagged: geometries.length - tagged,
+  };
+}
+
+export function filterGeometriesByTagStatus(
+  geometries: Geometry[],
+  displayLinkedGeometryIdsByTagUuid: Map<string, Set<string>>,
+  tagStatusFilter: GeometryTagStatusFilter
+): Geometry[] {
+  if (tagStatusFilter === 'all') return geometries;
+
+  const linkedGeometryIds = buildLinkedGeometryIdSet(displayLinkedGeometryIdsByTagUuid);
+  return geometries.filter((geometry) => {
+    const isTagged = linkedGeometryIds.has(geometry.uuid);
+    return tagStatusFilter === 'tagged' ? isTagged : !isTagged;
+  });
 }
 
 interface BuildHighlightedGeometryUuidsArgs {

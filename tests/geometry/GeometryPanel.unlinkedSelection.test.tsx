@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, cleanup } from '@testing-library/react';
+import { act, fireEvent, render, screen, cleanup, waitFor } from '@testing-library/react';
 import { GeometryPanel } from '../../src/geometry/GeometryPanel';
 import { useDocumentStore } from '../../src/store/useDocumentStore';
 import type { Geometry, Tag } from '../../src/types';
@@ -34,6 +34,7 @@ vi.mock('../../src/geometry/MapView', () => ({
   }) => (
     <div
       data-testid="mock-map-view"
+      data-geometry-uuids={geometries.map((geometry) => geometry.uuid).join(',')}
       data-selected-uuids={selectedGeometryUuids.join(',')}
       data-preview-uuid={previewGeometryUuid ?? ''}
     >
@@ -158,6 +159,11 @@ function openDocumentGeometryCheck() {
   fireEvent.click(screen.getByRole('button', { name: 'Dokumentkontroll' }));
 }
 
+function getMapGeometryUuids(): string[] {
+  const raw = screen.getByTestId('mock-map-view').getAttribute('data-geometry-uuids') ?? '';
+  return raw ? raw.split(',') : [];
+}
+
 describe('GeometryPanel unlinked geometry selection', () => {
   beforeEach(() => {
     window.localStorage.clear();
@@ -272,6 +278,80 @@ describe('GeometryPanel unlinked geometry selection', () => {
     expect(container.textContent).not.toContain('Preview-GML');
   });
 
+  it('filters JSON geometries by tagged status in both map and list', () => {
+    resetStore(
+      [
+        makeGeometry('geo-a', 'Linked A'),
+        makeGeometry('geo-b', 'Linked B'),
+        makeGeometry('geo-c', 'Unlinked C'),
+      ],
+      {
+        tags: [
+          makeTag({ geometryIds: ['geo-a', 'geo-b'] }),
+        ],
+      }
+    );
+
+    render(<GeometryPanel />);
+
+    fireEvent.click(screen.getByRole('button', { name: /^Taggade\s*2$/ }));
+
+    expect(screen.getByText('Linked A')).toBeTruthy();
+    expect(screen.getByText('Linked B')).toBeTruthy();
+    expect(screen.queryByText('Unlinked C')).toBeNull();
+    expect(getMapGeometryUuids()).toEqual(['geo-a', 'geo-b']);
+    expect(screen.getByText(hasExactText('JSON · 2 visade'))).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: /^Otaggade\s*1$/ }));
+
+    expect(screen.queryByText('Linked A')).toBeNull();
+    expect(screen.queryByText('Linked B')).toBeNull();
+    expect(screen.getByText('Unlinked C')).toBeTruthy();
+    expect(getMapGeometryUuids()).toEqual(['geo-c']);
+    expect(screen.getByText(hasExactText('JSON · 1 visade'))).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: /^Alla\s*3$/ }));
+
+    expect(screen.getByText('Linked A')).toBeTruthy();
+    expect(screen.getByText('Linked B')).toBeTruthy();
+    expect(screen.getByText('Unlinked C')).toBeTruthy();
+    expect(getMapGeometryUuids()).toEqual(['geo-a', 'geo-b', 'geo-c']);
+  });
+
+  it('resets the untagged filter when a selected tag focuses a linked geometry', async () => {
+    const tag = makeTag({
+      uuid: 'tag-linked',
+      geometryIds: ['geo-a'],
+    });
+    resetStore(
+      [
+        makeGeometry('geo-a', 'Linked A'),
+        makeGeometry('geo-b', 'Unlinked B'),
+      ],
+      {
+        tags: [tag],
+      }
+    );
+
+    render(<GeometryPanel />);
+
+    fireEvent.click(screen.getByRole('button', { name: /^Otaggade\s*1$/ }));
+    expect(screen.queryByText('Linked A')).toBeNull();
+    expect(screen.getByText('Unlinked B')).toBeTruthy();
+
+    act(() => {
+      useDocumentStore.setState({ selectedTagUuid: tag.uuid });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('Linked A')).toBeTruthy();
+    });
+    expect(screen.getByRole('button', { name: /^Alla\s*2$/ }).getAttribute('aria-pressed')).toBe(
+      'true'
+    );
+    expect(getMapGeometryUuids()).toEqual(['geo-a', 'geo-b']);
+  });
+
   it('hides the JSON linked summary in document-check mode without preview controls', () => {
     resetStore(
       [
@@ -306,6 +386,39 @@ describe('GeometryPanel unlinked geometry selection', () => {
     expect(screen.queryByText(hasExactText('0 av 0 geometrier är länkade'))).toBeNull();
     expect(screen.getByText(hasExactText('1 geometrier finns redan i dokumentet'))).toBeTruthy();
     expect(screen.getByText('map-select-docx-1')).toBeTruthy();
+  });
+
+  it('uses mirrored document-check links for tagged and untagged status filters', () => {
+    const tag = makeTag({
+      uuid: '11111111-2222-3333-4444-555555555555',
+      geometryIds: ['stale-json-1'],
+    });
+    resetStore(
+      [
+        {
+          ...makeDocxGmlGeometry('docx-linked', 'Mirrored GML'),
+          properties: { identitet: generateBookmarkName(tag) },
+        },
+        makeDocxGmlGeometry('docx-unlinked', 'Unlinked GML'),
+      ],
+      {
+        tags: [tag],
+      }
+    );
+
+    render(<GeometryPanel />);
+
+    fireEvent.click(screen.getByRole('button', { name: /^Taggade\s*1$/ }));
+
+    expect(screen.getByText('Mirrored GML')).toBeTruthy();
+    expect(screen.queryByText('Unlinked GML')).toBeNull();
+    expect(getMapGeometryUuids()).toEqual(['docx-linked']);
+
+    fireEvent.click(screen.getByRole('button', { name: /^Otaggade\s*1$/ }));
+
+    expect(screen.queryByText('Mirrored GML')).toBeNull();
+    expect(screen.getByText('Unlinked GML')).toBeTruthy();
+    expect(getMapGeometryUuids()).toEqual(['docx-unlinked']);
   });
 
   it('shows imported-docx header copy when using document-check mode', () => {

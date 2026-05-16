@@ -25,9 +25,12 @@ import {
   buildHighlightedGeometryUuids,
   buildFocusLinkedGeometryIdsByTagUuidForMode,
   buildDisplayLinkedGeometryIdsByTagUuidForMode,
+  countGeometriesByTagStatus,
+  filterGeometriesByTagStatus,
   resolveActiveMapMainMode,
   resolveFocusedGeometryForSelectedTag,
   selectVisibleGeometries,
+  type GeometryTagStatusFilter,
   type MapMainMode,
 } from './mapDataMode';
 
@@ -45,6 +48,18 @@ const FEATURE_COLORS: Record<string, string> = {
   'användningsbestämmelse': '#10b981',
   'egenskapsbestämmelse': '#8b5cf6',
   planbeskrivning: '#f97316',
+};
+
+const TAG_STATUS_FILTER_LABELS: Record<GeometryTagStatusFilter, string> = {
+  all: 'Alla',
+  tagged: 'Taggade',
+  untagged: 'Otaggade',
+};
+
+const TAG_STATUS_FILTER_COLORS: Record<GeometryTagStatusFilter, string> = {
+  all: '#6b7280',
+  tagged: '#3b82f6',
+  untagged: '#f97316',
 };
 
 function featureIcon(featureType?: string): string {
@@ -91,6 +106,7 @@ export const GeometryPanel: React.FC = () => {
   const [hoveredPickerGeometryUuid, setHoveredPickerGeometryUuid] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTypeFilters, setActiveTypeFilters] = useState<Set<string>>(new Set());
+  const [tagStatusFilter, setTagStatusFilter] = useState<GeometryTagStatusFilter>('all');
   const [mapMainMode, setMapMainMode] = useState<MapMainMode>('json');
 
   // ── Map maximize state ────────────────────────────────────────────────────
@@ -258,12 +274,40 @@ export const GeometryPanel: React.FC = () => {
   // Reset type chips when source mode changes to avoid hidden stale filters.
   useEffect(() => {
     setActiveTypeFilters(new Set());
+    setTagStatusFilter('all');
     setExpandedGeoUuid(null);
     setManualFocusedGeometryUuid(null);
     setHoveredPickerGeometryUuid(null);
     setPicker(null);
     setModalPicker(null);
   }, [activeMainMode]);
+
+  const tagStatusCounts = useMemo(
+    () => countGeometriesByTagStatus(visibleGeometries, displayLinkedGeometryIdsByTagUuid),
+    [visibleGeometries, displayLinkedGeometryIdsByTagUuid]
+  );
+  const statusFilteredGeometries = useMemo(
+    () =>
+      filterGeometriesByTagStatus(
+        visibleGeometries,
+        displayLinkedGeometryIdsByTagUuid,
+        tagStatusFilter
+      ),
+    [visibleGeometries, displayLinkedGeometryIdsByTagUuid, tagStatusFilter]
+  );
+  const tagStatusFilterOptions: Array<{
+    value: GeometryTagStatusFilter;
+    label: string;
+    count: number;
+  }> = [
+    { value: 'all', label: TAG_STATUS_FILTER_LABELS.all, count: tagStatusCounts.all },
+    { value: 'tagged', label: TAG_STATUS_FILTER_LABELS.tagged, count: tagStatusCounts.tagged },
+    { value: 'untagged', label: TAG_STATUS_FILTER_LABELS.untagged, count: tagStatusCounts.untagged },
+  ];
+  const hasActiveGeometryFilters =
+    tagStatusFilter !== 'all' ||
+    activeTypeFilters.size > 0 ||
+    searchQuery.trim().length > 0;
 
   // ── Derive unique feature types for filter chips ──────────────────────────
   const allFeatureTypes = Array.from(
@@ -281,7 +325,7 @@ export const GeometryPanel: React.FC = () => {
   };
 
   // ── Filtered geometries (used for both list and map) ──────────────────────
-  const filteredGeometries = visibleGeometries.filter((geo) => {
+  const filteredGeometries = statusFilteredGeometries.filter((geo) => {
     if (activeTypeFilters.size > 0 && !activeTypeFilters.has(geo.featureType ?? 'okänd')) {
       return false;
     }
@@ -379,6 +423,12 @@ export const GeometryPanel: React.FC = () => {
       if (geo && activeTypeFilters.size > 0 && !activeTypeFilters.has(geo.featureType ?? 'okänd')) {
         setActiveTypeFilters(new Set());
       }
+      if (
+        tagStatusFilter !== 'all' &&
+        !statusFilteredGeometries.some((g) => g.uuid === focusGeoId)
+      ) {
+        setTagStatusFilter('all');
+      }
       if (searchQuery.trim()) {
         const selectedStillVisible = filteredGeometries.some((g) => g.uuid === focusGeoId);
         if (!selectedStillVisible) {
@@ -401,8 +451,10 @@ export const GeometryPanel: React.FC = () => {
     activeTypeFilters,
     activeMainMode,
     visibleGeometries,
+    statusFilteredGeometries,
     filteredGeometries,
     isLinking,
+    tagStatusFilter,
     searchQuery,
     expandedGeoUuid,
   ]);
@@ -494,7 +546,9 @@ export const GeometryPanel: React.FC = () => {
             <p className="text-[10px] text-gray-400 mt-0.5">
               {activeMainMode === 'json'
                 ? `JSON · ${filteredGeometries.length} visade`
-                : `${visibleGeometries.length} geometrier finns redan i dokumentet`}
+                : hasActiveGeometryFilters
+                  ? `${filteredGeometries.length} av ${visibleGeometries.length} geometrier finns redan i dokumentet`
+                  : `${visibleGeometries.length} geometrier finns redan i dokumentet`}
             </p>
           </div>
 
@@ -716,6 +770,36 @@ export const GeometryPanel: React.FC = () => {
             {String(geometries.find((g) => g.sourceDocId === activeGeometryDocId)
               ?.properties?.['beteckning'] ?? 'Detaljplan inläst')}
           </p>
+        </div>
+      )}
+
+      {/* ── Tag status filter ─────────────────────────────────────────────── */}
+      {visibleGeometries.length > 0 && (
+        <div className="px-3 pb-2 flex flex-wrap gap-1">
+          {tagStatusFilterOptions.map((option) => {
+            const active = tagStatusFilter === option.value;
+            const color = TAG_STATUS_FILTER_COLORS[option.value];
+            return (
+              <button
+                key={option.value}
+                type="button"
+                aria-pressed={active}
+                onClick={() => setTagStatusFilter(option.value)}
+                className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border transition-all ${
+                  active
+                    ? 'text-white border-transparent'
+                    : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300'
+                }`}
+                style={active ? { backgroundColor: color, borderColor: color } : {}}
+                title={`Visa ${option.label.toLowerCase()} geometrier`}
+              >
+                <span>{option.label}</span>
+                <span className={active ? 'text-white/90' : 'text-gray-400'}>
+                  {option.count}
+                </span>
+              </button>
+            );
+          })}
         </div>
       )}
 
@@ -1003,7 +1087,9 @@ export const GeometryPanel: React.FC = () => {
                   <p className="text-[10px] text-gray-400 mt-0.5">
                     {activeMainMode === 'json'
                       ? `JSON · ${filteredGeometries.length} visade`
-                      : `${visibleGeometries.length} geometrier finns redan i dokumentet`}
+                      : hasActiveGeometryFilters
+                        ? `${filteredGeometries.length} av ${visibleGeometries.length} geometrier finns redan i dokumentet`
+                        : `${visibleGeometries.length} geometrier finns redan i dokumentet`}
                   </p>
                 </div>
               </div>

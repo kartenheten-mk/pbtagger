@@ -4,6 +4,8 @@ import {
   buildFocusLinkedGeometryIdsByTagUuidForMode,
   buildHighlightedGeometryUuids,
   buildDisplayLinkedGeometryIdsByTagUuidForMode,
+  countGeometriesByTagStatus,
+  filterGeometriesByTagStatus,
   resolveFocusedGeometryForSelectedTag,
   resolveActiveMapMainMode,
   selectVisibleGeometries,
@@ -54,6 +56,33 @@ describe('mapDataMode view-model helpers', () => {
 
     expect(jsonVisible.map((g) => g.uuid)).toEqual(['json-1']);
     expect(gmlVisible.map((g) => g.uuid)).toEqual(['imported-1']);
+  });
+
+  it('filters and counts geometries by tag status using displayed links', () => {
+    const visible = [
+      makeGeometry('geo-a', 'json'),
+      makeGeometry('geo-b', 'json'),
+      makeGeometry('geo-c', 'json'),
+    ];
+    const displayedLinks = new Map<string, Set<string>>([
+      ['tag-1', new Set(['geo-a', 'missing-geo'])],
+      ['tag-2', new Set(['geo-c'])],
+    ]);
+
+    expect(
+      filterGeometriesByTagStatus(visible, displayedLinks, 'all').map((g) => g.uuid)
+    ).toEqual(['geo-a', 'geo-b', 'geo-c']);
+    expect(
+      filterGeometriesByTagStatus(visible, displayedLinks, 'tagged').map((g) => g.uuid)
+    ).toEqual(['geo-a', 'geo-c']);
+    expect(
+      filterGeometriesByTagStatus(visible, displayedLinks, 'untagged').map((g) => g.uuid)
+    ).toEqual(['geo-b']);
+    expect(countGeometriesByTagStatus(visible, displayedLinks)).toEqual({
+      all: 3,
+      tagged: 2,
+      untagged: 1,
+    });
   });
 
   it('uses current explicit links only for Imported DOCX mode badges', () => {
