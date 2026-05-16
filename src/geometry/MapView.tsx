@@ -17,13 +17,13 @@
  *   featureProjection:'EPSG:3857' → displayed on OSM map (EPSG:3857)
  */
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 
 // OpenLayers core
 import Map from 'ol/Map';
 import View from 'ol/View';
 import TileLayer from 'ol/layer/Tile';
-import VectorLayer from 'ol/layer/Vector';
+import VectorImageLayer from 'ol/layer/VectorImage';
 import VectorSource from 'ol/source/Vector';
 import OSM from 'ol/source/OSM';
 import GeoJSON from 'ol/format/GeoJSON';
@@ -78,13 +78,15 @@ interface MapViewProps {
 
 // ─── Style factory ────────────────────────────────────────────────────────────
 
-function makeStyle(
-  color: string,
-  selected: boolean,
-  pending: boolean,
-  preview: boolean,
-  linking: boolean
-): Style {
+type StyleMode = 'default' | 'selected' | 'pending' | 'preview' | 'linking';
+
+const styleCache = new globalThis.Map<string, Style>();
+
+function makeStyle(color: string, mode: StyleMode): Style {
+  const selected = mode === 'selected';
+  const pending = mode === 'pending';
+  const preview = mode === 'preview';
+  const linking = mode === 'linking';
   const fillAlpha = selected ? '20' : preview ? '18' : '15';
   const strokeWidth = selected ? 4 : pending ? 3 : preview ? 3 : linking ? 2 : 1.5;
   const strokeColor = selected
@@ -111,37 +113,77 @@ function makeStyle(
   });
 }
 
+function getCachedStyle(color: string, mode: StyleMode): Style {
+  const cacheKey = `${color}\u0000${mode}`;
+  const cached = styleCache.get(cacheKey);
+  if (cached) return cached;
+  const style = makeStyle(color, mode);
+  styleCache.set(cacheKey, style);
+  return style;
+}
+
 function styleFunction(
   feature: FeatureLike,
-  selectedUuids: string[],
-  pendingUuids: string[],
+  selectedUuids: Set<string>,
+  pendingUuids: Set<string>,
   previewUuid: string | null | undefined,
   isLinking: boolean
 ): Style {
   const uuid = feature.get('uuid') as string;
   const color: string = feature.get('color') ?? '#6b7280';
-  const selected = selectedUuids.includes(uuid);
-  const pending = !selected && pendingUuids.includes(uuid);
+  const selected = selectedUuids.has(uuid);
+  const pending = !selected && pendingUuids.has(uuid);
   const preview = !selected && !pending && previewUuid === uuid;
-  return makeStyle(color, selected, pending, preview, isLinking && !selected && !pending && !preview);
+  const mode: StyleMode = selected
+    ? 'selected'
+    : pending
+      ? 'pending'
+      : preview
+        ? 'preview'
+        : isLinking
+          ? 'linking'
+          : 'default';
+  return getCachedStyle(color, mode);
+}
+
+const coordinateIdentityByArray = new WeakMap<object, number>();
+let nextCoordinateIdentity = 1;
+
+function getCoordinateIdentity(coordinates: Geometry['coordinates']): number {
+  const existing = coordinateIdentityByArray.get(coordinates);
+  if (existing) return existing;
+  const identity = nextCoordinateIdentity;
+  nextCoordinateIdentity += 1;
+  coordinateIdentityByArray.set(coordinates, identity);
+  return identity;
 }
 
 function buildGeometryDataKey(geometries: Geometry[]): string {
-  return JSON.stringify(
-    geometries.map((geometry) => [
-      geometry.uuid,
-      geometry.name,
-      geometry.type,
-      geometry.crs,
-      geometry.featureType,
-      geometry.source,
-      geometry.sourceDocId,
-      geometry.color,
-      geometry.coordinates,
-      geometry.properties?.['bestammelseformulering'],
-      geometry.properties?.['kategori'],
-    ])
-  );
+  return geometries
+    .map((geometry) =>
+      [
+        geometry.uuid,
+        geometry.name,
+        geometry.type,
+        geometry.crs,
+        geometry.featureType,
+        geometry.source,
+        geometry.sourceDocId,
+        geometry.color,
+        getCoordinateIdentity(geometry.coordinates),
+        geometry.properties?.['bestammelseformulering'],
+        geometry.properties?.['kategori'],
+      ].join('\u0001')
+    )
+    .join('\u0002');
+}
+
+function buildUuidSetKey(uuids: string[]): string {
+  return uuids.length === 0 ? '' : [...uuids].sort().join('\u0000');
+}
+
+function buildUuidSetFromKey(key: string): Set<string> {
+  return new Set(key ? key.split('\u0000') : []);
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -160,23 +202,42 @@ export const MapView: React.FC<MapViewProps> = ({
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<Map | null>(null);
   const vectorSourceRef = useRef<VectorSource | null>(null);
-  const vectorLayerRef = useRef<VectorLayer | null>(null);
+  const vectorLayerRef = useRef<VectorImageLayer | null>(null);
+
+  const selectedGeometryKey = useMemo(
+    () => buildUuidSetKey(selectedGeometryUuids),
+    [selectedGeometryUuids]
+  );
+  const pendingGeometryKey = useMemo(
+    () => buildUuidSetKey(pendingGeometryUuids),
+    [pendingGeometryUuids]
+  );
+  const selectedUuidSet = useMemo(
+    () => buildUuidSetFromKey(selectedGeometryKey),
+    [selectedGeometryKey]
+  );
+  const pendingUuidSet = useMemo(
+    () => buildUuidSetFromKey(pendingGeometryKey),
+    [pendingGeometryKey]
+  );
+  const geometryDataKey = useMemo(
+    () => buildGeometryDataKey(geometries),
+    [geometries]
+  );
 
   // Keep fresh refs so OL event closures always see the latest callbacks/state
   const onFeatureClickRef = useRef(onFeatureClick);
   onFeatureClickRef.current = onFeatureClick;
   const onMultiFeatureClickRef = useRef(onMultiFeatureClick);
   onMultiFeatureClickRef.current = onMultiFeatureClick;
-  const pendingUuidsRef = useRef(pendingGeometryUuids);
-  pendingUuidsRef.current = pendingGeometryUuids;
+  const pendingUuidSetRef = useRef(pendingUuidSet);
+  pendingUuidSetRef.current = pendingUuidSet;
+  const selectedUuidSetRef = useRef(selectedUuidSet);
+  selectedUuidSetRef.current = selectedUuidSet;
   const selectedUuidsRef = useRef(selectedGeometryUuids);
   selectedUuidsRef.current = selectedGeometryUuids;
   const geometriesRef = useRef(geometries);
   geometriesRef.current = geometries;
-  const selectedGeometryKey = selectedGeometryUuids.length === 0
-    ? ''
-    : [...selectedGeometryUuids].sort().join('\u0000');
-  const geometryDataKey = buildGeometryDataKey(geometries);
 
   // ── Initialise map once ───────────────────────────────────────────────────
   useEffect(() => {
@@ -185,13 +246,15 @@ export const MapView: React.FC<MapViewProps> = ({
     const vectorSource = new VectorSource();
     vectorSourceRef.current = vectorSource;
 
-    const vectorLayer = new VectorLayer({
+    const vectorLayer = new VectorImageLayer({
       source: vectorSource,
+      imageRatio: 1,
+      renderBuffer: 24,
       style: (feature) =>
         styleFunction(
           feature,
-          selectedGeometryUuids,
-          pendingGeometryUuids,
+          selectedUuidSet,
+          pendingUuidSet,
           previewGeometryUuid,
           isLinking
         ),
@@ -211,10 +274,11 @@ export const MapView: React.FC<MapViewProps> = ({
     });
 
     mapRef.current = map;
+    const hitOptions = { layerFilter: (layer: unknown) => layer === vectorLayer };
 
     // ── Click handler ────────────────────────────────────────────────────
     map.on('click', (event) => {
-      const olFeatures = map.getFeaturesAtPixel(event.pixel);
+      const olFeatures = map.getFeaturesAtPixel(event.pixel, hitOptions);
       if (!olFeatures || olFeatures.length === 0) return;
 
       // Build candidate list
@@ -228,8 +292,8 @@ export const MapView: React.FC<MapViewProps> = ({
           featureType: f.get('featureType') as string | undefined,
           color: (f.get('color') as string | undefined) ?? '#6b7280',
           isChecked:
-            pendingUuidsRef.current.includes(uuid) ||
-            selectedUuidsRef.current.includes(uuid),
+            pendingUuidSetRef.current.has(uuid) ||
+            selectedUuidSetRef.current.has(uuid),
         });
       }
 
@@ -245,9 +309,28 @@ export const MapView: React.FC<MapViewProps> = ({
     });
 
     // Pointer cursor on hover
+    let hoverFrame: number | null = null;
+    let latestHoverPixel: number[] | null = null;
     map.on('pointermove', (event) => {
-      const hit = map.hasFeatureAtPixel(event.pixel);
-      map.getTargetElement().style.cursor = hit ? 'pointer' : '';
+      if (event.dragging) {
+        latestHoverPixel = null;
+        if (hoverFrame !== null) {
+          window.cancelAnimationFrame(hoverFrame);
+          hoverFrame = null;
+        }
+        map.getTargetElement().style.cursor = '';
+        return;
+      }
+
+      latestHoverPixel = event.pixel.slice();
+      if (hoverFrame !== null) return;
+
+      hoverFrame = window.requestAnimationFrame(() => {
+        hoverFrame = null;
+        if (!latestHoverPixel) return;
+        const hit = map.hasFeatureAtPixel(latestHoverPixel, hitOptions);
+        map.getTargetElement().style.cursor = hit ? 'pointer' : '';
+      });
     });
 
     const resizeObserver = new ResizeObserver(() => {
@@ -257,6 +340,9 @@ export const MapView: React.FC<MapViewProps> = ({
     if (currentContainer) resizeObserver.observe(currentContainer);
 
     return () => {
+      if (hoverFrame !== null) {
+        window.cancelAnimationFrame(hoverFrame);
+      }
       if (currentContainer) resizeObserver.unobserve(currentContainer);
       map.setTarget(undefined);
       mapRef.current = null;
@@ -298,13 +384,13 @@ export const MapView: React.FC<MapViewProps> = ({
     layer.setStyle((feature) =>
       styleFunction(
         feature,
-        selectedGeometryUuids,
-        pendingGeometryUuids,
+        selectedUuidSet,
+        pendingUuidSet,
         previewGeometryUuid,
         isLinking
       )
     );
-  }, [selectedGeometryUuids, pendingGeometryUuids, previewGeometryUuid, isLinking]);
+  }, [selectedUuidSet, pendingUuidSet, previewGeometryUuid, isLinking]);
 
   // ── Pan to fit all selected features ─────────────────────────────────────
   useEffect(() => {

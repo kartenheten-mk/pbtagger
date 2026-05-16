@@ -55,8 +55,8 @@ vi.mock('ol/source/OSM', () => ({
   default: class MockOsm {},
 }));
 
-vi.mock('ol/layer/Vector', () => ({
-  default: class MockVectorLayer {
+vi.mock('ol/layer/VectorImage', () => ({
+  default: class MockVectorImageLayer {
     private style: unknown;
 
     constructor(options: { style?: unknown }) {
@@ -226,6 +226,64 @@ describe('MapView selected geometry auto-fit', () => {
       <MapView
         geometries={geometries}
         selectedGeometryUuids={['geo-b']}
+        previewGeometryUuid="geo-b"
+        isLinking={false}
+        onFeatureClick={noop}
+        onMultiFeatureClick={noop}
+      />
+    );
+
+    expect(fitMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('reloads features when coordinate array identity changes', () => {
+    const geometries = [makeGeometry('geo-a'), makeGeometry('geo-b')];
+    const { rerender } = render(
+      <MapView
+        geometries={geometries}
+        selectedGeometryUuids={[]}
+        isLinking={false}
+        onFeatureClick={noop}
+        onMultiFeatureClick={noop}
+      />
+    );
+
+    expect(fitMock).toHaveBeenCalledTimes(1);
+    fitMock.mockClear();
+
+    rerender(
+      <MapView
+        geometries={[...geometries]}
+        selectedGeometryUuids={[]}
+        previewGeometryUuid="geo-b"
+        isLinking={false}
+        onFeatureClick={noop}
+        onMultiFeatureClick={noop}
+      />
+    );
+
+    expect(fitMock).not.toHaveBeenCalled();
+
+    const updatedGeometries: Geometry[] = [
+      {
+        ...geometries[0],
+        coordinates: [
+          [
+            [15, 62],
+            [15.002, 62],
+            [15.002, 62.002],
+            [15, 62.002],
+            [15, 62],
+          ],
+        ],
+      },
+      geometries[1],
+    ];
+
+    rerender(
+      <MapView
+        geometries={updatedGeometries}
+        selectedGeometryUuids={[]}
         previewGeometryUuid="geo-b"
         isLinking={false}
         onFeatureClick={noop}

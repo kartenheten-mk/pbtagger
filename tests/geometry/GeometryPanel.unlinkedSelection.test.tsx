@@ -8,6 +8,10 @@ import { useDocumentStore } from '../../src/store/useDocumentStore';
 import type { Geometry, Tag } from '../../src/types';
 import { generateBookmarkName } from '../../src/docx/bookmarkUtils';
 
+const { mapViewRenderMock } = vi.hoisted(() => ({
+  mapViewRenderMock: vi.fn(),
+}));
+
 vi.mock('../../src/geometry/MapView', () => ({
   MapView: ({
     geometries,
@@ -31,44 +35,48 @@ vi.mock('../../src/geometry/MapView', () => ({
       x: number,
       y: number
     ) => void;
-  }) => (
-    <div
-      data-testid="mock-map-view"
-      data-geometry-uuids={geometries.map((geometry) => geometry.uuid).join(',')}
-      data-selected-uuids={selectedGeometryUuids.join(',')}
-      data-preview-uuid={previewGeometryUuid ?? ''}
-    >
-      {geometries.map((geometry) => (
-        <button
-          key={geometry.uuid}
-          type="button"
-          onClick={() => onFeatureClick(geometry.uuid)}
-        >
-          map-select-{geometry.uuid}
-        </button>
-      ))}
-      {geometries.length >= 2 && (
-        <button
-          type="button"
-          onClick={() =>
-            onMultiFeatureClick(
-              geometries.slice(0, 2).map((geometry) => ({
-                uuid: geometry.uuid,
-                name: geometry.name,
-                featureType: geometry.featureType,
-                color: '#3b82f6',
-                isChecked: selectedGeometryUuids.includes(geometry.uuid),
-              })),
-              24,
-              16
-            )
-          }
-        >
-          open-overlap-picker
-        </button>
-      )}
-    </div>
-  ),
+  }) => {
+    mapViewRenderMock({ geometries, selectedGeometryUuids, previewGeometryUuid });
+
+    return (
+      <div
+        data-testid="mock-map-view"
+        data-geometry-uuids={geometries.map((geometry) => geometry.uuid).join(',')}
+        data-selected-uuids={selectedGeometryUuids.join(',')}
+        data-preview-uuid={previewGeometryUuid ?? ''}
+      >
+        {geometries.map((geometry) => (
+          <button
+            key={geometry.uuid}
+            type="button"
+            onClick={() => onFeatureClick(geometry.uuid)}
+          >
+            map-select-{geometry.uuid}
+          </button>
+        ))}
+        {geometries.length >= 2 && (
+          <button
+            type="button"
+            onClick={() =>
+              onMultiFeatureClick(
+                geometries.slice(0, 2).map((geometry) => ({
+                  uuid: geometry.uuid,
+                  name: geometry.name,
+                  featureType: geometry.featureType,
+                  color: '#3b82f6',
+                  isChecked: selectedGeometryUuids.includes(geometry.uuid),
+                })),
+                24,
+                16
+              )
+            }
+          >
+            open-overlap-picker
+          </button>
+        )}
+      </div>
+    );
+  },
 }));
 
 function makeGeometry(uuid: string, name: string): Geometry {
@@ -172,6 +180,7 @@ describe('GeometryPanel unlinked geometry selection', () => {
       configurable: true,
       value: vi.fn(),
     });
+    mapViewRenderMock.mockClear();
     resetStore([
       makeGeometry('geo-a', 'Unlinked A'),
       makeGeometry('geo-b', 'Unlinked B'),
@@ -192,6 +201,17 @@ describe('GeometryPanel unlinked geometry selection', () => {
     );
     expect(getGeometryRow('geo-a', container).className).toContain('bg-blue-50');
     expect(useDocumentStore.getState().selectedTagUuid).toBeNull();
+  });
+
+  it('does not rerender the map for unrelated store updates', () => {
+    render(<GeometryPanel />);
+    mapViewRenderMock.mockClear();
+
+    act(() => {
+      useDocumentStore.setState({ fileName: 'renamed.docx' });
+    });
+
+    expect(mapViewRenderMock).not.toHaveBeenCalled();
   });
 
   it('highlights the list row when clicking an unlinked geometry in the map', () => {

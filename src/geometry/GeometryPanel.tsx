@@ -15,6 +15,7 @@
 
 import React, { useRef, useEffect, useCallback, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useShallow } from 'zustand/react/shallow';
 import type { Tag } from '../types';
 import { useDocumentStore } from '../store/useDocumentStore';
 import { MapView } from './MapView';
@@ -93,7 +94,20 @@ export const GeometryPanel: React.FC = () => {
     cancelLinking,
     selectTag,
     unlinkGeometry,
-  } = useDocumentStore();
+  } = useDocumentStore(
+    useShallow((state) => ({
+      geometries: state.geometries,
+      tags: state.tags,
+      linkingTagUuid: state.linkingTagUuid,
+      selectedTagUuid: state.selectedTagUuid,
+      activeGeometryDocId: state.activeGeometryDocId,
+      finishLinking: state.finishLinking,
+      batchLinkGeometries: state.batchLinkGeometries,
+      cancelLinking: state.cancelLinking,
+      selectTag: state.selectTag,
+      unlinkGeometry: state.unlinkGeometry,
+    }))
+  );
 
   const geometryListRef = useRef<HTMLDivElement>(null);
   const previousSelectedTagUuidRef = useRef<string | null>(null);
@@ -132,17 +146,24 @@ export const GeometryPanel: React.FC = () => {
   const [stagedUuids, setStagedUuids] = useState<Set<string>>(new Set());
 
   const isLinking = !!linkingTagUuid;
-  const linkingTag = tags.find((t) => t.uuid === linkingTagUuid);
+  const linkingTag = useMemo(
+    () => tags.find((t) => t.uuid === linkingTagUuid),
+    [tags, linkingTagUuid]
+  );
   const activeMainMode = resolveActiveMapMainMode(mapMainMode, isLinking);
 
   const { json: jsonGeometries, docxGml: importedDocxGeometries } =
-    splitGeometriesBySource(geometries);
+    useMemo(() => splitGeometriesBySource(geometries), [geometries]);
   const shouldShowAvailableGeometries = jsonGeometries.length > 0;
   const shouldShowDocumentCheck = jsonGeometries.length === 0;
-  const visibleGeometries = selectVisibleGeometries(
-    activeMainMode,
-    jsonGeometries,
-    importedDocxGeometries
+  const visibleGeometries = useMemo(
+    () =>
+      selectVisibleGeometries(
+        activeMainMode,
+        jsonGeometries,
+        importedDocxGeometries
+      ),
+    [activeMainMode, jsonGeometries, importedDocxGeometries]
   );
 
   const jsonGeometryIdSet = useMemo(
@@ -310,8 +331,9 @@ export const GeometryPanel: React.FC = () => {
     searchQuery.trim().length > 0;
 
   // ── Derive unique feature types for filter chips ──────────────────────────
-  const allFeatureTypes = Array.from(
-    new Set(visibleGeometries.map((g) => g.featureType ?? 'okänd'))
+  const allFeatureTypes = useMemo(
+    () => Array.from(new Set(visibleGeometries.map((g) => g.featureType ?? 'okänd'))),
+    [visibleGeometries]
   );
 
   // ── Toggle a type filter chip ─────────────────────────────────────────────
@@ -325,34 +347,50 @@ export const GeometryPanel: React.FC = () => {
   };
 
   // ── Filtered geometries (used for both list and map) ──────────────────────
-  const filteredGeometries = statusFilteredGeometries.filter((geo) => {
-    if (activeTypeFilters.size > 0 && !activeTypeFilters.has(geo.featureType ?? 'okänd')) {
-      return false;
-    }
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      const name = geo.name.toLowerCase();
-      const type = (geo.featureType ?? '').toLowerCase();
-      const kategori = String(geo.properties?.['kategori'] ?? '').toLowerCase();
-      const bestammelse = String(geo.properties?.['bestammelseformulering'] ?? '').toLowerCase();
-      if (!name.includes(q) && !type.includes(q) && !kategori.includes(q) && !bestammelse.includes(q)) {
+  const filteredGeometries = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+
+    return statusFilteredGeometries.filter((geo) => {
+      if (activeTypeFilters.size > 0 && !activeTypeFilters.has(geo.featureType ?? 'okänd')) {
         return false;
       }
-    }
-    return true;
-  });
-  const selectedGeometryUuids = buildHighlightedGeometryUuids({
-    isLinking,
-    manualFocusedGeometryUuid,
-    selectedTagUuid,
-    displayLinkedGeometryIdsByTagUuid,
-    visibleGeometries,
-  });
+      if (query) {
+        const name = geo.name.toLowerCase();
+        const type = (geo.featureType ?? '').toLowerCase();
+        const kategori = String(geo.properties?.['kategori'] ?? '').toLowerCase();
+        const bestammelse = String(geo.properties?.['bestammelseformulering'] ?? '').toLowerCase();
+        if (!name.includes(query) && !type.includes(query) && !kategori.includes(query) && !bestammelse.includes(query)) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [statusFilteredGeometries, activeTypeFilters, searchQuery]);
+  const selectedGeometryUuids = useMemo(
+    () =>
+      buildHighlightedGeometryUuids({
+        isLinking,
+        manualFocusedGeometryUuid,
+        selectedTagUuid,
+        displayLinkedGeometryIdsByTagUuid,
+        visibleGeometries,
+      }),
+    [
+      isLinking,
+      manualFocusedGeometryUuid,
+      selectedTagUuid,
+      displayLinkedGeometryIdsByTagUuid,
+      visibleGeometries,
+    ]
+  );
   const selectedGeometryUuidSet = useMemo(
     () => new Set(selectedGeometryUuids),
     [selectedGeometryUuids]
   );
-  const pendingGeometryUuids = isLinking ? Array.from(stagedUuids) : [];
+  const pendingGeometryUuids = useMemo(
+    () => (isLinking ? Array.from(stagedUuids) : []),
+    [isLinking, stagedUuids]
+  );
 
   const selectTagFromExplicitAction = useCallback(
     (tagUuid: string, geometryUuid: string) => {
@@ -535,6 +573,23 @@ export const GeometryPanel: React.FC = () => {
     [selectTagFromExplicitAction]
   );
 
+  const handleMapMultiFeatureClick = useCallback(
+    (items: PickerItem[], pixelX: number, pixelY: number) => {
+      // pixelX/Y are relative to the inner map div (inside 12px padding)
+      setHoveredPickerGeometryUuid(null);
+      setPicker({ items, x: pixelX + 12, y: pixelY + 12 });
+    },
+    []
+  );
+
+  const handleModalMapMultiFeatureClick = useCallback(
+    (items: PickerItem[], pixelX: number, pixelY: number) => {
+      setHoveredPickerGeometryUuid(null);
+      setModalPicker({ items, x: pixelX + 12, y: pixelY + 12 });
+    },
+    []
+  );
+
   return (
     <div className="w-full bg-white flex flex-col h-full overflow-hidden">
 
@@ -649,11 +704,7 @@ export const GeometryPanel: React.FC = () => {
               : gmlEmptySubtitle
           }
           onFeatureClick={handleMapFeatureClick}
-          onMultiFeatureClick={(items, pixelX, pixelY) => {
-            // pixelX/Y are relative to the inner map div (inside 12px padding)
-            setHoveredPickerGeometryUuid(null);
-            setPicker({ items, x: pixelX + 12, y: pixelY + 12 });
-          }}
+          onMultiFeatureClick={handleMapMultiFeatureClick}
         />
 
         {/* Maximize button */}
@@ -1138,10 +1189,7 @@ export const GeometryPanel: React.FC = () => {
                     : gmlEmptySubtitle
                 }
                 onFeatureClick={handleMapFeatureClick}
-                onMultiFeatureClick={(items, pixelX, pixelY) => {
-                  setHoveredPickerGeometryUuid(null);
-                  setModalPicker({ items, x: pixelX + 12, y: pixelY + 12 });
-                }}
+                onMultiFeatureClick={handleModalMapMultiFeatureClick}
               />
 
               {/* Modal disambiguation picker */}
