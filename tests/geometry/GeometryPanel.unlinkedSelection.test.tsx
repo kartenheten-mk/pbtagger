@@ -157,6 +157,14 @@ function getGeometryRow(uuid: string, container: HTMLElement): HTMLElement {
   return row;
 }
 
+function expectScrolledToGeometry(uuid: string, container: HTMLElement) {
+  const scrollIntoViewMock = vi.mocked(Element.prototype.scrollIntoView);
+  const row = container.querySelector<HTMLElement>(`[data-geometry-uuid="${uuid}"]`);
+  expect(row).toBeTruthy();
+  expect(scrollIntoViewMock).toHaveBeenCalledWith({ behavior: 'smooth', block: 'nearest' });
+  expect(scrollIntoViewMock.mock.contexts[scrollIntoViewMock.mock.contexts.length - 1]).toBe(row);
+}
+
 function hasExactText(expected: string) {
   return (_: string, element: Element | null) =>
     element?.textContent === expected &&
@@ -216,6 +224,7 @@ describe('GeometryPanel unlinked geometry selection', () => {
 
   it('highlights the list row when clicking an unlinked geometry in the map', () => {
     const { container } = render(<GeometryPanel />);
+    vi.mocked(Element.prototype.scrollIntoView).mockClear();
 
     fireEvent.click(screen.getByText('map-select-geo-b'));
 
@@ -223,11 +232,13 @@ describe('GeometryPanel unlinked geometry selection', () => {
       'geo-b'
     );
     expect(getGeometryRow('geo-b', container).className).toContain('bg-blue-50');
+    expectScrolledToGeometry('geo-b', container);
     expect(useDocumentStore.getState().selectedTagUuid).toBeNull();
   });
 
   it('uses the overlap picker path for unlinked geometries just like a direct map click', () => {
     const { container } = render(<GeometryPanel />);
+    vi.mocked(Element.prototype.scrollIntoView).mockClear();
 
     fireEvent.click(screen.getByText('open-overlap-picker'));
     fireEvent.click(screen.getByRole('button', { name: /Unlinked B/ }));
@@ -236,7 +247,30 @@ describe('GeometryPanel unlinked geometry selection', () => {
       'geo-b'
     );
     expect(getGeometryRow('geo-b', container).className).toContain('bg-blue-50');
+    expectScrolledToGeometry('geo-b', container);
     expect(useDocumentStore.getState().selectedTagUuid).toBeNull();
+  });
+
+  it('scrolls to a geometry selected from the map while linking', () => {
+    const tag = makeTag();
+    resetStore(
+      [
+        makeGeometry('geo-a', 'Unlinked A'),
+        makeGeometry('geo-b', 'Unlinked B'),
+      ],
+      {
+        tags: [tag],
+      }
+    );
+    useDocumentStore.setState({ linkingTagUuid: tag.uuid });
+    const { container } = render(<GeometryPanel />);
+    vi.mocked(Element.prototype.scrollIntoView).mockClear();
+
+    fireEvent.click(screen.getByText('map-select-geo-b'));
+
+    expect(getGeometryRow('geo-b', container).className).toContain('bg-emerald-50');
+    expect(useDocumentStore.getState().tags[0].geometryIds).toEqual(['geo-b']);
+    expectScrolledToGeometry('geo-b', container);
   });
 
   it('previews an overlap picker geometry on hover without selecting it', () => {

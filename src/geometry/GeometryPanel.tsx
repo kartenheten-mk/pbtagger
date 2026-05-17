@@ -407,6 +407,15 @@ export const GeometryPanel: React.FC = () => {
     [selectedTagUuid, selectTag]
   );
 
+  const scrollGeometryRowIntoView = useCallback((geometryUuid: string) => {
+    const container = geometryListRef.current;
+    if (!container) return;
+    const el = Array.from(
+      container.querySelectorAll<HTMLElement>('[data-geometry-uuid]')
+    ).find((row) => row.dataset.geometryUuid === geometryUuid);
+    el?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, []);
+
   // ── Auto-expand and scroll to linked geometry when a tag is selected ───────
   useEffect(() => {
     const selectionSource = tagSelectionSourceRef.current;
@@ -434,10 +443,7 @@ export const GeometryPanel: React.FC = () => {
       if (isStillVisible) {
         setExpandedGeoUuid(pendingManualFocusUuid);
         const timer = setTimeout(() => {
-          const el = geometryListRef.current?.querySelector<HTMLElement>(
-            `[data-geometry-uuid="${pendingManualFocusUuid}"]`
-          );
-          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          scrollGeometryRowIntoView(pendingManualFocusUuid);
         }, 100);
         return () => clearTimeout(timer);
       }
@@ -470,10 +476,7 @@ export const GeometryPanel: React.FC = () => {
       }
       setExpandedGeoUuid(focusGeoId);
       const timer = setTimeout(() => {
-        const el = geometryListRef.current?.querySelector<HTMLElement>(
-          `[data-geometry-uuid="${focusGeoId}"]`
-        );
-        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        scrollGeometryRowIntoView(focusGeoId);
       }, 100);
       return () => clearTimeout(timer);
     }
@@ -490,6 +493,7 @@ export const GeometryPanel: React.FC = () => {
     tagStatusFilter,
     searchQuery,
     expandedGeoUuid,
+    scrollGeometryRowIntoView,
   ]);
 
   // ── Toggle a geometry in the staged set (multi-select mode) ──────────────
@@ -529,15 +533,18 @@ export const GeometryPanel: React.FC = () => {
       if (isLinking) {
         if (activeMainMode !== 'json') return;
         toggleStaged(uuid);
+        scrollGeometryRowIntoView(uuid);
         return;
       }
       focusGeometryFromInspection(uuid);
+      scrollGeometryRowIntoView(uuid);
     },
     [
       isLinking,
       activeMainMode,
       toggleStaged,
       focusGeometryFromInspection,
+      scrollGeometryRowIntoView,
     ]
   );
 
