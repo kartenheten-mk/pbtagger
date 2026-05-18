@@ -42,6 +42,8 @@ export interface PlanbeskrivningImportResult {
    * importing can restore the full `tag.geometryIds` array.
    */
   identitetToGeometryUuid: Map<string, string[]>;
+  /** Base <identitet> values whose <Lage> used <planomrade>Ja</planomrade>. */
+  planomradeIdentiteter: Set<string>;
 }
 
 // ─── Main entry point ─────────────────────────────────────────────────────────
@@ -93,6 +95,7 @@ export function parsePlanbeskrivningXmlText(
 
   // ── Pass 1: collect raw (identitet, geoUuid) pairs ────────────────────────
   const rawPairs: Array<{ identitet: string; geoUuid: string }> = [];
+  const rawPlanomradeIdentiteter: string[] = [];
 
   for (const omf of omfElements) {
     const identitet = getChildText(omf, 'identitet');
@@ -105,6 +108,8 @@ export function parsePlanbeskrivningXmlText(
     if (geo) {
       geometries.push(geo);
       rawPairs.push({ identitet, geoUuid: geo.uuid });
+    } else if (isPlanomradeJa(lage)) {
+      rawPlanomradeIdentiteter.push(identitet);
     }
   }
 
@@ -116,11 +121,22 @@ export function parsePlanbeskrivningXmlText(
   // the stripped form is always a prefix of the full base identitet.
   const GN_SUFFIX = /_g\d+$/;
 
-  const baseIdentiteter = new Set(
-    rawPairs.filter(p => !GN_SUFFIX.test(p.identitet)).map(p => p.identitet)
-  );
+  const baseIdentiteter = new Set([
+    ...rawPairs.filter(p => !GN_SUFFIX.test(p.identitet)).map(p => p.identitet),
+    ...rawPlanomradeIdentiteter.filter((identitet) => !GN_SUFFIX.test(identitet)),
+  ]);
 
   const identitetToGeometryUuid = new Map<string, string[]>();
+  const planomradeIdentiteter = new Set<string>();
+
+  const resolveBaseIdentitet = (identitet: string): string => {
+    if (!GN_SUFFIX.test(identitet)) return identitet;
+    const stripped = identitet.replace(GN_SUFFIX, '');
+    for (const base of baseIdentiteter) {
+      if (base.startsWith(stripped)) return base;
+    }
+    return stripped;
+  };
 
   for (const { identitet, geoUuid } of rawPairs) {
     if (!GN_SUFFIX.test(identitet)) {
@@ -129,24 +145,17 @@ export function parsePlanbeskrivningXmlText(
       identitetToGeometryUuid.set(identitet, [...existing, geoUuid]);
     } else {
       // Derived (_g2, _g3, …) — find the matching base via prefix lookup
-      const stripped = identitet.replace(GN_SUFFIX, '');
-
-      let matchedBase: string | null = null;
-      for (const base of baseIdentiteter) {
-        // The stripped prefix is always a prefix of the full base identitet
-        if (base.startsWith(stripped)) {
-          matchedBase = base;
-          break;
-        }
-      }
-
-      const key = matchedBase ?? stripped;
+      const key = resolveBaseIdentitet(identitet);
       const existing = identitetToGeometryUuid.get(key) ?? [];
       identitetToGeometryUuid.set(key, [...existing, geoUuid]);
     }
   }
 
-  return { config, geometries, identitetToGeometryUuid };
+  for (const identitet of rawPlanomradeIdentiteter) {
+    planomradeIdentiteter.add(resolveBaseIdentitet(identitet));
+  }
+
+  return { config, geometries, identitetToGeometryUuid, planomradeIdentiteter };
 }
 
 // ─── Config extraction ────────────────────────────────────────────────────────
@@ -204,6 +213,12 @@ function extractGeometryFromLage(lage: Element, identitet: string): Geometry | n
 
   // No GML geometry in this Lage (uses planomrade / reference)
   return null;
+}
+
+function isPlanomradeJa(lage: Element): boolean {
+  const planomradeEl = findChildByLocalName(lage, 'planomrade');
+  const text = planomradeEl?.textContent?.trim().toLowerCase() ?? '';
+  return text === 'ja' || text === 'true' || text === '1';
 }
 
 // ─── GML deserialization ──────────────────────────────────────────────────────
@@ -404,4 +419,6 @@ function findElementByLocalName(root: Element, localName: string): Element | nul
   }
   return null;
 }
+
+
 

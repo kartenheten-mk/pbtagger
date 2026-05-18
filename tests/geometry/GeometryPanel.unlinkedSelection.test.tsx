@@ -426,8 +426,8 @@ describe('GeometryPanel unlinked geometry selection', () => {
     expect(screen.queryByRole('button', { name: 'Preview' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Imported DOCX' })).toBeNull();
     expect(
-      screen.getByText(hasExactText('1 geometrier finns redan i dokumentet'))
-    ).toBeTruthy();
+      screen.queryByText(hasExactText('1 geometrier finns redan i dokumentet'))
+    ).toBeNull();
   });
 
   it('auto-selects document-check mode when only imported DOCX GML exists', () => {
@@ -439,7 +439,7 @@ describe('GeometryPanel unlinked geometry selection', () => {
 
     expect(screen.queryByRole('button', { name: 'Tillgängliga geometrier' })).toBeNull();
     expect(screen.queryByText(hasExactText('0 av 0 geometrier är länkade'))).toBeNull();
-    expect(screen.getByText(hasExactText('1 geometrier finns redan i dokumentet'))).toBeTruthy();
+    expect(screen.queryByText(hasExactText('1 geometrier finns redan i dokumentet'))).toBeNull();
     expect(screen.getByText('map-select-docx-1')).toBeTruthy();
   });
 
@@ -476,7 +476,44 @@ describe('GeometryPanel unlinked geometry selection', () => {
     expect(getMapGeometryUuids()).toEqual(['docx-unlinked']);
   });
 
-  it('shows imported-docx header copy when using document-check mode', () => {
+  it('groups identical DOCX GML shapes into one list row with multiple linked tags', () => {
+    resetStore(
+      [
+        {
+          ...makeDocxGmlGeometry('docx-a', 'Tag A GML'),
+          properties: { identitet: 'TagAIdentitet' },
+        },
+        {
+          ...makeDocxGmlGeometry('docx-b', 'Tag B GML'),
+          properties: { identitet: 'TagBIdentitet' },
+        },
+      ],
+      {
+        tags: [
+          makeTag({ uuid: 'tag-a', text: 'First linked tag', geometryIds: ['docx-a'] }),
+          makeTag({ uuid: 'tag-b', text: 'Second linked tag', geometryIds: ['docx-b'] }),
+        ],
+      }
+    );
+
+    render(<GeometryPanel />);
+
+    expect(screen.getByText('TagAIdentitet')).toBeTruthy();
+    expect(screen.queryByText('TagBIdentitet')).toBeNull();
+    expect(screen.getByText(/2 GML-objekt/)).toBeTruthy();
+    expect(screen.getByText(/2 taggar/)).toBeTruthy();
+
+    fireEvent.click(screen.getByText('TagAIdentitet'));
+
+    expect(screen.getByTestId('mock-map-view').getAttribute('data-selected-uuids'))
+      .toContain('docx-a');
+    expect(screen.getByTestId('mock-map-view').getAttribute('data-selected-uuids'))
+      .toContain('docx-b');
+    expect(screen.getByText('First linked tag')).toBeTruthy();
+    expect(screen.getByText('Second linked tag')).toBeTruthy();
+  });
+
+  it('hides imported-docx header count when using document-check mode', () => {
     resetStore(
       [
         makeDocxGmlGeometry('docx-1', 'Imported A'),
@@ -495,11 +532,11 @@ describe('GeometryPanel unlinked geometry selection', () => {
     openDocumentGeometryCheck();
 
     expect(
-      screen.getByText(hasExactText('1 geometrier finns redan i dokumentet'))
-    ).toBeTruthy();
+      screen.queryByText(hasExactText('1 geometrier finns redan i dokumentet'))
+    ).toBeNull();
   });
 
-  it('uses the same GML copy in the maximized modal header', () => {
+  it('also hides the GML count in the maximized modal header', () => {
     resetStore(
       [
         makeDocxGmlGeometry('docx-1', 'Imported A'),
@@ -515,8 +552,8 @@ describe('GeometryPanel unlinked geometry selection', () => {
     fireEvent.click(screen.getByTitle('Maximera karta'));
 
     expect(
-      screen.getAllByText(hasExactText('1 geometrier finns redan i dokumentet'))
-    ).toHaveLength(2);
+      screen.queryByText(hasExactText('1 geometrier finns redan i dokumentet'))
+    ).toBeNull();
   });
 
   it('selects the first linked tag in document order when clicking imported DOCX GML', () => {

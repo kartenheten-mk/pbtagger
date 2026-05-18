@@ -348,7 +348,8 @@ describe('validatePlanbeskrivning — export eligibility warnings', () => {
     );
     expect(result.valid).toBe(true);
     expect(result.errors).toEqual([]);
-    expect(result.warnings.some((warning) => warning.includes('exkluderad från Planbeskrivning-export'))).toBe(true);
+    expect(result.warnings.some((warning) => warning.message.includes('exkluderad från Planbeskrivning-export'))).toBe(true);
+    expect(result.warnings[0]?.tagUuid).toBe('tag-image');
   });
 
   it('warns when a tag lacks BFS mapping and is excluded from Planbeskrivning export', () => {
@@ -358,13 +359,92 @@ describe('validatePlanbeskrivning — export eligibility warnings', () => {
     );
     expect(result.valid).toBe(true);
     expect(result.errors).toEqual([]);
-    expect(result.warnings.some((warning) => warning.includes('saknar BFS 2020:8-mappning'))).toBe(true);
+    expect(result.warnings.some((warning) => warning.message.includes('saknar BFS 2020:8-mappning'))).toBe(true);
+    expect(result.warnings[0]?.tagUuid).toBe('tag-unknown-cat');
   });
 });
 
 // ─── PLANB-002: Motiv till reglering requires planbestammelsereferens ──────────
 
 describe('PLANB-002 — Motiv till reglering requires planbestammelsereferens', () => {
+  it('allows read-only imported DOCX GML as direct Lage geometry for Motiv till reglering', () => {
+    const docxGmlGeo = makePolygonGeometry({
+      uuid: 'docx-gml-motiv-geo',
+      source: 'docx_gml',
+      featureType: 'planbeskrivning',
+      sourceDocId: undefined,
+      properties: { identitet: 'MotivDocxGml' },
+    });
+    const tag = makeTag({
+      uuid: 'motiv-docx-gml-tag',
+      categoryId: 'motiv-till-detaljplanens-regleringar--motiv-till-reglering',
+      geometryIds: ['docx-gml-motiv-geo'],
+    });
+
+    const result = validatePlanbeskrivning([tag], [docxGmlGeo]);
+    expect(result.valid).toBe(true);
+    expect(result.errors.some((error) => error.rule === 'PLANB-002')).toBe(false);
+
+    const xml = buildPlanbeskrivningXml(makeConfig(), [tag], [docxGmlGeo]);
+    expect(xml).toContain('lmg:Yta');
+    expect(xml).toContain('gml:Polygon');
+    expect(xml).not.toContain('<planbestammelsereferens>docx-gml-motiv-geo</planbestammelsereferens>');
+  });
+
+  it('still reports PLANB-002 for Motiv till reglering without bestämmelse or DOCX GML geometry', () => {
+    const normalGeo = makePolygonGeometry({
+      uuid: 'normal-motiv-geo',
+      source: 'json',
+      featureType: 'annat-objekt',
+    });
+    const tag = makeTag({
+      uuid: 'motiv-normal-geo-tag',
+      categoryId: 'motiv-till-detaljplanens-regleringar--motiv-till-reglering',
+      geometryIds: ['normal-motiv-geo'],
+    });
+
+    const result = validatePlanbeskrivning([tag], [normalGeo]);
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((error) => error.rule === 'PLANB-002')).toBe(true);
+  });
+
+  it('allows imported DOCX planomrade fallback for Motiv till reglering when no JSON is loaded', () => {
+    const tag = makeTag({
+      uuid: 'motiv-imported-planomrade-tag',
+      categoryId: 'motiv-till-detaljplanens-regleringar--motiv-till-reglering',
+      geometryIds: undefined,
+      planbeskrivningImportedPlanomrade: true,
+    });
+
+    const result = validatePlanbeskrivning([tag], []);
+    expect(result.valid).toBe(true);
+    expect(result.errors.some((error) => error.rule === 'PLANB-002')).toBe(false);
+    expect(result.warnings.some((warning) => warning.message.includes('imported DOCX Planbeskrivning XML'))).toBe(true);
+
+    const xml = buildPlanbeskrivningXml(makeConfig(), [tag], []);
+    expect(xml).toContain('<planomrade>Ja</planomrade>');
+    expect(xml).not.toContain('<planbestammelsereferens>');
+    expect(xml).not.toContain('lmg:Yta');
+  });
+
+  it('keeps PLANB-002 strict when a JSON geometry document is loaded', () => {
+    const tag = makeTag({
+      uuid: 'motiv-imported-planomrade-with-json-tag',
+      categoryId: 'motiv-till-detaljplanens-regleringar--motiv-till-reglering',
+      geometryIds: undefined,
+      planbeskrivningImportedPlanomrade: true,
+    });
+    const jsonGeo = makePolygonGeometry({
+      uuid: 'unlinked-json-geo',
+      source: 'json',
+      featureType: 'annat-objekt',
+    });
+
+    const result = validatePlanbeskrivning([tag], [jsonGeo]);
+    expect(result.valid).toBe(false);
+    expect(result.errors.some((error) => error.rule === 'PLANB-002')).toBe(true);
+  });
+
   it('uses planbestammelsereferens when bestämmelse geometry has no serializable coords', () => {
     // A bestämmelse geometry with featureType "bestämmelse" but empty coordinates
     // so serializeGml returns null → builder falls to planbestammelsereferens path
@@ -431,7 +511,7 @@ describe('strict validation coverage', () => {
     const result = validatePlanbeskrivning([tag], []);
     expect(result.valid).toBe(true);
     expect(result.errors).toEqual([]);
-    expect(result.warnings.some((warning) => warning.includes('saknar BFS 2020:8-mappning'))).toBe(true);
+    expect(result.warnings.some((warning) => warning.message.includes('saknar BFS 2020:8-mappning'))).toBe(true);
   });
 
   it('reports PLANB-007 when objektreferens would be non-persistent', () => {

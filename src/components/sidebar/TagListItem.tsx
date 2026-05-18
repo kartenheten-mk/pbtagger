@@ -17,6 +17,7 @@ export interface TagListItemProps {
   onSelect: () => void;
   onRemove: () => void;
   onLinkGeometry: () => void;
+  canEditGeometryLinks?: boolean;
   /** Unlink a specific geometry from this tag */
   onUnlinkGeometry: (geometryUuid: string) => void;
 }
@@ -36,6 +37,7 @@ export const TagListItem: React.FC<TagListItemProps> = ({
   onSelect,
   onRemove,
   onLinkGeometry,
+  canEditGeometryLinks = true,
   onUnlinkGeometry,
 }) => {
   const targetType = tag.targetType ?? 'text';
@@ -143,25 +145,27 @@ export const TagListItem: React.FC<TagListItemProps> = ({
             </div>
 
             {/* Edit geometry links button */}
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                onLinkGeometry();
-              }}
-              className="flex items-center gap-1 text-xs text-blue-500 hover:text-blue-700 transition-colors mt-0.5"
-            >
-              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                />
-              </svg>
-              Ändra geometrier
-            </button>
+            {canEditGeometryLinks && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onLinkGeometry();
+                }}
+                className="flex items-center gap-1 text-xs text-blue-500 hover:text-blue-700 transition-colors mt-0.5"
+              >
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                  />
+                </svg>
+                Ändra geometrier
+              </button>
+            )}
           </div>
-        ) : (
+        ) : canEditGeometryLinks ? (
           <button
             onClick={(e) => {
               e.stopPropagation();
@@ -179,7 +183,7 @@ export const TagListItem: React.FC<TagListItemProps> = ({
             </svg>
             Länka till geometrier
           </button>
-        )}
+        ) : null}
       </div>
 
       {/* UUID debug info */}

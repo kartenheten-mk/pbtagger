@@ -3,6 +3,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import PizZip from 'pizzip';
 import { parseDocx } from '../../src/docx/DocxParser';
+import { CUSTOM_XML_NS } from '../../src/docx/ContentControlBuilder';
+import { validatePlanbeskrivning } from '../../src/docx/PlanbeskrivningXmlBuilder';
 import { parseDetaljplanJson } from '../../src/geometry/detaljplanParser';
 import { buildMirroredDisplayLinks } from '../../src/geometry/tagLinkMirror';
 import { generateBookmarkName } from '../../src/docx/bookmarkUtils';
@@ -75,6 +77,61 @@ function buildBookmarkOnlyDocx(bookmarkName: string): ArrayBuffer {
   return zip.generate({ type: 'arraybuffer' });
 }
 
+function buildPlanomradeOnlyDocx(tag: Tag, bookmarkName: string): ArrayBuffer {
+  const zip = new PizZip();
+  zip.file(
+    'word/document.xml',
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:p>
+      <w:r><w:t>Intro </w:t></w:r>
+      <w:bookmarkStart w:id="1" w:name="${bookmarkName}"/>
+      <w:r><w:t>${tag.text}</w:t></w:r>
+      <w:bookmarkEnd w:id="1"/>
+    </w:p>
+  </w:body>
+</w:document>`
+  );
+  zip.file(
+    'customXml/item5.xml',
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<pb:tags xmlns:pb="${CUSTOM_XML_NS}">
+  <pb:tag uuid="${tag.uuid}" categoryId="${tag.categoryId}" targetType="text" paragraphIndex="0" startOffset="6" endOffset="${6 + tag.text.length}" createdAt="${tag.createdAt}" geometryIds="stale-geo-1,stale-geo-2">
+    <pb:text>${tag.text}</pb:text>
+  </pb:tag>
+</pb:tags>`
+  );
+  zip.file(
+    'customXml/item6.xml',
+    `<?xml version="1.0" encoding="UTF-8"?>
+<Planbeskrivning xmlns="${PLANBESKRIVNING_NS}"
+                 xmlns:lmg="${LMG_NS}"
+                 xmlns:gml="${GML_NS}">
+  <objektidentitet>12345678-1234-1234-1234-123456789012</objektidentitet>
+  <objektversion>1</objektversion>
+  <versionGiltigFran>2022-11-17T14:24:34.123+01:00</versionGiltigFran>
+  <detaljplansreferens>12345678-cafe-cafe-cafe-123456789012</detaljplansreferens>
+  <Objektmetadata>
+    <programvara>Test</programvara>
+    <programvaruversion>1.0</programvaruversion>
+  </Objektmetadata>
+  <Omfattning>
+    <identitet>${bookmarkName}</identitet>
+    <Lage>
+      <planomrade>Ja</planomrade>
+    </Lage>
+    <Indelning>
+      <tema>motiv till detaljplanens regleringar</tema>
+      <grupp>motiv till reglering</grupp>
+    </Indelning>
+  </Omfattning>
+</Planbeskrivning>`
+  );
+
+  return zip.generate({ type: 'arraybuffer' });
+}
+
 describe('DOCX import keeps JSON geometry links without duplicating GML links', () => {
   it('restores bookmark-only DOCX GML links without a JSON file', async () => {
     const seedTag: Tag = {
@@ -134,6 +191,32 @@ describe('DOCX import keeps JSON geometry links without duplicating GML links', 
     }
   });
 
+  it('marks DOCX-only planomrade fallback tags without removing stale geometryIds used for GML display mirroring', async () => {
+    const seedTag: Tag = {
+      uuid: 'a36573f1-77b2-410e-a613-97078d092428',
+      categoryId: 'motiv-till-detaljplanens-regleringar--motiv-till-reglering',
+      targetType: 'text',
+      text: 'Motiv text',
+      paragraphIndex: 0,
+      startOffset: 6,
+      endOffset: 16,
+      createdAt: '2026-01-01T00:00:00.000Z',
+    };
+    const bookmarkName = generateBookmarkName(seedTag);
+
+    const parsedDocx = await parseDocx(buildPlanomradeOnlyDocx(seedTag, bookmarkName));
+
+    expect(parsedDocx.planbeskrivning?.geometries).toHaveLength(0);
+    expect(parsedDocx.planbeskrivning?.planomradeIdentiteter.has(bookmarkName)).toBe(true);
+    expect(parsedDocx.tags).toHaveLength(1);
+    expect(parsedDocx.tags[0]).toMatchObject({
+      uuid: seedTag.uuid,
+      categoryId: seedTag.categoryId,
+      planbeskrivningImportedPlanomrade: true,
+      geometryIds: ['stale-geo-1', 'stale-geo-2'],
+    });
+  });
+
   it('resolves DOCX GML links for stale JSON-linked tags when no JSON file is loaded', async () => {
     const docxPath = path.join(
       __dirname,
@@ -159,6 +242,31 @@ describe('DOCX import keeps JSON geometry links without duplicating GML links', 
     });
 
     expect(tagsWithDocxGmlMatches.length).toBeGreaterThan(0);
+  });
+
+  it('does not raise PLANB-002 for Motiv till reglering when matching DOCX GML exists and no JSON is loaded', async () => {
+    const docxPath = path.join(
+      __dirname,
+      '../docx_example_file/document_with_gml_tags.docx'
+    );
+
+    const parsedDocx = await parseDocx(toArrayBuffer(fs.readFileSync(docxPath)));
+    const validation = validatePlanbeskrivning(
+      parsedDocx.tags,
+      parsedDocx.planbeskrivning?.geometries ?? []
+    );
+
+    const motivTagUuids = new Set([
+      'd334d2c2-52ef-462d-9145-5ad2a14b5493',
+      '10fdea61-60e2-4ccb-bc05-bb4d2377634b',
+      'c6df416b-fc9e-4baf-9376-62b57f7bea53',
+    ]);
+    const motivPlanb002Errors = validation.errors.filter(
+      (error) => error.rule === 'PLANB-002' && error.tagUuid && motivTagUuids.has(error.tagUuid)
+    );
+
+    expect(parsedDocx.planbeskrivning?.geometries.length).toBeGreaterThan(0);
+    expect(motivPlanb002Errors).toEqual([]);
   });
 
   it('can still resolve imported DOCX GML links for JSON-linked tags at display time', async () => {

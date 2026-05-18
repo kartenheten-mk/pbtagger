@@ -101,10 +101,50 @@ export interface PlanbeskrivningValidationError {
   tagUuid?: string;
 }
 
+export interface PlanbeskrivningValidationWarning {
+  message: string;
+  tagUuid?: string;
+}
+
 export interface ValidationResult {
   valid: boolean;
   errors: PlanbeskrivningValidationError[];
-  warnings: string[];
+  warnings: PlanbeskrivningValidationWarning[];
+}
+
+export function formatPlanbeskrivningValidationErrors(
+  errors: PlanbeskrivningValidationError[],
+  tags: Tag[]
+): string {
+  const tagByUuid = new Map(tags.map((t) => [t.uuid, t]));
+  return errors
+    .map((e, idx) => {
+      const tag = e.tagUuid ? tagByUuid.get(e.tagUuid) : undefined;
+      const shortUuid = e.tagUuid ? e.tagUuid.slice(0, 8) : 'okänd';
+      const preview =
+        tag?.text
+          ?.replace(/\s+/g, ' ')
+          .trim()
+          .slice(0, 60) ?? '';
+      const clippedPreview =
+        preview.length === 60 ? `${preview}...` : preview;
+      const para =
+        tag?.paragraphIndex !== undefined ? `, stycke ${tag.paragraphIndex + 1}` : '';
+
+      const humanRule =
+        e.rule === 'PLANB-004'
+          ? 'Indelning (tema/grupp/undergrupp) måste vara giltig enligt BFS 2020:8.'
+          : e.rule === 'PLANB-007'
+            ? 'Objektreferens måste vara en beständig identifierare.'
+            : e.message;
+
+      const tagInfo = tag
+        ? `Tagg ${shortUuid}${para}${clippedPreview ? `, text: "${clippedPreview}"` : ''}`
+        : `Tagg ${shortUuid}`;
+
+      return `${idx + 1}. [${e.rule}] ${tagInfo}\n   ${humanRule}`;
+    })
+    .join('\n');
 }
 
 export interface SpecExportEligibility {
@@ -288,6 +328,78 @@ function isDetaljplanFeature(featureType?: string): boolean {
   return (featureType ?? '').toLowerCase() === 'detaljplan';
 }
 
+function isSerializableDocxGmlGeometry(geo: Geometry): boolean {
+  return geo.source === 'docx_gml' && serializeGml(geo) !== null;
+}
+
+function hasJsonGeometryLoaded(geometries: Geometry[]): boolean {
+  return geometries.some((geo) => geo.source === 'json');
+}
+
+function isImportedPlanomradeFallbackAllowed(
+  tag: Tag,
+  allProjectGeometries: Geometry[]
+): boolean {
+  return (
+    tag.planbeskrivningImportedPlanomrade === true &&
+    !hasJsonGeometryLoaded(allProjectGeometries)
+  );
+}
+
+function getBaseIdentitet(identitet: string): string {
+  return identitet.replace(/_g\d+$/i, '');
+}
+
+function getTagUuidSuffix(tag: Tag): string {
+  return tag.uuid.replace(/-/g, '').slice(0, 8).toLowerCase();
+}
+
+function matchesTagIdentitet(
+  tagBaseIdentitet: string,
+  tagUuidSuffix: string,
+  geometryIdentitet: string
+): boolean {
+  const ident = geometryIdentitet.toLowerCase();
+  const base = tagBaseIdentitet.toLowerCase();
+  if (ident === base) return true;
+
+  const stripped = getBaseIdentitet(ident);
+  if (ident !== stripped && (base.startsWith(stripped) || stripped.startsWith(base))) {
+    return true;
+  }
+
+  const tokens = stripped.split('_').filter(Boolean);
+  const lastToken = tokens[tokens.length - 1] ?? '';
+  return !!lastToken && (tagUuidSuffix.startsWith(lastToken) || lastToken.startsWith(tagUuidSuffix));
+}
+
+function isMatchingImportedDocxGmlGeometryForTag(tag: Tag, geo: Geometry): boolean {
+  if (!isSerializableDocxGmlGeometry(geo)) return false;
+  const identitet =
+    typeof geo.properties?.['identitet'] === 'string'
+      ? (geo.properties['identitet'] as string)
+      : '';
+  if (!identitet) return false;
+
+  return matchesTagIdentitet(generateBookmarkName(tag), getTagUuidSuffix(tag), identitet);
+}
+
+function getDocxOnlyMatchedGmlGeometries(tag: Tag, allProjectGeometries: Geometry[]): Geometry[] {
+  if (hasJsonGeometryLoaded(allProjectGeometries)) return [];
+  return allProjectGeometries.filter((geo) => isMatchingImportedDocxGmlGeometryForTag(tag, geo));
+}
+
+function mergeUniqueGeometries(primary: Geometry[], secondary: Geometry[]): Geometry[] {
+  const seen = new Set(primary.map((geo) => geo.uuid));
+  const merged = [...primary];
+  for (const geo of secondary) {
+    if (seen.has(geo.uuid)) continue;
+    seen.add(geo.uuid);
+    merged.push(geo);
+  }
+  return merged;
+}
+
 // ─── <Lage> builder ───────────────────────────────────────────────────────────
 
 interface LageResult {
@@ -333,16 +445,23 @@ function buildLage(
   if (isMotivTillReglering) {
     // PLANB-002: Must have planbestammelsereferens
     if (!bestammelseGeo) {
-      violations.push({
-        rule: 'PLANB-002',
-        message: `Tag ${tag.uuid}: grupp "Motiv till reglering" requires a planbestammelsereferens, but no bestämmelse geometry is linked.`,
-        tagUuid: tag.uuid,
-      });
-      // Best-effort fallback: include GML if available
-      if (gmlXml) {
+      // Imported DOCX GML is read-only: the original planbestämmelse reference may
+      // no longer be available, but the embedded GML location is still a valid
+      // direct <geometri> representation for <Lage>.
+      if (geo && isSerializableDocxGmlGeometry(geo) && gmlXml) {
         lageContent = indent(gmlXml, 8);
       } else {
-        lageContent = '        <planomrade>Ja</planomrade>';
+        violations.push({
+          rule: 'PLANB-002',
+          message: `Tag ${tag.uuid}: grupp "Motiv till reglering" requires a planbestammelsereferens, but no bestämmelse geometry is linked.`,
+          tagUuid: tag.uuid,
+        });
+        // Best-effort fallback: include GML if available
+        if (gmlXml) {
+          lageContent = indent(gmlXml, 8);
+        } else {
+          lageContent = '        <planomrade>Ja</planomrade>';
+        }
       }
     } else {
       // PLANB-002 satisfied.
@@ -429,7 +548,8 @@ function deriveGeoIdentitet(baseIdentitet: string, geoIndex: number): string {
  */
 function buildOmfattningBlocks(
   tag: Tag,
-  geometryMap: Map<string, Geometry>
+  geometryMap: Map<string, Geometry>,
+  allProjectGeometries: Geometry[]
 ): OmfattningResult[] {
   const category = CATEGORY_MAP.get(tag.categoryId);
 
@@ -468,9 +588,13 @@ function buildOmfattningBlocks(
   }
 
   // ── Linked geometries ────────────────────────────────────────────────────
-  const linkedGeometries: Geometry[] = (tag.geometryIds ?? [])
+  const explicitLinkedGeometries: Geometry[] = (tag.geometryIds ?? [])
     .map((id) => geometryMap.get(id))
     .filter((g): g is Geometry => g !== undefined);
+  const linkedGeometries = mergeUniqueGeometries(
+    explicitLinkedGeometries,
+    getDocxOnlyMatchedGmlGeometries(tag, allProjectGeometries)
+  );
 
   const indelningXml = buildIndelning(resolvedCategory);
 
@@ -483,6 +607,24 @@ function buildOmfattningBlocks(
       linkedGeometries,
       resolvedCategory
     );
+    if (
+      lageViolations.some((violation) => violation.rule === 'PLANB-002') &&
+      isImportedPlanomradeFallbackAllowed(tag, allProjectGeometries)
+    ) {
+      return {
+        xml: [
+          `    <Omfattning>`,
+          `      <identitet>${esc(identitet)}</identitet>`,
+          `      <Lage>`,
+          `        <planomrade>Ja</planomrade>`,
+          `      </Lage>`,
+          indelningXml,
+          `    </Omfattning>`,
+        ].join('\n'),
+        identitet,
+        violations: violations.filter((violation) => violation.rule !== 'PLANB-002'),
+      };
+    }
     violations.push(...lageViolations);
 
     const xml = [
@@ -533,7 +675,7 @@ export function validatePlanbeskrivning(
   geometries: Geometry[]
 ): ValidationResult {
   const errors: PlanbeskrivningValidationError[] = [];
-  const warnings: string[] = [];
+  const warnings: PlanbeskrivningValidationWarning[] = [];
 
   const geometryMap = new Map(geometries.map((g) => [g.uuid, g]));
   const seenIdentiteter = new Set<string>();
@@ -541,9 +683,10 @@ export function validatePlanbeskrivning(
   for (const tag of tags) {
     const eligibility = getSpecExportEligibility(tag);
     if (!eligibility.eligible) {
-      warnings.push(
-        `Tag ${tag.uuid}: exkluderad från Planbeskrivning-export. ${eligibility.reason ?? 'Okänd anledning.'}`
-      );
+      warnings.push({
+        message: `Tag ${tag.uuid}: exkluderad från Planbeskrivning-export. ${eligibility.reason ?? 'Okänd anledning.'}`,
+        tagUuid: tag.uuid,
+      });
       continue;
     }
 
@@ -582,15 +725,20 @@ export function validatePlanbeskrivning(
     const isMotivTillReglering =
       (category?.gruppName ?? '').toLowerCase() === 'motiv till reglering';
 
-    const linkedGeos: Geometry[] = (tag.geometryIds ?? [])
+    const explicitLinkedGeos: Geometry[] = (tag.geometryIds ?? [])
       .map((id) => geometryMap.get(id))
       .filter((g): g is Geometry => g !== undefined);
+    const linkedGeos = mergeUniqueGeometries(
+      explicitLinkedGeos,
+      getDocxOnlyMatchedGmlGeometries(tag, geometries)
+    );
 
     // PLANB-001
     if (linkedGeos.length === 0) {
-      warnings.push(
-        `Tag ${tag.uuid}: no geometry linked — will use <planomrade>Ja</planomrade> as fallback.`
-      );
+      warnings.push({
+        message: `Tag ${tag.uuid}: no geometry linked — will use <planomrade>Ja</planomrade> as fallback.`,
+        tagUuid: tag.uuid,
+      });
     }
 
     // PLANB-002
@@ -598,10 +746,23 @@ export function validatePlanbeskrivning(
       const hasBestammelse = linkedGeos.some((g) =>
         isBestammelseFeature(g.featureType)
       );
-      if (!hasBestammelse) {
-        errors.push({
-          rule: 'PLANB-002',
-          message: `Tag ${tag.uuid}: grupp "Motiv till reglering" requires a linked bestämmelse geometry for <planbestammelsereferens>.`,
+      const hasDocxGmlDirectGeometry = linkedGeos.some(isSerializableDocxGmlGeometry);
+      if (!hasBestammelse && !hasDocxGmlDirectGeometry) {
+        if (isImportedPlanomradeFallbackAllowed(tag, geometries)) {
+          warnings.push({
+            message: `Tag ${tag.uuid}: no geometry linked — will use <planomrade>Ja</planomrade> as fallback from imported DOCX Planbeskrivning XML.`,
+            tagUuid: tag.uuid,
+          });
+        } else {
+          errors.push({
+            rule: 'PLANB-002',
+            message: `Tag ${tag.uuid}: grupp "Motiv till reglering" requires a linked bestämmelse geometry for <planbestammelsereferens>.`,
+            tagUuid: tag.uuid,
+          });
+        }
+      } else if (!hasBestammelse && hasDocxGmlDirectGeometry && explicitLinkedGeos.length === 0) {
+        warnings.push({
+          message: `Tag ${tag.uuid}: imported DOCX GML geometry is used as read-only fallback because no JSON geometry is loaded.`,
           tagUuid: tag.uuid,
         });
       }
@@ -660,7 +821,7 @@ export function buildPlanbeskrivningXml(
 
   for (const tag of exportableTags) {
     // Each tag may produce multiple blocks (one per linked geometry).
-    const blocks = buildOmfattningBlocks(tag, geometryMap);
+    const blocks = buildOmfattningBlocks(tag, geometryMap, geometries);
 
     for (const { xml, identitet } of blocks) {
       // PLANB-003: ensure uniqueness by appending _2, _3, … for duplicates

@@ -112,6 +112,7 @@ export interface TagMetadata {
   tableId?: string;
   /** UUIDs of linked geometries (stored as comma-separated string in XML) */
   geometryIds?: string[];
+  planbeskrivningImportedPlanomrade?: boolean;
   note?: string;
   createdAt: string;
 }
@@ -128,7 +129,10 @@ export function buildCustomXmlItem(tags: TagMetadata[]): string {
         t.endParagraphIndex !== undefined && t.endParagraphIndex !== t.paragraphIndex
           ? ` endParagraphIndex="${t.endParagraphIndex}"`
           : '';
-      return `  <pb:tag uuid="${escXml(t.uuid)}" categoryId="${escXml(t.categoryId)}" targetType="${escXml(targetType)}" paragraphIndex="${t.paragraphIndex}" startOffset="${t.startOffset}" endOffset="${t.endOffset}"${endParaAttr} createdAt="${escXml(t.createdAt)}"${t.runId ? ` runId="${escXml(t.runId)}"` : ''}${t.tableId ? ` tableId="${escXml(t.tableId)}"` : ''}${geometryIdsAttr}${t.note ? ` note="${escXml(t.note)}"` : ''}>
+      const importedPlanomradeAttr = t.planbeskrivningImportedPlanomrade
+        ? ' planbeskrivningImportedPlanomrade="true"'
+        : '';
+      return `  <pb:tag uuid="${escXml(t.uuid)}" categoryId="${escXml(t.categoryId)}" targetType="${escXml(targetType)}" paragraphIndex="${t.paragraphIndex}" startOffset="${t.startOffset}" endOffset="${t.endOffset}"${endParaAttr} createdAt="${escXml(t.createdAt)}"${t.runId ? ` runId="${escXml(t.runId)}"` : ''}${t.tableId ? ` tableId="${escXml(t.tableId)}"` : ''}${geometryIdsAttr}${importedPlanomradeAttr}${t.note ? ` note="${escXml(t.note)}"` : ''}>
     <pb:text>${escXml(t.text)}</pb:text>
   </pb:tag>`;
     })

@@ -176,7 +176,7 @@ describe('PlanbeskrivningXmlParser — multi-geometry grouping', () => {
   });
 
   describe('Omfattning without GML geometry (planomrade)', () => {
-    it('is excluded from identitetToGeometryUuid', () => {
+    it('is excluded from identitetToGeometryUuid but tracked as planomrade fallback', () => {
       const base = 'NoGeoTag';
       const xml = buildXml([
         { identitet: base, geoXml: '<planomrade>Ja</planomrade>' },
@@ -187,6 +187,23 @@ describe('PlanbeskrivningXmlParser — multi-geometry grouping', () => {
       expect(result).not.toBeNull();
       expect(result!.geometries).toHaveLength(0);
       expect(result!.identitetToGeometryUuid.size).toBe(0);
+      expect(result!.planomradeIdentiteter.has(base)).toBe(true);
+    });
+
+    it('groups derived GML geometries under a base identitet that only has planomrade', () => {
+      const base = 'PlanomradeBaseWithGml';
+      const g2 = deriveGeoIdentitet(base, 2);
+      const xml = buildXml([
+        { identitet: base, geoXml: '<planomrade>Ja</planomrade>' },
+        { identitet: g2, geoXml: POLYGON_GEO },
+      ]);
+
+      const result = extractPlanbeskrivningFromZip(zipWith(xml));
+
+      expect(result).not.toBeNull();
+      expect(result!.geometries).toHaveLength(1);
+      expect(result!.planomradeIdentiteter.has(base)).toBe(true);
+      expect(result!.identitetToGeometryUuid.get(base)).toHaveLength(1);
     });
   });
 });

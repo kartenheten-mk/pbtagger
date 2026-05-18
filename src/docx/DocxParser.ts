@@ -93,7 +93,11 @@ export async function parseDocx(buffer: ArrayBuffer): Promise<ParseResult> {
   // ── Planbeskrivning v2.0 XML import ────────────────────────────────────────
   const planbeskrivning = extractPlanbeskrivningFromZip(zip) ?? undefined;
 
-  if (planbeskrivning && planbeskrivning.identitetToGeometryUuid.size > 0) {
+  if (
+    planbeskrivning &&
+    (planbeskrivning.identitetToGeometryUuid.size > 0 ||
+      planbeskrivning.planomradeIdentiteter.size > 0)
+  ) {
     const importedGmlUuidSet = new Set(
       planbeskrivning.geometries.map((geo) => geo.uuid)
     );
@@ -137,6 +141,18 @@ export async function parseDocx(buffer: ArrayBuffer): Promise<ParseResult> {
       if (toAdd.length > 0) {
         tag.geometryIds = [...toAdd, ...existing];
       }
+    }
+
+    // Mark tags whose Planbeskrivning XML used the whole-plan fallback
+    // (<planomrade>Ja</planomrade>) instead of explicit GML/references.  This
+    // is important for DOCX-only/read-only imports: old app metadata may still
+    // contain stale geometryIds, but the actual imported Planbeskrivning XML has
+    // no geometry to restore for this tag.
+    for (const identitet of planbeskrivning.planomradeIdentiteter) {
+      const tag = tagByBookmarkName.get(identitet);
+      if (!tag) continue;
+
+      tag.planbeskrivningImportedPlanomrade = true;
     }
   }
 
@@ -680,6 +696,8 @@ function extractTagsFromCustomXml(zip: PizZip): Tag[] {
         : legacyGeometryId
           ? [legacyGeometryId]
           : undefined;
+      const planbeskrivningImportedPlanomrade =
+        el.getAttribute('planbeskrivningImportedPlanomrade') === 'true';
       const note = el.getAttribute('note') || undefined;
       const runId = el.getAttribute('runId') || undefined;
       const tableId = el.getAttribute('tableId') || undefined;
@@ -713,6 +731,7 @@ function extractTagsFromCustomXml(zip: PizZip): Tag[] {
         runId,
         tableId,
         geometryIds,
+        planbeskrivningImportedPlanomrade,
         note,
         createdAt,
       });

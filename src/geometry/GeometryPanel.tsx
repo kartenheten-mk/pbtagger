@@ -16,12 +16,13 @@
 import React, { useRef, useEffect, useCallback, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useShallow } from 'zustand/react/shallow';
-import type { Tag } from '../types';
+import type { Geometry, Tag } from '../types';
 import { useDocumentStore } from '../store/useDocumentStore';
 import { MapView } from './MapView';
 import type { PickerItem } from './MapView';
 import { splitGeometriesBySource } from './geometrySource';
 import { buildMirroredDisplayLinks } from './tagLinkMirror';
+import { groupDocxGmlGeometries } from './docxGmlGrouping';
 import {
   buildHighlightedGeometryUuids,
   buildFocusLinkedGeometryIdsByTagUuidForMode,
@@ -78,6 +79,15 @@ function compareTagsByDocumentOrder(a: Tag, b: Tag): number {
     a.endOffset - b.endOffset ||
     a.uuid.localeCompare(b.uuid)
   );
+}
+
+interface GeometryListRow {
+  key: string;
+  name: string;
+  geometries: Geometry[];
+  geometryUuids: string[];
+  primaryGeometry: Geometry;
+  isDocxGmlGroup: boolean;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -235,6 +245,17 @@ export const GeometryPanel: React.FC = () => {
     (geometryUuid: string): Tag[] => linkedTagsByGeometryUuid.get(geometryUuid) ?? [],
     [linkedTagsByGeometryUuid]
   );
+  const getLinkedTagsForGeometryUuids = useCallback(
+    (geometryUuids: string[]): Tag[] => {
+      const geometryUuidSet = new Set(geometryUuids);
+      return [...tags].sort(compareTagsByDocumentOrder).filter((tag) => {
+        const linkedIds = displayLinkedGeometryIdsByTagUuid.get(tag.uuid);
+        if (!linkedIds) return false;
+        return Array.from(linkedIds).some((id) => geometryUuidSet.has(id));
+      });
+    },
+    [tags, displayLinkedGeometryIdsByTagUuid]
+  );
   const gmlEmptyTitle = 'Ingen GML hittad i importerad DOCX';
   const gmlEmptySubtitle = 'Importera en DOCX med Planbeskrivning GML för att visa befintliga objekt';
 
@@ -307,11 +328,6 @@ export const GeometryPanel: React.FC = () => {
     { value: 'tagged', label: TAG_STATUS_FILTER_LABELS.tagged, count: tagStatusCounts.tagged },
     { value: 'untagged', label: TAG_STATUS_FILTER_LABELS.untagged, count: tagStatusCounts.untagged },
   ];
-  const hasActiveGeometryFilters =
-    tagStatusFilter !== 'all' ||
-    activeTypeFilters.size > 0 ||
-    searchQuery.trim().length > 0;
-
   // ── Derive unique feature types for filter chips ──────────────────────────
   const allFeatureTypes = useMemo(
     () => Array.from(new Set(visibleGeometries.map((g) => g.featureType ?? 'okänd'))),
@@ -348,7 +364,59 @@ export const GeometryPanel: React.FC = () => {
       return true;
     });
   }, [statusFilteredGeometries, activeTypeFilters, searchQuery]);
-  const selectedGeometryUuids = useMemo(
+
+  const docxGmlGroups = useMemo(
+    () => activeMainMode === 'gml' ? groupDocxGmlGeometries(filteredGeometries) : [],
+    [activeMainMode, filteredGeometries]
+  );
+  const gmlGroupByPrimaryUuid = useMemo(() => {
+    const map = new Map<string, GeometryListRow>();
+    for (const group of docxGmlGroups) {
+      const primaryGeometry = group.geometries[0];
+      if (!primaryGeometry) continue;
+      map.set(group.key, {
+        key: group.key,
+        name: group.label,
+        geometries: group.geometries,
+        geometryUuids: group.geometryUuids,
+        primaryGeometry,
+        isDocxGmlGroup: group.geometryUuids.length > 1,
+      });
+    }
+    return map;
+  }, [docxGmlGroups]);
+  const gmlPrimaryUuidByGeometryUuid = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const group of docxGmlGroups) {
+      for (const uuid of group.geometryUuids) {
+        map.set(uuid, group.key);
+      }
+    }
+    return map;
+  }, [docxGmlGroups]);
+  const listRows = useMemo<GeometryListRow[]>(() => {
+    if (activeMainMode === 'gml') {
+      return Array.from(gmlGroupByPrimaryUuid.values());
+    }
+
+    return filteredGeometries.map((geometry) => ({
+      key: geometry.uuid,
+      name: geometry.name,
+      geometries: [geometry],
+      geometryUuids: [geometry.uuid],
+      primaryGeometry: geometry,
+      isDocxGmlGroup: false,
+    }));
+  }, [activeMainMode, filteredGeometries, gmlGroupByPrimaryUuid]);
+  const getDisplayGeometryUuid = useCallback(
+    (geometryUuid: string): string => {
+      if (activeMainMode !== 'gml') return geometryUuid;
+      return gmlPrimaryUuidByGeometryUuid.get(geometryUuid) ?? geometryUuid;
+    },
+    [activeMainMode, gmlPrimaryUuidByGeometryUuid]
+  );
+
+  const baseSelectedGeometryUuids = useMemo(
     () =>
       buildHighlightedGeometryUuids({
         isLinking,
@@ -365,6 +433,20 @@ export const GeometryPanel: React.FC = () => {
       visibleGeometries,
     ]
   );
+  const selectedGeometryUuids = useMemo(() => {
+    const selected = new Set(baseSelectedGeometryUuids);
+    if (!isLinking && activeMainMode === 'gml' && expandedGeoUuid) {
+      const group = gmlGroupByPrimaryUuid.get(expandedGeoUuid);
+      for (const uuid of group?.geometryUuids ?? []) selected.add(uuid);
+    }
+    return Array.from(selected);
+  }, [
+    activeMainMode,
+    baseSelectedGeometryUuids,
+    expandedGeoUuid,
+    gmlGroupByPrimaryUuid,
+    isLinking,
+  ]);
   const selectedGeometryUuidSet = useMemo(
     () => new Set(selectedGeometryUuids),
     [selectedGeometryUuids]
@@ -397,11 +479,12 @@ export const GeometryPanel: React.FC = () => {
   const scrollGeometryRowIntoView = useCallback((geometryUuid: string) => {
     const container = geometryListRef.current;
     if (!container) return;
+    const displayGeometryUuid = getDisplayGeometryUuid(geometryUuid);
     const el = Array.from(
       container.querySelectorAll<HTMLElement>('[data-geometry-uuid]')
-    ).find((row) => row.dataset.geometryUuid === geometryUuid);
+    ).find((row) => row.dataset.geometryUuid === displayGeometryUuid);
     el?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  }, []);
+  }, [getDisplayGeometryUuid]);
 
   // ── Auto-expand and scroll to linked geometry when a tag is selected ───────
   useEffect(() => {
@@ -428,9 +511,10 @@ export const GeometryPanel: React.FC = () => {
       const isStillVisible = visibleGeometries.some((g) => g.uuid === pendingManualFocusUuid);
       pendingManualFocusUuidRef.current = null;
       if (isStillVisible) {
-        setExpandedGeoUuid(pendingManualFocusUuid);
+        const displayFocusUuid = getDisplayGeometryUuid(pendingManualFocusUuid);
+        setExpandedGeoUuid(displayFocusUuid);
         const timer = setTimeout(() => {
-          scrollGeometryRowIntoView(pendingManualFocusUuid);
+          scrollGeometryRowIntoView(displayFocusUuid);
         }, 100);
         return () => clearTimeout(timer);
       }
@@ -461,9 +545,10 @@ export const GeometryPanel: React.FC = () => {
           setSearchQuery('');
         }
       }
-      setExpandedGeoUuid(focusGeoId);
+      const displayFocusGeoId = getDisplayGeometryUuid(focusGeoId);
+      setExpandedGeoUuid(displayFocusGeoId);
       const timer = setTimeout(() => {
-        scrollGeometryRowIntoView(focusGeoId);
+        scrollGeometryRowIntoView(displayFocusGeoId);
       }, 100);
       return () => clearTimeout(timer);
     }
@@ -480,6 +565,7 @@ export const GeometryPanel: React.FC = () => {
     tagStatusFilter,
     searchQuery,
     expandedGeoUuid,
+    getDisplayGeometryUuid,
     scrollGeometryRowIntoView,
   ]);
 
@@ -503,15 +589,42 @@ export const GeometryPanel: React.FC = () => {
 
   const focusGeometryFromInspection = useCallback(
     (uuid: string) => {
+      const displayUuid = getDisplayGeometryUuid(uuid);
       tagSelectionSourceRef.current = 'geometry';
       setManualFocusedGeometryUuid(uuid);
-      setExpandedGeoUuid(uuid);
-      const linkedTags = getLinkedTagsForGeometry(uuid);
+      setExpandedGeoUuid(displayUuid);
+      const group = activeMainMode === 'gml'
+        ? gmlGroupByPrimaryUuid.get(displayUuid)
+        : undefined;
+      const linkedTags = group
+        ? getLinkedTagsForGeometryUuids(group.geometryUuids)
+        : getLinkedTagsForGeometry(uuid);
       if (linkedTags.length > 0) {
         selectTagFromGeometry(linkedTags[0].uuid, uuid);
       }
     },
-    [getLinkedTagsForGeometry, selectTagFromGeometry]
+    [
+      activeMainMode,
+      getDisplayGeometryUuid,
+      getLinkedTagsForGeometry,
+      getLinkedTagsForGeometryUuids,
+      gmlGroupByPrimaryUuid,
+      selectTagFromGeometry,
+    ]
+  );
+
+  const focusGeometryRowFromInspection = useCallback(
+    (row: GeometryListRow) => {
+      const focusUuid = row.primaryGeometry.uuid;
+      tagSelectionSourceRef.current = 'geometry';
+      setManualFocusedGeometryUuid(focusUuid);
+      setExpandedGeoUuid(row.key);
+      const linkedTags = getLinkedTagsForGeometryUuids(row.geometryUuids);
+      if (linkedTags.length > 0) {
+        selectTagFromGeometry(linkedTags[0].uuid, focusUuid);
+      }
+    },
+    [getLinkedTagsForGeometryUuids, selectTagFromGeometry]
   );
 
   // ── Map feature click ──────────────────────────────────────────────────────
@@ -524,11 +637,12 @@ export const GeometryPanel: React.FC = () => {
         return;
       }
       focusGeometryFromInspection(uuid);
-      scrollGeometryRowIntoView(uuid);
+      scrollGeometryRowIntoView(getDisplayGeometryUuid(uuid));
     },
     [
       isLinking,
       activeMainMode,
+      getDisplayGeometryUuid,
       toggleStaged,
       focusGeometryFromInspection,
       scrollGeometryRowIntoView,
@@ -536,27 +650,28 @@ export const GeometryPanel: React.FC = () => {
   );
 
   // ── List item click ────────────────────────────────────────────────────────
-  const handleListItemClick = useCallback(
-    (uuid: string) => {
+  const handleListRowClick = useCallback(
+    (row: GeometryListRow) => {
+      const uuid = row.primaryGeometry.uuid;
       if (isLinking) {
         if (activeMainMode !== 'json') return;
         toggleStaged(uuid);
         return;
       }
-      focusGeometryFromInspection(uuid);
+      focusGeometryRowFromInspection(row);
     },
     [
       isLinking,
       activeMainMode,
       toggleStaged,
-      focusGeometryFromInspection,
+      focusGeometryRowFromInspection,
     ]
   );
 
   const handleTagSubClick = useCallback(
-    (e: React.MouseEvent, tag: Tag, geometryUuid: string) => {
+    (e: React.MouseEvent, tag: Tag, geometryUuid: string, displayGeometryUuid = geometryUuid) => {
       e.stopPropagation();
-      setExpandedGeoUuid(geometryUuid);
+      setExpandedGeoUuid(displayGeometryUuid);
       selectTagFromExplicitAction(tag.uuid, geometryUuid);
     },
     [selectTagFromExplicitAction]
@@ -587,13 +702,6 @@ export const GeometryPanel: React.FC = () => {
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <h2 className="text-sm font-semibold text-gray-700 truncate">Karta</h2>
-            {activeMainMode !== 'json' && (
-              <p className="text-[10px] text-gray-400 mt-0.5">
-                {hasActiveGeometryFilters
-                  ? `${filteredGeometries.length} av ${visibleGeometries.length} geometrier finns redan i dokumentet`
-                  : `${visibleGeometries.length} geometrier finns redan i dokumentet`}
-              </p>
-            )}
           </div>
 
           <div className="flex items-center gap-1">
@@ -918,7 +1026,7 @@ export const GeometryPanel: React.FC = () => {
                 : gmlEmptySubtitle}
             </p>
           </div>
-        ) : filteredGeometries.length === 0 ? (
+        ) : listRows.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-8 text-center">
             <div className="text-2xl mb-2">🔍</div>
             <p className="text-xs text-gray-400 font-medium">Inga träffar</p>
@@ -926,21 +1034,22 @@ export const GeometryPanel: React.FC = () => {
           </div>
         ) : (
           <ul className="space-y-1">
-            {filteredGeometries.map((geo) => {
-              const linkedTags = getLinkedTagsForGeometry(geo.uuid);
+            {listRows.map((row) => {
+              const geo = row.primaryGeometry;
+              const linkedTags = getLinkedTagsForGeometryUuids(row.geometryUuids);
               const linkedCount = linkedTags.length;
               const color = featureColor(geo.featureType);
               const icon = featureIcon(geo.featureType);
 
-              const isSelected = !isLinking && selectedGeometryUuidSet.has(geo.uuid);
+              const isSelected = !isLinking && row.geometryUuids.some((uuid) => selectedGeometryUuidSet.has(uuid));
               // In linking mode: checked means staged
               const isChecked = isLinking && stagedUuids.has(geo.uuid);
-              const isExpanded = expandedGeoUuid === geo.uuid;
+              const isExpanded = expandedGeoUuid === row.key;
 
               return (
-                <li key={geo.uuid} className="group" data-geometry-uuid={geo.uuid}>
+                <li key={row.key} className="group" data-geometry-uuid={row.key}>
                   <div
-                    onClick={() => handleListItemClick(geo.uuid)}
+                    onClick={() => handleListRowClick(row)}
                     className={`flex items-start gap-2 px-3 py-2 rounded-lg border transition-all cursor-pointer ${
                       isLinking
                         ? isChecked
@@ -980,10 +1089,15 @@ export const GeometryPanel: React.FC = () => {
                             : isSelected ? '#1d4ed8' : '#374151'
                         }}
                       >
-                        {geo.name}
+                        {row.name}
                       </p>
                       <p className="text-xs text-gray-400 truncate">
                         {geo.featureType ?? geo.type}
+                        {row.isDocxGmlGroup && (
+                          <span className="ml-1 text-orange-500">
+                            · {row.geometryUuids.length} GML-objekt
+                          </span>
+                        )}
                         {linkedCount > 0 && (
                           <span className="ml-1 text-blue-500">
                             · {linkedCount} tagg{linkedCount !== 1 ? 'ar' : ''}
@@ -1018,12 +1132,18 @@ export const GeometryPanel: React.FC = () => {
                   {!isLinking && isExpanded && linkedTags.length > 0 && (
                     <ul className="mt-1 ml-6 mr-2 space-y-0.5 border-l-2 border-gray-100 pl-3 pb-1">
                       {linkedTags.map((tag) => {
-                        const isExplicitLink = (tag.geometryIds ?? []).includes(geo.uuid);
+                        const linkedIdsForTag = displayLinkedGeometryIdsByTagUuid.get(tag.uuid) ?? new Set<string>();
+                        const rowGeometryUuidForTag =
+                          row.geometryUuids.find((uuid) => linkedIdsForTag.has(uuid)) ??
+                          row.primaryGeometry.uuid;
+                        const isExplicitLink = row.geometryUuids.some((uuid) =>
+                          (tag.geometryIds ?? []).includes(uuid)
+                        );
                         const canUnlink = activeMainMode === 'json' && isExplicitLink;
                         return (
                           <li
                             key={tag.uuid}
-                            onClick={(e) => handleTagSubClick(e, tag, geo.uuid)}
+                            onClick={(e) => handleTagSubClick(e, tag, rowGeometryUuidForTag, row.key)}
                             className={`flex items-center gap-2 px-2.5 py-1.5 rounded-md cursor-pointer transition-all text-xs ${
                               selectedTagUuid === tag.uuid
                                 ? 'bg-blue-50 text-blue-700 ring-1 ring-blue-300'
@@ -1113,13 +1233,6 @@ export const GeometryPanel: React.FC = () => {
                 <span className="text-base">🗺</span>
                 <div>
                   <h2 className="text-sm font-semibold text-gray-700">Karta</h2>
-                  {activeMainMode !== 'json' && (
-                    <p className="text-[10px] text-gray-400 mt-0.5">
-                      {hasActiveGeometryFilters
-                        ? `${filteredGeometries.length} av ${visibleGeometries.length} geometrier finns redan i dokumentet`
-                        : `${visibleGeometries.length} geometrier finns redan i dokumentet`}
-                    </p>
-                  )}
                 </div>
               </div>
               {isLinking && (

@@ -35,6 +35,7 @@ import {
 import { findMaxBookmarkId } from './bookmarkUtils';
 import {
   buildPlanbeskrivningXml,
+  formatPlanbeskrivningValidationErrors,
   validatePlanbeskrivning,
 } from './PlanbeskrivningXmlBuilder';
 import {
@@ -114,6 +115,7 @@ export async function exportDocx(
       runId: t.runId,
       tableId: t.tableId,
       geometryIds: t.geometryIds,
+      planbeskrivningImportedPlanomrade: t.planbeskrivningImportedPlanomrade,
       note: t.note,
       createdAt: t.createdAt,
     }))
@@ -154,7 +156,7 @@ function injectPlanbeskrivningXml(
   const validation = validatePlanbeskrivning(tags, opts.geometries);
   const enforceCompliance = opts.enforceCompliance ?? true;
   if (enforceCompliance && !validation.valid) {
-    const details = formatComplianceErrors(validation.errors, tags);
+    const details = formatPlanbeskrivningValidationErrors(validation.errors, tags);
     throw new Error(
       `Kan inte exportera Planbeskrivning v2.0 eftersom vissa regler inte uppfylls:\n${details}`
     );
@@ -181,41 +183,6 @@ function injectPlanbeskrivningXml(
   // Register in document.xml.rels and [Content_Types].xml
   updateDocumentRelsForPlanbeskrivning(zip, pbItemPath);
   updateContentTypes(zip, pbItemPath, pbPropsPath);
-}
-
-function formatComplianceErrors(
-  errors: Array<{ rule: string; message: string; tagUuid?: string }>,
-  tags: Tag[]
-): string {
-  const tagByUuid = new Map(tags.map((t) => [t.uuid, t]));
-  return errors
-    .map((e, idx) => {
-      const tag = e.tagUuid ? tagByUuid.get(e.tagUuid) : undefined;
-      const shortUuid = e.tagUuid ? e.tagUuid.slice(0, 8) : 'okänd';
-      const preview =
-        tag?.text
-          ?.replace(/\s+/g, ' ')
-          .trim()
-          .slice(0, 60) ?? '';
-      const clippedPreview =
-        preview.length === 60 ? `${preview}...` : preview;
-      const para =
-        tag?.paragraphIndex !== undefined ? `, stycke ${tag.paragraphIndex + 1}` : '';
-
-      const humanRule =
-        e.rule === 'PLANB-004'
-          ? 'Indelning (tema/grupp/undergrupp) måste vara giltig enligt BFS 2020:8.'
-          : e.rule === 'PLANB-007'
-            ? 'Objektreferens måste vara en beständig identifierare.'
-            : e.message;
-
-      const tagInfo = tag
-        ? `Tagg ${shortUuid}${para}${clippedPreview ? `, text: "${clippedPreview}"` : ''}`
-        : `Tagg ${shortUuid}`;
-
-      return `${idx + 1}. [${e.rule}] ${tagInfo}\n   ${humanRule}`;
-    })
-    .join('\n');
 }
 
 /**

@@ -76,6 +76,13 @@ export interface Tag {
   tableId?: string;
   /** UUIDs of linked geometries (supports multiple) */
   geometryIds?: string[];
+  /**
+   * Set when the tag was imported from a Planbeskrivning XML <Omfattning>
+   * whose <Lage> used <planomrade>Ja</planomrade> instead of explicit GML or
+   * object references. This allows read-only DOCX imports to preserve that
+   * fallback when no geometry JSON is loaded.
+   */
+  planbeskrivningImportedPlanomrade?: boolean;
   /** Human readable note */
   note?: string;
   createdAt: string; // ISO timestamp

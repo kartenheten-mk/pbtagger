@@ -72,10 +72,12 @@ function makeDocxGmlGeometry(uuid: string, name: string, tag: Tag): Geometry {
 function renderPanel({
   tags,
   geometries,
+  onLinkGeometry = vi.fn(),
   onUnlinkGeometry = vi.fn(),
 }: {
   tags: Tag[];
   geometries: Geometry[];
+  onLinkGeometry?: (tagUuid: string) => void;
   onUnlinkGeometry?: (tagUuid: string, geometryUuid: string) => void;
 }) {
   return render(
@@ -88,7 +90,7 @@ function renderPanel({
       getCategoryById={(id) => categories.find((category) => category.id === id)}
       onSelectTag={vi.fn()}
       onRemoveTag={vi.fn()}
-      onLinkGeometry={vi.fn()}
+      onLinkGeometry={onLinkGeometry}
       onUnlinkGeometry={onUnlinkGeometry}
     />
   );
@@ -129,6 +131,24 @@ describe('ViewTagsPanel DOCX-GML geometry links', () => {
     expect(onUnlinkGeometry).not.toHaveBeenCalled();
   });
 
+  it('hides geometry link/edit actions when only DOCX-GML geometries are loaded', () => {
+    const linkedTag = makeTag({ uuid: 'linked-tag', geometryIds: ['docx-gml-1'] });
+    const unlinkedTag = makeTag({ uuid: 'unlinked-tag', text: 'Untagged selection' });
+    const docxGml = makeDocxGmlGeometry('docx-gml-1', 'Read-only DOCX GML', linkedTag);
+    const onLinkGeometry = vi.fn();
+
+    renderPanel({
+      tags: [linkedTag, unlinkedTag],
+      geometries: [docxGml],
+      onLinkGeometry,
+    });
+
+    expect(screen.getByText('Read-only DOCX GML')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Ändra geometrier' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Länka till geometrier' })).toBeNull();
+    expect(onLinkGeometry).not.toHaveBeenCalled();
+  });
+
   it('prefers explicit JSON links over mirrored DOCX-GML fallback links', () => {
     const tag = makeTag({ geometryIds: ['json-1'] });
     const jsonGeometry = makeGeometry('json-1', 'JSON Geometry');
@@ -143,6 +163,7 @@ describe('ViewTagsPanel DOCX-GML geometry links', () => {
 
     expect(screen.getByText('JSON Geometry')).toBeTruthy();
     expect(screen.queryByText('Mirrored DOCX GML')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Ändra geometrier' })).toBeTruthy();
 
     fireEvent.click(screen.getByTitle('Avlänka JSON Geometry'));
 

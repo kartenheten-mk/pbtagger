@@ -21,6 +21,9 @@ const PlanbeskrivningConfigPanel = lazy(() =>
   }))
 );
 
+const ERROR_AUTO_DISMISS_MS = 30000;
+const SUCCESS_AUTO_DISMISS_MS = 3000;
+
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
 function Spinner() {
@@ -124,6 +127,7 @@ export const DataMenu: React.FC = () => {
 
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [isStatusHovered, setIsStatusHovered] = useState(false);
 
   const buttonRef  = useRef<HTMLButtonElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
@@ -152,13 +156,13 @@ export const DataMenu: React.FC = () => {
 
   // Auto-clear banners
   useEffect(() => {
-    if (!error) return;
-    const t = setTimeout(() => setError(null), 5000);
+    if (!error || isStatusHovered) return;
+    const t = setTimeout(() => setError(null), ERROR_AUTO_DISMISS_MS);
     return () => clearTimeout(t);
-  }, [error]);
+  }, [error, isStatusHovered]);
   useEffect(() => {
     if (!success) return;
-    const t = setTimeout(() => setSuccess(null), 3000);
+    const t = setTimeout(() => setSuccess(null), SUCCESS_AUTO_DISMISS_MS);
     return () => clearTimeout(t);
   }, [success]);
 
@@ -564,9 +568,13 @@ export const DataMenu: React.FC = () => {
 
       {/* Screen-level status message (outside dropdown) */}
       {(error || success) && (
-        <div className="fixed right-4 top-20 z-[120] w-[min(24rem,calc(100vw-2rem))]">
+        <div className={`fixed right-4 top-20 z-[120] ${error ? 'w-[min(48rem,calc(100vw-2rem))]' : 'w-[min(24rem,calc(100vw-2rem))]'}`}>
           <div
-            className={`px-3 py-2 rounded-lg text-xs font-medium flex items-start gap-2 shadow-lg ${
+            role={error ? 'alert' : 'status'}
+            aria-live={error ? 'assertive' : 'polite'}
+            onMouseEnter={() => setIsStatusHovered(true)}
+            onMouseLeave={() => setIsStatusHovered(false)}
+            className={`max-h-[calc(100vh-6rem)] overflow-y-auto px-3 py-2 rounded-lg text-xs font-medium flex items-start gap-2 shadow-lg ${
               error
                 ? 'bg-red-50 border border-red-200 text-red-700'
                 : 'bg-green-50 border border-green-200 text-green-700'
@@ -583,10 +591,13 @@ export const DataMenu: React.FC = () => {
                   d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
             )}
-            <span className="leading-snug whitespace-pre-line">{error ?? success}</span>
+            <span className="min-w-0 flex-1 leading-snug whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+              {error ?? success}
+            </span>
             <button
               onClick={() => { setError(null); setSuccess(null); }}
-              className="ml-auto opacity-60 hover:opacity-100"
+              className="ml-auto flex-shrink-0 opacity-60 hover:opacity-100"
+              aria-label="Stäng statusmeddelande"
             >
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />

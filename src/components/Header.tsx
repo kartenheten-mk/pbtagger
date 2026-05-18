@@ -10,6 +10,7 @@ import { useDocumentStore } from '../store/useDocumentStore';
 import { useStoreWithEqualityFn } from 'zustand/traditional';
 import { DataMenu } from './DataMenu';
 import { getAllDocuments } from '../db/documentDb';
+import { PlanbeskrivningValidityIndicator } from './PlanbeskrivningValidityIndicator';
 
 interface HeaderProps {
   onClearDocument: () => void;
@@ -233,6 +234,9 @@ export const Header: React.FC<HeaderProps> = ({ onClearDocument }) => {
           </svg>
         </button>
       </div>
+
+      {/* Planbeskrivning export validity indicator */}
+      <PlanbeskrivningValidityIndicator />
 
       {/* ── Data menu (import + export) ── */}
       <DataMenu />
