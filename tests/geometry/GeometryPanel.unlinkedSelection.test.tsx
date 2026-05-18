@@ -302,7 +302,7 @@ describe('GeometryPanel unlinked geometry selection', () => {
     expect(screen.getByTestId('mock-map-view').getAttribute('data-preview-uuid')).toBe('');
   });
 
-  it('shows a JSON linked summary using unique linked geometry count', () => {
+  it('hides JSON map subtitles and linked summary in JSON mode', () => {
     resetStore(
       [
         makeGeometry('geo-a', 'Linked A'),
@@ -320,8 +320,9 @@ describe('GeometryPanel unlinked geometry selection', () => {
 
     const { container } = render(<GeometryPanel />);
 
-    expect(screen.getByText(hasExactText('2 av 3 geometrier är länkade'))).toBeTruthy();
-    expect(screen.getByText(hasExactText('JSON · 3 visade'))).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Karta' })).toBeTruthy();
+    expect(screen.queryByText(hasExactText('2 av 3 geometrier är länkade'))).toBeNull();
+    expect(screen.queryByText(hasExactText('JSON · 3 visade'))).toBeNull();
     expect(screen.queryByRole('button', { name: 'Fler geometrier' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Dokumentkontroll' })).toBeNull();
     expect(screen.queryByText('GML PREVIEW')).toBeNull();
@@ -354,7 +355,7 @@ describe('GeometryPanel unlinked geometry selection', () => {
     expect(screen.getByText('Linked B')).toBeTruthy();
     expect(screen.queryByText('Unlinked C')).toBeNull();
     expect(getMapGeometryUuids()).toEqual(['geo-a', 'geo-b']);
-    expect(screen.getByText(hasExactText('JSON · 2 visade'))).toBeTruthy();
+    expect(screen.queryByText(hasExactText('JSON · 2 visade'))).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: /^Otaggade\s*1$/ }));
 
@@ -362,7 +363,7 @@ describe('GeometryPanel unlinked geometry selection', () => {
     expect(screen.queryByText('Linked B')).toBeNull();
     expect(screen.getByText('Unlinked C')).toBeTruthy();
     expect(getMapGeometryUuids()).toEqual(['geo-c']);
-    expect(screen.getByText(hasExactText('JSON · 1 visade'))).toBeTruthy();
+    expect(screen.queryByText(hasExactText('JSON · 1 visade'))).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: /^Alla\s*3$/ }));
 

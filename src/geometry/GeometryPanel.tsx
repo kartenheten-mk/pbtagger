@@ -187,19 +187,6 @@ export const GeometryPanel: React.FC = () => {
 
     return filtered;
   }, [tags, jsonGeometryIdSet, importedDocxGeometries, importedDocxGeometryIdSet]);
-  const linkedJsonGeometryCount = useMemo(() => {
-    const linkedIds = new Set<string>();
-
-    for (const tag of tags) {
-      for (const geometryId of tag.geometryIds ?? []) {
-        if (jsonGeometryIdSet.has(geometryId)) {
-          linkedIds.add(geometryId);
-        }
-      }
-    }
-
-    return linkedIds.size;
-  }, [tags, jsonGeometryIdSet]);
   const displayLinkedGeometryIdsByTagUuid = useMemo(() => {
     return buildDisplayLinkedGeometryIdsByTagUuidForMode({
       tags,
@@ -600,13 +587,13 @@ export const GeometryPanel: React.FC = () => {
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <h2 className="text-sm font-semibold text-gray-700 truncate">Karta</h2>
-            <p className="text-[10px] text-gray-400 mt-0.5">
-              {activeMainMode === 'json'
-                ? `JSON · ${filteredGeometries.length} visade`
-                : hasActiveGeometryFilters
+            {activeMainMode !== 'json' && (
+              <p className="text-[10px] text-gray-400 mt-0.5">
+                {hasActiveGeometryFilters
                   ? `${filteredGeometries.length} av ${visibleGeometries.length} geometrier finns redan i dokumentet`
                   : `${visibleGeometries.length} geometrier finns redan i dokumentet`}
-            </p>
+              </p>
+            )}
           </div>
 
           <div className="flex items-center gap-1">
@@ -647,17 +634,6 @@ export const GeometryPanel: React.FC = () => {
             )}
           </div>
         </div>
-
-        {activeMainMode === 'json' && (
-          <div className="px-2.5 py-1.5 rounded-lg border border-blue-100 bg-blue-50/70">
-            <p className="text-xs text-blue-700">
-              <span className="font-semibold">{linkedJsonGeometryCount}</span>
-              {' av '}
-              <span className="font-semibold">{jsonGeometries.length}</span>
-              {' geometrier är länkade'}
-            </p>
-          </div>
-        )}
       </div>
 
       {/* ── Linking mode banner ──────────────────────────────────────────── */}
@@ -1137,13 +1113,13 @@ export const GeometryPanel: React.FC = () => {
                 <span className="text-base">🗺</span>
                 <div>
                   <h2 className="text-sm font-semibold text-gray-700">Karta</h2>
-                  <p className="text-[10px] text-gray-400 mt-0.5">
-                    {activeMainMode === 'json'
-                      ? `JSON · ${filteredGeometries.length} visade`
-                      : hasActiveGeometryFilters
+                  {activeMainMode !== 'json' && (
+                    <p className="text-[10px] text-gray-400 mt-0.5">
+                      {hasActiveGeometryFilters
                         ? `${filteredGeometries.length} av ${visibleGeometries.length} geometrier finns redan i dokumentet`
                         : `${visibleGeometries.length} geometrier finns redan i dokumentet`}
-                  </p>
+                    </p>
+                  )}
                 </div>
               </div>
               {isLinking && (
