@@ -407,6 +407,63 @@ describe('GeometryPanel unlinked geometry selection', () => {
     expect(getMapGeometryUuids()).toEqual(['geo-a', 'geo-b']);
   });
 
+  it('expands every geometry row linked to the selected tag', async () => {
+    const tag = makeTag({
+      uuid: 'tag-multi-geometry',
+      text: 'Selected multi geometry tag',
+      geometryIds: ['geo-a', 'geo-b'],
+    });
+    resetStore(
+      [
+        makeGeometry('geo-a', 'Linked A'),
+        makeGeometry('geo-b', 'Linked B'),
+        makeGeometry('geo-c', 'Unlinked C'),
+      ],
+      {
+        tags: [tag],
+        selectedTagUuid: tag.uuid,
+      }
+    );
+
+    render(<GeometryPanel />);
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Selected multi geometry tag')).toHaveLength(2);
+    });
+    expect(screen.getByTestId('mock-map-view').getAttribute('data-selected-uuids'))
+      .toBe('geo-a,geo-b');
+  });
+
+  it('expands every geometry row when clicking a linked tag in the geometry list', async () => {
+    const tag = makeTag({
+      uuid: 'tag-multi-geometry',
+      text: 'Selected multi geometry tag',
+      geometryIds: ['geo-a', 'geo-b'],
+    });
+    resetStore(
+      [
+        makeGeometry('geo-a', 'Linked A'),
+        makeGeometry('geo-b', 'Linked B'),
+        makeGeometry('geo-c', 'Unlinked C'),
+      ],
+      {
+        tags: [tag],
+      }
+    );
+
+    render(<GeometryPanel />);
+
+    fireEvent.click(screen.getByText('Linked A'));
+    fireEvent.click(screen.getByText('Selected multi geometry tag'));
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Selected multi geometry tag')).toHaveLength(2);
+    });
+    expect(useDocumentStore.getState().selectedTagUuid).toBe(tag.uuid);
+    expect(screen.getByTestId('mock-map-view').getAttribute('data-selected-uuids'))
+      .toBe('geo-a,geo-b');
+  });
+
   it('hides the JSON linked summary in document-check mode without preview controls', () => {
     resetStore(
       [

@@ -125,7 +125,7 @@ export const GeometryPanel: React.FC = () => {
   const tagSelectionSourceRef = useRef<'geometry' | 'tag' | null>(null);
   /** Ref to the map wrapper div — used for picker positioning */
   const mapWrapperRef = useRef<HTMLDivElement>(null);
-  const [expandedGeoUuid, setExpandedGeoUuid] = useState<string | null>(null);
+  const [expandedGeoUuids, setExpandedGeoUuids] = useState<Set<string>>(() => new Set());
   const [manualFocusedGeometryUuid, setManualFocusedGeometryUuid] = useState<string | null>(null);
   const [hoveredPickerGeometryUuid, setHoveredPickerGeometryUuid] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -298,7 +298,7 @@ export const GeometryPanel: React.FC = () => {
   useEffect(() => {
     setActiveTypeFilters(new Set());
     setTagStatusFilter('all');
-    setExpandedGeoUuid(null);
+    setExpandedGeoUuids(new Set());
     setManualFocusedGeometryUuid(null);
     setHoveredPickerGeometryUuid(null);
     setPicker(null);
@@ -435,15 +435,17 @@ export const GeometryPanel: React.FC = () => {
   );
   const selectedGeometryUuids = useMemo(() => {
     const selected = new Set(baseSelectedGeometryUuids);
-    if (!isLinking && activeMainMode === 'gml' && expandedGeoUuid) {
-      const group = gmlGroupByPrimaryUuid.get(expandedGeoUuid);
-      for (const uuid of group?.geometryUuids ?? []) selected.add(uuid);
+    if (!isLinking && activeMainMode === 'gml') {
+      for (const expandedGeoUuid of expandedGeoUuids) {
+        const group = gmlGroupByPrimaryUuid.get(expandedGeoUuid);
+        for (const uuid of group?.geometryUuids ?? []) selected.add(uuid);
+      }
     }
     return Array.from(selected);
   }, [
     activeMainMode,
     baseSelectedGeometryUuids,
-    expandedGeoUuid,
+    expandedGeoUuids,
     gmlGroupByPrimaryUuid,
     isLinking,
   ]);
@@ -486,6 +488,29 @@ export const GeometryPanel: React.FC = () => {
     el?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }, [getDisplayGeometryUuid]);
 
+  const primaryExpandedGeoUuid = useMemo(() => {
+    const first = expandedGeoUuids.values().next();
+    return first.done ? null : first.value;
+  }, [expandedGeoUuids]);
+
+  const getExpandedDisplayGeoIdsForTag = useCallback(
+    (tagUuid: string, fallbackDisplayGeoUuid?: string): Set<string> => {
+      const linkedIds = focusLinkedGeometryIdsByTagUuid.get(tagUuid) ?? new Set<string>();
+      const expandedDisplayGeoIds = new Set(
+        visibleGeometries
+          .filter((geometry) => linkedIds.has(geometry.uuid))
+          .map((geometry) => getDisplayGeometryUuid(geometry.uuid))
+      );
+
+      if (fallbackDisplayGeoUuid) {
+        expandedDisplayGeoIds.add(fallbackDisplayGeoUuid);
+      }
+
+      return expandedDisplayGeoIds;
+    },
+    [focusLinkedGeometryIdsByTagUuid, getDisplayGeometryUuid, visibleGeometries]
+  );
+
   // ── Auto-expand and scroll to linked geometry when a tag is selected ───────
   useEffect(() => {
     const selectionSource = tagSelectionSourceRef.current;
@@ -512,7 +537,11 @@ export const GeometryPanel: React.FC = () => {
       pendingManualFocusUuidRef.current = null;
       if (isStillVisible) {
         const displayFocusUuid = getDisplayGeometryUuid(pendingManualFocusUuid);
-        setExpandedGeoUuid(displayFocusUuid);
+        const expandedDisplayGeoIds = getExpandedDisplayGeoIdsForTag(
+          selectedTagUuid,
+          displayFocusUuid
+        );
+        setExpandedGeoUuids(expandedDisplayGeoIds);
         const timer = setTimeout(() => {
           scrollGeometryRowIntoView(displayFocusUuid);
         }, 100);
@@ -524,35 +553,52 @@ export const GeometryPanel: React.FC = () => {
       selectedTagUuid,
       displayLinkedGeometryIdsByTagUuid: focusLinkedGeometryIdsByTagUuid,
       visibleGeometries,
-      previousFocusedGeometryUuid: expandedGeoUuid,
+      previousFocusedGeometryUuid: primaryExpandedGeoUuid,
       allowVisiblePreviousFocus: !didTagChange,
     });
 
     if (focusGeoId) {
+      const selectedLinkedIds = focusLinkedGeometryIdsByTagUuid.get(selectedTagUuid) ?? new Set<string>();
+      const linkedVisibleGeometries = visibleGeometries.filter((geometry) =>
+        selectedLinkedIds.has(geometry.uuid)
+      );
       const geo = visibleGeometries.find((g) => g.uuid === focusGeoId);
-      if (geo && activeTypeFilters.size > 0 && !activeTypeFilters.has(geo.featureType ?? 'okänd')) {
+      const displayFocusGeoId = getDisplayGeometryUuid(focusGeoId);
+      const expandedDisplayGeoIds = getExpandedDisplayGeoIdsForTag(
+        selectedTagUuid,
+        geo ? displayFocusGeoId : undefined
+      );
+
+      if (
+        activeTypeFilters.size > 0 &&
+        linkedVisibleGeometries.some((geometry) => !activeTypeFilters.has(geometry.featureType ?? 'okänd'))
+      ) {
         setActiveTypeFilters(new Set());
       }
       if (
         tagStatusFilter !== 'all' &&
-        !statusFilteredGeometries.some((g) => g.uuid === focusGeoId)
+        linkedVisibleGeometries.some(
+          (geometry) => !statusFilteredGeometries.some((g) => g.uuid === geometry.uuid)
+        )
       ) {
         setTagStatusFilter('all');
       }
       if (searchQuery.trim()) {
-        const selectedStillVisible = filteredGeometries.some((g) => g.uuid === focusGeoId);
-        if (!selectedStillVisible) {
+        const filteredGeometryIds = new Set(filteredGeometries.map((g) => g.uuid));
+        const allSelectedLinksStillVisible = linkedVisibleGeometries.every((geometry) =>
+          filteredGeometryIds.has(geometry.uuid)
+        );
+        if (!allSelectedLinksStillVisible) {
           setSearchQuery('');
         }
       }
-      const displayFocusGeoId = getDisplayGeometryUuid(focusGeoId);
-      setExpandedGeoUuid(displayFocusGeoId);
+      setExpandedGeoUuids(expandedDisplayGeoIds.size > 0 ? expandedDisplayGeoIds : new Set([displayFocusGeoId]));
       const timer = setTimeout(() => {
         scrollGeometryRowIntoView(displayFocusGeoId);
       }, 100);
       return () => clearTimeout(timer);
     }
-    setExpandedGeoUuid(null);
+    setExpandedGeoUuids(new Set());
   }, [
     selectedTagUuid,
     focusLinkedGeometryIdsByTagUuid,
@@ -564,7 +610,8 @@ export const GeometryPanel: React.FC = () => {
     isLinking,
     tagStatusFilter,
     searchQuery,
-    expandedGeoUuid,
+    primaryExpandedGeoUuid,
+    getExpandedDisplayGeoIdsForTag,
     getDisplayGeometryUuid,
     scrollGeometryRowIntoView,
   ]);
@@ -592,7 +639,7 @@ export const GeometryPanel: React.FC = () => {
       const displayUuid = getDisplayGeometryUuid(uuid);
       tagSelectionSourceRef.current = 'geometry';
       setManualFocusedGeometryUuid(uuid);
-      setExpandedGeoUuid(displayUuid);
+      setExpandedGeoUuids(new Set([displayUuid]));
       const group = activeMainMode === 'gml'
         ? gmlGroupByPrimaryUuid.get(displayUuid)
         : undefined;
@@ -618,7 +665,7 @@ export const GeometryPanel: React.FC = () => {
       const focusUuid = row.primaryGeometry.uuid;
       tagSelectionSourceRef.current = 'geometry';
       setManualFocusedGeometryUuid(focusUuid);
-      setExpandedGeoUuid(row.key);
+      setExpandedGeoUuids(new Set([row.key]));
       const linkedTags = getLinkedTagsForGeometryUuids(row.geometryUuids);
       if (linkedTags.length > 0) {
         selectTagFromGeometry(linkedTags[0].uuid, focusUuid);
@@ -671,10 +718,11 @@ export const GeometryPanel: React.FC = () => {
   const handleTagSubClick = useCallback(
     (e: React.MouseEvent, tag: Tag, geometryUuid: string, displayGeometryUuid = geometryUuid) => {
       e.stopPropagation();
-      setExpandedGeoUuid(displayGeometryUuid);
+      const expandedDisplayGeoIds = getExpandedDisplayGeoIdsForTag(tag.uuid, displayGeometryUuid);
+      setExpandedGeoUuids(expandedDisplayGeoIds);
       selectTagFromExplicitAction(tag.uuid, geometryUuid);
     },
-    [selectTagFromExplicitAction]
+    [getExpandedDisplayGeoIdsForTag, selectTagFromExplicitAction]
   );
 
   const handleMapMultiFeatureClick = useCallback(
@@ -1044,7 +1092,7 @@ export const GeometryPanel: React.FC = () => {
               const isSelected = !isLinking && row.geometryUuids.some((uuid) => selectedGeometryUuidSet.has(uuid));
               // In linking mode: checked means staged
               const isChecked = isLinking && stagedUuids.has(geo.uuid);
-              const isExpanded = expandedGeoUuid === row.key;
+              const isExpanded = expandedGeoUuids.has(row.key);
 
               return (
                 <li key={row.key} className="group" data-geometry-uuid={row.key}>
