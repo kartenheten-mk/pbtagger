@@ -106,10 +106,16 @@ export interface PlanbeskrivningValidationWarning {
   tagUuid?: string;
 }
 
+export interface PlanbeskrivningValidationInfo {
+  message: string;
+  tagUuid?: string;
+}
+
 export interface ValidationResult {
   valid: boolean;
   errors: PlanbeskrivningValidationError[];
   warnings: PlanbeskrivningValidationWarning[];
+  infos: PlanbeskrivningValidationInfo[];
 }
 
 export function formatPlanbeskrivningValidationErrors(
@@ -676,6 +682,7 @@ export function validatePlanbeskrivning(
 ): ValidationResult {
   const errors: PlanbeskrivningValidationError[] = [];
   const warnings: PlanbeskrivningValidationWarning[] = [];
+  const infos: PlanbeskrivningValidationInfo[] = [];
 
   const geometryMap = new Map(geometries.map((g) => [g.uuid, g]));
   const seenIdentiteter = new Set<string>();
@@ -736,10 +743,18 @@ export function validatePlanbeskrivning(
 
     // PLANB-001
     if (linkedGeos.length === 0) {
-      warnings.push({
-        message: `Tag ${tag.uuid}: no geometry linked — will use <planomrade>Ja</planomrade> as fallback.`,
+      const fromImportedPlanomrade = isImportedPlanomradeFallbackAllowed(tag, geometries);
+      const fallbackNotice = {
+        message: fromImportedPlanomrade
+          ? `Tag ${tag.uuid}: no geometry linked — will use <planomrade>Ja</planomrade> as fallback from imported DOCX Planbeskrivning XML.`
+          : `Tag ${tag.uuid}: no geometry linked — will use <planomrade>Ja</planomrade> as fallback.`,
         tagUuid: tag.uuid,
-      });
+      };
+      if (isMotivTillReglering) {
+        warnings.push(fallbackNotice);
+      } else {
+        infos.push(fallbackNotice);
+      }
     }
 
     // PLANB-002
@@ -758,12 +773,7 @@ export function validatePlanbeskrivning(
       );
       const hasDocxGmlDirectGeometry = linkedGeos.some(isSerializableDocxGmlGeometry);
       if (!hasBestammelse && !hasDocxGmlDirectGeometry) {
-        if (isImportedPlanomradeFallbackAllowed(tag, geometries)) {
-          warnings.push({
-            message: `Tag ${tag.uuid}: no geometry linked — will use <planomrade>Ja</planomrade> as fallback from imported DOCX Planbeskrivning XML.`,
-            tagUuid: tag.uuid,
-          });
-        } else {
+        if (!isImportedPlanomradeFallbackAllowed(tag, geometries)) {
           errors.push({
             rule: 'PLANB-002',
             message: `Tag ${tag.uuid}: grupp "Motiv till reglering" requires a linked bestämmelse geometry for <planbestammelsereferens>.`,
@@ -811,6 +821,7 @@ export function validatePlanbeskrivning(
     valid: errors.length === 0,
     errors,
     warnings,
+    infos,
   };
 }
 

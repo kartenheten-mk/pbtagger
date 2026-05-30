@@ -348,6 +348,7 @@ describe('validatePlanbeskrivning — export eligibility warnings', () => {
     );
     expect(result.valid).toBe(true);
     expect(result.errors).toEqual([]);
+    expect(result.infos).toEqual([]);
     expect(result.warnings.some((warning) => warning.message.includes('exkluderad från Planbeskrivning-export'))).toBe(true);
     expect(result.warnings[0]?.tagUuid).toBe('tag-image');
   });
@@ -359,8 +360,46 @@ describe('validatePlanbeskrivning — export eligibility warnings', () => {
     );
     expect(result.valid).toBe(true);
     expect(result.errors).toEqual([]);
+    expect(result.infos).toEqual([]);
     expect(result.warnings.some((warning) => warning.message.includes('saknar BFS 2020:8-mappning'))).toBe(true);
     expect(result.warnings[0]?.tagUuid).toBe('tag-unknown-cat');
+  });
+});
+
+describe('validatePlanbeskrivning — informational fallbacks', () => {
+  it('reports planomrade fallback as information when a tag has no linked geometry', () => {
+    const result = validatePlanbeskrivning(
+      [makeTag({ uuid: 'tag-planomrade-info', geometryIds: undefined })],
+      []
+    );
+
+    expect(result.valid).toBe(true);
+    expect(result.errors).toEqual([]);
+    expect(result.warnings).toEqual([]);
+    expect(result.infos.some((info) => info.message.includes('will use <planomrade>Ja</planomrade> as fallback'))).toBe(true);
+    expect(result.infos[0]?.tagUuid).toBe('tag-planomrade-info');
+  });
+
+  it('reports imported DOCX GML read-only fallback for motiv tags as a warning', () => {
+    const tag = makeTag({
+      uuid: '12345678-1111-4111-8111-111111111111',
+      categoryId: 'motiv-till-detaljplanens-regleringar--motiv-till-reglering',
+      geometryIds: undefined,
+    });
+    const docxGmlGeo = makePolygonGeometry({
+      uuid: 'docx-gml-auto-match',
+      source: 'docx_gml',
+      featureType: 'planbeskrivning',
+      sourceDocId: undefined,
+      properties: { identitet: generateBookmarkName(tag) },
+    });
+
+    const result = validatePlanbeskrivning([tag], [docxGmlGeo]);
+
+    expect(result.valid).toBe(true);
+    expect(result.errors).toEqual([]);
+    expect(result.infos).toEqual([]);
+    expect(result.warnings.some((warning) => warning.message.includes('read-only fallback'))).toBe(true);
   });
 });
 
@@ -419,7 +458,9 @@ describe('PLANB-002 — Motiv till reglering requires planbestammelsereferens', 
     const result = validatePlanbeskrivning([tag], []);
     expect(result.valid).toBe(true);
     expect(result.errors.some((error) => error.rule === 'PLANB-002')).toBe(false);
+    expect(result.infos).toEqual([]);
     expect(result.warnings.some((warning) => warning.message.includes('imported DOCX Planbeskrivning XML'))).toBe(true);
+    expect(result.warnings.filter((warning) => warning.message.includes('<planomrade>Ja</planomrade>'))).toHaveLength(1);
 
     const xml = buildPlanbeskrivningXml(makeConfig(), [tag], []);
     expect(xml).toContain('<planomrade>Ja</planomrade>');
@@ -492,6 +533,7 @@ describe('PLANB-002 — Motiv till reglering requires planbestammelsereferens', 
 
     expect(result.valid).toBe(true);
     expect(result.errors).toEqual([]);
+    expect(result.infos).toEqual([]);
     expect(
       result.warnings.some((warning) =>
         warning.message.includes('taggade detaljplan-JSON-exporten')
