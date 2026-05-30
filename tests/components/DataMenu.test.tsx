@@ -1,0 +1,168 @@
+/** @vitest-environment jsdom */
+
+import React from 'react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { saveAs } from 'file-saver';
+import { DataMenu } from '../../src/components/DataMenu';
+import { exportDocx } from '../../src/docx/DocxExporter';
+import { useDocumentStore } from '../../src/store/useDocumentStore';
+import type { DocModel, Tag } from '../../src/types';
+
+vi.mock('file-saver', () => ({
+  saveAs: vi.fn(),
+}));
+
+vi.mock('../../src/docx/DocxExporter', () => ({
+  exportDocx: vi.fn(),
+}));
+
+const docModel: DocModel = {
+  paragraphs: [],
+};
+
+function makeTag(overrides: Partial<Tag> = {}): Tag {
+  return {
+    uuid: 'tag-1',
+    categoryId: 'detaljplanens-syfte--syfte',
+    targetType: 'text',
+    text: 'Markerad text',
+    paragraphIndex: 0,
+    startOffset: 0,
+    endOffset: 13,
+    createdAt: '2026-05-30T10:00:00.000Z',
+    ...overrides,
+  };
+}
+
+function resetStore(overrides: Partial<ReturnType<typeof useDocumentStore.getState>> = {}) {
+  useDocumentStore.setState({
+    documentId: 'doc-1',
+    zipBuffer: new Uint8Array([80, 75, 3, 4]).buffer,
+    docModel,
+    fileName: 'Planbeskrivning.docx',
+    tags: [],
+    geometries: [],
+    selectedTagUuid: null,
+    linkingTagUuid: null,
+    pendingSelection: null,
+    showTags: true,
+    activeGeometryDocId: null,
+    planbeskrivningConfig: null,
+    enforcePlanbeskrivningCompliance: true,
+    ...overrides,
+  });
+  useDocumentStore.temporal.getState().clear();
+}
+
+function openMenu() {
+  render(<DataMenu />);
+  fireEvent.click(screen.getByRole('button', { name: 'Data' }));
+}
+
+describe('DataMenu export grouping', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+    vi.clearAllMocks();
+    resetStore();
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
+
+  it('groups export actions by original files, enriched outputs, and project', () => {
+    openMenu();
+
+    expect(screen.getByText('Original')).toBeTruthy();
+    expect(screen.getByText('Med taggar och motiv')).toBeTruthy();
+    expect(screen.getByText('Projekt')).toBeTruthy();
+    expect(screen.getByText('Exportinställningar')).toBeTruthy();
+
+    expect(screen.getByRole('button', { name: /Exportera originaldokument/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Exportera originalgeometri/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Exportera taggat dokument/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Exportera geometri med motiv/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Exportera hela projektet/i })).toBeTruthy();
+  });
+
+  it('moves action descriptions into hover tooltips instead of visible helper text', () => {
+    openMenu();
+
+    const originalDocumentDescription =
+      'Ladda ner den inlästa .docx-filen utan nya taggar eller exportmetadata.';
+    const originalGeometryDescription =
+      'Ladda ner geometridokumentet i originalformat.';
+    const originalDocument = screen.getByRole('button', { name: /Exportera originaldokument/i });
+    const originalGeometry = screen.getByRole('button', { name: /Exportera originalgeometri/i });
+
+    expect(screen.queryByText(originalDocumentDescription)).toBeNull();
+    expect(screen.queryByText(originalGeometryDescription)).toBeNull();
+    expect(screen.queryByText('Ingen geometrifil laddad.')).toBeNull();
+    expect(originalDocument.getAttribute('title')).toBe(originalDocumentDescription);
+    expect(originalGeometry.getAttribute('title')).toBe(
+      `${originalGeometryDescription} Ingen geometrifil laddad.`
+    );
+  });
+
+  it('keeps Planbeskrivning export settings compact with details in tooltips', () => {
+    openMenu();
+
+    expect(screen.getByText('Exportinställningar')).toBeTruthy();
+    expect(screen.getByText('Planbeskrivning v2.0')).toBeTruthy();
+    expect(screen.getByText('Blockera vid fel')).toBeTruthy();
+    expect(screen.queryByText('omfattningar.xml inkluderas alltid')).toBeNull();
+    expect(screen.queryByText('Välj om compliance-fel ska blockera export eller inte.')).toBeNull();
+    expect(screen.queryByText('Läge: Blockera export vid compliance-fel.')).toBeNull();
+
+    expect(screen.getByRole('switch').getAttribute('title')).toBe(
+      'omfattningar.xml inkluderas alltid. Export blockeras vid compliance-fel.'
+    );
+    const metadataButton = screen.getByRole('button', { name: 'Redigera metadata' });
+    expect(metadataButton.getAttribute('title')).toBe(
+      'Redigera metadata för Planbeskrivning v2.0-exporten.'
+    );
+    expect(metadataButton.closest('.bg-amber-50')).toBeNull();
+  });
+
+  it('keeps export disabled states tied to the right prerequisites', () => {
+    resetStore({ zipBuffer: null, activeGeometryDocId: null, tags: [] });
+
+    openMenu();
+
+    const originalDocument = screen.getByRole('button', { name: /Exportera originaldokument/i }) as HTMLButtonElement;
+    const originalGeometry = screen.getByRole('button', { name: /Exportera originalgeometri/i }) as HTMLButtonElement;
+    const taggedDocument = screen.getByRole('button', { name: /Exportera taggat dokument/i }) as HTMLButtonElement;
+    const geometryWithMotiv = screen.getByRole('button', { name: /Exportera geometri med motiv/i }) as HTMLButtonElement;
+
+    expect(originalDocument.disabled).toBe(true);
+    expect(originalGeometry.disabled).toBe(true);
+    expect(taggedDocument.disabled).toBe(true);
+    expect(geometryWithMotiv.disabled).toBe(true);
+  });
+
+  it('exports the original document without invoking tagged DOCX export', async () => {
+    const zipBuffer = new Uint8Array([80, 75, 3, 4, 20]).buffer;
+    resetStore({
+      zipBuffer,
+      fileName: 'Original.docx',
+      tags: [makeTag()],
+    });
+
+    openMenu();
+
+    fireEvent.click(screen.getByRole('button', { name: /Exportera originaldokument/i }));
+
+    await waitFor(() => {
+      expect(saveAs).toHaveBeenCalledTimes(1);
+    });
+
+    const [blob, fileName] = vi.mocked(saveAs).mock.calls[0];
+    expect(fileName).toBe('Original.docx');
+    expect(blob).toBeInstanceOf(Blob);
+    expect((blob as Blob).type).toBe('application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    expect(Array.from(new Uint8Array(await (blob as Blob).arrayBuffer()))).toEqual([80, 75, 3, 4, 20]);
+    expect(exportDocx).not.toHaveBeenCalled();
+  });
+});

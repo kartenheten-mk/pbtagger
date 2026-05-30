@@ -3,7 +3,7 @@
  *
  * A single "Data" button in the Header that opens a popover with two sections:
  *   - Import (Upload): .docx replacement, Geometry JSON
- *   - Export (Download): .docx tagged, Geometry JSON, whole project
+ *   - Export (Download): grouped original files, enriched outputs, whole project
  *
  * Design goals:
  *   - All data operations in one discoverable place
@@ -13,6 +13,7 @@
  */
 
 import React, { Suspense, lazy, useRef, useState, useEffect, useCallback } from 'react';
+import { saveAs } from 'file-saver';
 import { useDocumentStore } from '../store/useDocumentStore';
 
 const PlanbeskrivningConfigPanel = lazy(() =>
@@ -43,6 +44,16 @@ function SectionLabel({ label, icon }: { label: string; icon: React.ReactNode })
   );
 }
 
+function ExportGroupLabel({ label }: { label: string }) {
+  return (
+    <div className="pt-1 first:pt-0">
+      <p className="px-1 pb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+        {label}
+      </p>
+    </div>
+  );
+}
+
 // ─── Individual action card ───────────────────────────────────────────────────
 
 interface ActionCardProps {
@@ -67,13 +78,17 @@ function ActionCard({
   icon, title, description, color, disabled, disabledReason, loading, onClick,
 }: ActionCardProps) {
   const c = COLOR_MAP[color];
+  const tooltip = disabled && disabledReason
+    ? `${description} ${disabledReason}`
+    : description;
+
   return (
     <button
       onClick={disabled ? undefined : onClick}
-      title={disabled ? disabledReason : undefined}
+      title={tooltip}
       disabled={disabled || loading}
       className={`
-        w-full flex items-start gap-3 px-3 py-3 rounded-xl border text-left
+        w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border text-left
         transition-all focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-400
         ${disabled
           ? 'opacity-40 cursor-not-allowed border-gray-100 bg-gray-50'
@@ -81,15 +96,11 @@ function ActionCard({
         }
       `}
     >
-      <div className={`mt-0.5 flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center ${c.icon}`}>
+      <div className={`flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center ${c.icon}`}>
         {loading ? <Spinner /> : icon}
       </div>
       <div className="min-w-0">
         <p className={`text-sm font-semibold leading-tight ${disabled ? 'text-gray-400' : c.title}`}>{title}</p>
-        <p className="text-xs text-gray-400 mt-0.5 leading-snug">{description}</p>
-        {disabled && disabledReason && (
-          <p className="text-xs text-amber-500 mt-0.5 leading-snug">{disabledReason}</p>
-        )}
       </div>
     </button>
   );
@@ -120,6 +131,7 @@ export const DataMenu: React.FC = () => {
   const [showPbConfig, setShowPbConfig] = useState(false);
 
   // Loading states
+  const [exportingOriginalDocx, setExportingOriginalDocx] = useState(false);
   const [exportingDocx,    setExportingDocx]    = useState(false);
   const [exportingGeoOriginal, setExportingGeoOriginal] = useState(false);
   const [exportingGeoWithMotiv, setExportingGeoWithMotiv] = useState(false);
@@ -167,6 +179,27 @@ export const DataMenu: React.FC = () => {
     const t = setTimeout(() => setSuccess(null), SUCCESS_AUTO_DISMISS_MS);
     return () => clearTimeout(t);
   }, [success]);
+
+  // ── Export original .docx ─────────────────────────────────────────────────
+  const handleExportOriginalDocx = useCallback(async () => {
+    if (!zipBuffer) return;
+    setExportingOriginalDocx(true);
+    setError(null);
+    try {
+      const blob = new Blob(
+        [zipBuffer],
+        { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }
+      );
+      saveAs(blob, fileName || 'document.docx');
+      setSuccess('Originaldokument nedladdat!');
+      setOpen(false);
+    } catch (e) {
+      setError('Export av originaldokument misslyckades.');
+      console.error(e);
+    } finally {
+      setExportingOriginalDocx(false);
+    }
+  }, [zipBuffer, fileName]);
 
   // ── Export .docx ───────────────────────────────────────────────────────────
   const handleExportDocx = useCallback(async () => {
@@ -330,6 +363,7 @@ export const DataMenu: React.FC = () => {
   );
 
   const anyLoading =
+    exportingOriginalDocx ||
     exportingDocx ||
     exportingGeoOriginal ||
     exportingGeoWithMotiv ||
@@ -454,7 +488,45 @@ export const DataMenu: React.FC = () => {
               />
 
               <div className="space-y-2">
-                {/* Export .docx */}
+                <ExportGroupLabel label="Original" />
+
+                {/* Export original .docx */}
+                <ActionCard
+                  color="blue"
+                  icon={
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                  }
+                  title="Exportera originaldokument (.docx)"
+                  description="Ladda ner den inlästa .docx-filen utan nya taggar eller exportmetadata."
+                  disabled={!zipBuffer}
+                  disabledReason="Inget dokument laddat."
+                  loading={exportingOriginalDocx}
+                  onClick={handleExportOriginalDocx}
+                />
+
+                {/* Export original geometry JSON */}
+                <ActionCard
+                  color="green"
+                  icon={
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                    </svg>
+                  }
+                  title="Exportera originalgeometri (.json)"
+                  description="Ladda ner geometridokumentet i originalformat."
+                  disabled={!activeGeometryDocId}
+                  disabledReason="Ingen geometrifil laddad."
+                  loading={exportingGeoOriginal}
+                  onClick={handleExportOriginalGeo}
+                />
+
+                <ExportGroupLabel label="Med taggar och motiv" />
+
+                {/* Export tagged .docx */}
                 <ActionCard
                   color="blue"
                   icon={
@@ -469,23 +541,6 @@ export const DataMenu: React.FC = () => {
                   disabledReason="Lägg till minst en tagg först."
                   loading={exportingDocx}
                   onClick={handleExportDocx}
-                />
-
-                {/* Export original geometry JSON */}
-                <ActionCard
-                  color="green"
-                  icon={
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                        d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-                    </svg>
-                  }
-                  title="Exportera original geometri (.json)"
-                  description="Ladda ner geometridokumentet i originalformat."
-                  disabled={!activeGeometryDocId}
-                  disabledReason="Ingen geometrifil laddad."
-                  loading={exportingGeoOriginal}
-                  onClick={handleExportOriginalGeo}
                 />
 
                 {/* Export geometry JSON with motiv */}
@@ -504,6 +559,8 @@ export const DataMenu: React.FC = () => {
                   loading={exportingGeoWithMotiv}
                   onClick={handleExportGeoWithMotiv}
                 />
+
+                <ExportGroupLabel label="Projekt" />
 
                 {/* Export whole project */}
                 <ActionCard
@@ -525,10 +582,10 @@ export const DataMenu: React.FC = () => {
             {/* Divider */}
             <div className="border-t border-gray-100" />
 
-            {/* ──────────── PLANBESKRIVNING v2.0 ────────────────────── */}
+            {/* ──────────── EXPORT SETTINGS ─────────────────────────── */}
             <div>
               <SectionLabel
-                label="Planbeskrivning v2.0"
+                label="Exportinställningar"
                 icon={
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -536,63 +593,66 @@ export const DataMenu: React.FC = () => {
                   </svg>
                 }
               />
-              <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-3 space-y-3">
-                {/* Compliance note */}
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <div className="w-6 h-6 rounded-md bg-amber-100 flex items-center justify-center flex-shrink-0">
-                      <svg className="w-3.5 h-3.5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                          d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                      </svg>
+              <div className="space-y-2">
+                <div
+                  className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5"
+                  title="omfattningar.xml inkluderas alltid i den taggade dokumentexporten."
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="w-6 h-6 rounded-md bg-amber-100 flex items-center justify-center flex-shrink-0">
+                        <svg className="w-3.5 h-3.5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold text-amber-900 leading-tight">
+                          Planbeskrivning v2.0
+                        </p>
+                      </div>
                     </div>
-                    <div className="min-w-0">
-                      <p className="text-xs font-semibold text-amber-900 leading-tight">
-                        <code className="font-mono text-[10px]">omfattningar.xml</code> inkluderas alltid
-                      </p>
-                      <p className="text-[10px] text-amber-700 leading-snug">
-                        Välj om compliance-fel ska blockera export eller inte.
-                      </p>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <span className={`text-[10px] font-semibold ${
+                        enforcePlanbeskrivningCompliance ? 'text-amber-700' : 'text-gray-500'
+                      }`}>
+                        {enforcePlanbeskrivningCompliance ? 'Blockera vid fel' : 'Tillåt med fel'}
+                      </span>
+                      <button
+                        onClick={togglePlanbeskrivningCompliance}
+                        role="switch"
+                        aria-checked={enforcePlanbeskrivningCompliance}
+                        title={
+                          enforcePlanbeskrivningCompliance
+                            ? 'omfattningar.xml inkluderas alltid. Export blockeras vid compliance-fel.'
+                            : 'omfattningar.xml inkluderas alltid. Export tillåts även vid compliance-fel.'
+                        }
+                        className={`relative inline-flex h-5 w-9 flex-shrink-0 rounded-full border-2 transition-colors focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-1 ${
+                          enforcePlanbeskrivningCompliance
+                            ? 'border-amber-500 bg-amber-500'
+                            : 'border-gray-300 bg-gray-200'
+                        }`}
+                      >
+                        <span
+                          className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform mt-px ${
+                            enforcePlanbeskrivningCompliance ? 'translate-x-4' : 'translate-x-px'
+                          }`}
+                        />
+                      </button>
                     </div>
                   </div>
-                  <button
-                    onClick={togglePlanbeskrivningCompliance}
-                    role="switch"
-                    aria-checked={enforcePlanbeskrivningCompliance}
-                    title={
-                      enforcePlanbeskrivningCompliance
-                        ? 'Export blockeras vid compliance-fel'
-                        : 'Export tillåts även vid compliance-fel'
-                    }
-                    className={`relative inline-flex h-5 w-9 flex-shrink-0 rounded-full border-2 transition-colors focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-1 ${
-                      enforcePlanbeskrivningCompliance
-                        ? 'border-amber-500 bg-amber-500'
-                        : 'border-gray-300 bg-gray-200'
-                    }`}
-                  >
-                    <span
-                      className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform mt-px ${
-                        enforcePlanbeskrivningCompliance ? 'translate-x-4' : 'translate-x-px'
-                      }`}
-                    />
-                  </button>
                 </div>
-                <p className="text-[10px] text-amber-700 leading-snug">
-                  {enforcePlanbeskrivningCompliance
-                    ? 'Läge: Blockera export vid compliance-fel.'
-                    : 'Läge: Tillåt export även om compliance-fel finns.'}
-                </p>
-
                 <button
                   onClick={() => { setOpen(false); setShowPbConfig(true); }}
-                  className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-amber-300 bg-white hover:bg-amber-50 text-xs font-medium text-amber-700 transition-colors"
+                  title="Redigera metadata för Planbeskrivning v2.0-exporten."
+                  className="w-full flex items-center justify-center gap-2 px-2.5 py-2 rounded-xl border border-gray-200 bg-white hover:bg-amber-50 hover:border-amber-300 text-xs font-medium text-amber-700 transition-colors focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-1"
                 >
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                       d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                   </svg>
-                  Redigera metadata…
+                  Redigera metadata
                 </button>
               </div>
             </div>
