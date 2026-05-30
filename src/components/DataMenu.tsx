@@ -108,6 +108,7 @@ export const DataMenu: React.FC = () => {
     replaceDocument,
     importGeometryJson,
     exportGeometryJson,
+    exportGeometryJsonWithMotiv,
     planbeskrivningConfig,
     enforcePlanbeskrivningCompliance,
     togglePlanbeskrivningCompliance,
@@ -120,7 +121,8 @@ export const DataMenu: React.FC = () => {
 
   // Loading states
   const [exportingDocx,    setExportingDocx]    = useState(false);
-  const [exportingGeo,     setExportingGeo]      = useState(false);
+  const [exportingGeoOriginal, setExportingGeoOriginal] = useState(false);
+  const [exportingGeoWithMotiv, setExportingGeoWithMotiv] = useState(false);
   const [exportingProject, setExportingProject]  = useState(false);
   const [importingDocx,    setImportingDocx]    = useState(false);
   const [importingGeo,     setImportingGeo]      = useState(false);
@@ -199,21 +201,41 @@ export const DataMenu: React.FC = () => {
     }
   }, [zipBuffer, docModel, tags, fileName, planbeskrivningConfig, activeGeometryDocId, geometries, enforcePlanbeskrivningCompliance]);
 
-  // ── Export geometry JSON ───────────────────────────────────────────────────
-  const handleExportGeo = useCallback(async () => {
-    setExportingGeo(true);
+  // ── Export original geometry JSON ──────────────────────────────────────────
+  const handleExportOriginalGeo = useCallback(async () => {
+    setExportingGeoOriginal(true);
     setError(null);
     try {
       await exportGeometryJson();
-      setSuccess('Geometri-JSON nedladdad!');
+      setSuccess('Original geometri-JSON nedladdad!');
       setOpen(false);
     } catch (e) {
       setError('Geometriexport misslyckades.');
       console.error(e);
     } finally {
-      setExportingGeo(false);
+      setExportingGeoOriginal(false);
     }
   }, [exportGeometryJson]);
+
+  // ── Export geometry JSON with motiv ────────────────────────────────────────
+  const handleExportGeoWithMotiv = useCallback(async () => {
+    setExportingGeoWithMotiv(true);
+    setError(null);
+    try {
+      await exportGeometryJsonWithMotiv();
+      setSuccess('Geometri-JSON med motiv nedladdad!');
+      setOpen(false);
+    } catch (e) {
+      const msg =
+        e instanceof Error
+          ? e.message
+          : 'Geometriexport med motiv misslyckades.';
+      setError(msg);
+      console.error(e);
+    } finally {
+      setExportingGeoWithMotiv(false);
+    }
+  }, [exportGeometryJsonWithMotiv]);
 
   // ── Export whole project ───────────────────────────────────────────────────
   const handleExportProject = useCallback(async () => {
@@ -307,7 +329,13 @@ export const DataMenu: React.FC = () => {
     [importGeometryJson]
   );
 
-  const anyLoading = exportingDocx || exportingGeo || exportingProject || importingDocx || importingGeo;
+  const anyLoading =
+    exportingDocx ||
+    exportingGeoOriginal ||
+    exportingGeoWithMotiv ||
+    exportingProject ||
+    importingDocx ||
+    importingGeo;
 
   return (
     <div className="relative">
@@ -443,7 +471,7 @@ export const DataMenu: React.FC = () => {
                   onClick={handleExportDocx}
                 />
 
-                {/* Export geometry JSON */}
+                {/* Export original geometry JSON */}
                 <ActionCard
                   color="green"
                   icon={
@@ -452,12 +480,29 @@ export const DataMenu: React.FC = () => {
                         d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
                     </svg>
                   }
-                  title="Exportera geometri (.json)"
+                  title="Exportera original geometri (.json)"
                   description="Ladda ner geometridokumentet i originalformat."
                   disabled={!activeGeometryDocId}
                   disabledReason="Ingen geometrifil laddad."
-                  loading={exportingGeo}
-                  onClick={handleExportGeo}
+                  loading={exportingGeoOriginal}
+                  onClick={handleExportOriginalGeo}
+                />
+
+                {/* Export geometry JSON with motiv */}
+                <ActionCard
+                  color="green"
+                  icon={
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                    </svg>
+                  }
+                  title="Exportera geometri med motiv (.json)"
+                  description="Ladda ner en kopia där länkade motiv skrivs in i planbestämmelser."
+                  disabled={!activeGeometryDocId}
+                  disabledReason="Ingen geometrifil laddad."
+                  loading={exportingGeoWithMotiv}
+                  onClick={handleExportGeoWithMotiv}
                 />
 
                 {/* Export whole project */}

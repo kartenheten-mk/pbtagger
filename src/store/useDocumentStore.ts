@@ -16,7 +16,10 @@ import {
   deleteGeometryDoc,
 } from '../geometry/geometryDb';
 import { parseDetaljplanJson } from '../geometry/detaljplanParser';
-import { exportGeometryDocAsString } from '../geometry/geoJsonConverter';
+import {
+  exportGeometryDocAsString,
+  exportGeometryDocWithMotivAsString,
+} from '../geometry/geoJsonConverter';
 import { normalizeGeometrySource } from '../geometry/geometrySource';
 import { replaceDocxGmlGeometriesInState } from './geometryMerge';
 import { saveAs } from 'file-saver';
@@ -85,6 +88,11 @@ interface DocumentActions {
    * Download the active geometry document back to disk in its original format.
    */
   exportGeometryJson: () => Promise<void>;
+  /**
+   * Download a cloned geometry document with linked motiv text written into
+   * planbestämmelsebeskrivning.motiv for planbestämmelse features.
+   */
+  exportGeometryJsonWithMotiv: () => Promise<void>;
 
   // ─── Geometry linking ───────────────────────────────────────────────────
   startLinking: (tagUuid: string) => void;
@@ -167,6 +175,13 @@ function migrateTagsGeometryIds(tags: Tag[]): Tag[] {
     }
     return t;
   });
+}
+
+function buildMotivExportFileName(fileName: string): string {
+  if (fileName.toLowerCase().endsWith('.json')) {
+    return `${fileName.slice(0, -5)}_med_motiv.json`;
+  }
+  return `${fileName}_med_motiv.json`;
 }
 
 export const useDocumentStore = create<AppState & DocumentActions>()(
@@ -487,6 +502,21 @@ export const useDocumentStore = create<AppState & DocumentActions>()(
           const content = exportGeometryDocAsString(doc);
           const blob = new Blob([content], { type: 'application/json' });
           saveAs(blob, doc.fileName);
+        },
+
+        exportGeometryJsonWithMotiv: async () => {
+          const state = get();
+          const docId = state.activeGeometryDocId;
+          if (!docId) return;
+          const doc = await getGeometryDoc(docId);
+          if (!doc) return;
+          const content = exportGeometryDocWithMotivAsString(
+            doc,
+            state.tags,
+            state.geometries
+          );
+          const blob = new Blob([content], { type: 'application/json' });
+          saveAs(blob, buildMotivExportFileName(doc.fileName));
         },
 
         // ─── Geometry linking ───────────────────────────────────────────────

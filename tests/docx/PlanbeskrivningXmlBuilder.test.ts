@@ -466,6 +466,38 @@ describe('PLANB-002 — Motiv till reglering requires planbestammelsereferens', 
     expect(xml).not.toContain('lmg:Yta');
     expect(xml).not.toContain('lmg:Punkt');
   });
+
+  it('warns when multiple motiv tags point at the same planbestämmelse for tagged JSON export', () => {
+    const bestammelseGeom = makePolygonGeometry({
+      uuid: 'shared-bestammelse',
+      source: 'json',
+      featureType: 'användningsbestämmelse',
+    });
+    const tags = [
+      makeTag({
+        uuid: 'aaaaaaaa-1111-4111-8111-111111111111',
+        categoryId: 'motiv-till-detaljplanens-regleringar--motiv-till-reglering',
+        text: 'Motiv ett',
+        geometryIds: ['shared-bestammelse'],
+      }),
+      makeTag({
+        uuid: 'bbbbbbbb-2222-4222-8222-222222222222',
+        categoryId: 'motiv-till-detaljplanens-regleringar--motiv-till-reglering',
+        text: 'Motiv två',
+        geometryIds: ['shared-bestammelse'],
+      }),
+    ];
+
+    const result = validatePlanbeskrivning(tags, [bestammelseGeom]);
+
+    expect(result.valid).toBe(true);
+    expect(result.errors).toEqual([]);
+    expect(
+      result.warnings.some((warning) =>
+        warning.message.includes('taggade detaljplan-JSON-exporten')
+      )
+    ).toBe(true);
+  });
 });
 
 // ─── PLANB-006: Direct geometry takes precedence ──────────────────────────────

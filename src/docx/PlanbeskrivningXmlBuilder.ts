@@ -679,6 +679,7 @@ export function validatePlanbeskrivning(
 
   const geometryMap = new Map(geometries.map((g) => [g.uuid, g]));
   const seenIdentiteter = new Set<string>();
+  const motivTagUuidsByBestammelseUuid = new Map<string, string[]>();
 
   for (const tag of tags) {
     const eligibility = getSpecExportEligibility(tag);
@@ -743,6 +744,15 @@ export function validatePlanbeskrivning(
 
     // PLANB-002
     if (isMotivTillReglering) {
+      for (const geo of linkedGeos) {
+        if (!isBestammelseFeature(geo.featureType)) continue;
+        const tagUuids = motivTagUuidsByBestammelseUuid.get(geo.uuid) ?? [];
+        if (!tagUuids.includes(tag.uuid)) {
+          tagUuids.push(tag.uuid);
+        }
+        motivTagUuidsByBestammelseUuid.set(geo.uuid, tagUuids);
+      }
+
       const hasBestammelse = linkedGeos.some((g) =>
         isBestammelseFeature(g.featureType)
       );
@@ -785,6 +795,16 @@ export function validatePlanbeskrivning(
         });
       }
     }
+  }
+
+  for (const [geometryUuid, tagUuids] of motivTagUuidsByBestammelseUuid) {
+    if (tagUuids.length <= 1) continue;
+    warnings.push({
+      message:
+        `Flera motiv-taggar (${tagUuids.join(', ')}) pekar på samma planbestämmelse "${geometryUuid}". ` +
+        'Det är tillåtet i Planbeskrivning-standarden som flera omfattningar, men den taggade detaljplan-JSON-exporten har bara ett motivfält per planbestämmelse och kan därför blockeras.',
+      tagUuid: tagUuids[0],
+    });
   }
 
   return {

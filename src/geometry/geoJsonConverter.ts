@@ -11,7 +11,9 @@
  */
 
 import proj4, { type Converter } from 'proj4';
-import type { Geometry, GeometryDoc } from '../types';
+import type { Geometry, GeometryDoc, Tag, Tema } from '../types';
+import { flattenCategories } from '../data/categoryUtils';
+import rawCategories from '../data/categories.json';
 
 // ─── proj4 CRS definitions ────────────────────────────────────────────────────
 // Register all Swedish SWEREF 99 local zones that might appear in detaljplan JSON.
@@ -108,6 +110,58 @@ interface GeoJsonFeatureCollection {
   features: GeoJsonFeature[];
 }
 
+type JsonObject = Record<string, unknown>;
+
+const MOTIV_CATEGORY_IDS = new Set(
+  flattenCategories((rawCategories as unknown as { teman: Tema[] }).teman)
+    .filter((category) => category.gruppName.toLowerCase() === 'motiv till reglering')
+    .map((category) => category.id)
+);
+
+function isJsonObject(value: unknown): value is JsonObject {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isMotivTag(tag: Tag): boolean {
+  return MOTIV_CATEGORY_IDS.has(tag.categoryId);
+}
+
+function isBestammelseFeatureType(featureType?: string): boolean {
+  if (!featureType) return false;
+  const t = featureType.toLowerCase();
+  return t.includes('bestämmelse') || t.includes('bestammelse');
+}
+
+function cloneJsonObject(rawJson: JsonObject): JsonObject {
+  return JSON.parse(JSON.stringify(rawJson)) as JsonObject;
+}
+
+function getFeatureArray(rawJson: JsonObject): JsonObject[] {
+  if (rawJson['type'] !== 'FeatureCollection') {
+    throw new Error('Geometriexport med motiv kräver en detaljplan-JSON med type "FeatureCollection".');
+  }
+
+  const features = rawJson['features'];
+  if (!Array.isArray(features)) {
+    throw new Error('Geometriexport med motiv kräver en detaljplan-JSON där "features" är en array.');
+  }
+
+  return features.filter((feature): feature is JsonObject => isJsonObject(feature));
+}
+
+function buildFeatureById(features: JsonObject[]): Map<string, JsonObject> {
+  const featureById = new Map<string, JsonObject>();
+
+  for (const feature of features) {
+    const id = feature['id'];
+    if (typeof id === 'string' && id.length > 0) {
+      featureById.set(id, feature);
+    }
+  }
+
+  return featureById;
+}
+
 function buildGeoJsonGeometry(
   geo: Geometry
 ): GeoJsonGeometry | null {
@@ -192,4 +246,100 @@ export function exportGeometryDoc(doc: GeometryDoc): Record<string, unknown> {
  */
 export function exportGeometryDocAsString(doc: GeometryDoc): string {
   return JSON.stringify(doc.rawJson, null, 2);
+}
+
+/**
+ * Serialises a cloned GeometryDoc JSON after inserting motiv text from linked
+ * "Motiv till reglering" tags into matching planbestämmelse features.
+ */
+export function exportGeometryDocWithMotivAsString(
+  doc: GeometryDoc,
+  tags: Tag[],
+  geometries: Geometry[]
+): string {
+  const clonedRawJson = cloneJsonObject(doc.rawJson);
+  const features = getFeatureArray(clonedRawJson);
+  const featureById = buildFeatureById(features);
+  const geometryById = new Map(geometries.map((geometry) => [geometry.uuid, geometry]));
+  const motivByFeatureId = new Map<string, { motiv: string; tagUuid: string }>();
+
+  for (const tag of tags) {
+    if (!isMotivTag(tag)) continue;
+
+    const trimmedMotiv = tag.text.trim();
+    if (trimmedMotiv.length === 0) {
+      throw new Error(`Motiv-taggen ${tag.uuid} har tom motivtext efter trimning.`);
+    }
+    const motiv = trimmedMotiv.replace(/"/g, "'");
+
+    const activeLinkedGeometries: Geometry[] = [];
+    const seenGeometryIds = new Set<string>();
+
+    for (const geometryId of tag.geometryIds ?? []) {
+      if (seenGeometryIds.has(geometryId)) continue;
+      seenGeometryIds.add(geometryId);
+
+      const geometry = geometryById.get(geometryId);
+      if (!geometry || geometry.sourceDocId !== doc.id) continue;
+      activeLinkedGeometries.push(geometry);
+    }
+
+    if (activeLinkedGeometries.length === 0) {
+      throw new Error(
+        `Motiv-taggen ${tag.uuid} saknar länkad planbestämmelse i aktiv detaljplan-JSON.`
+      );
+    }
+
+    for (const geometry of activeLinkedGeometries) {
+      if (!isBestammelseFeatureType(geometry.featureType)) {
+        throw new Error(
+          `Motiv-taggen ${tag.uuid} är länkad till geometri "${geometry.uuid}" som inte är en planbestämmelse i aktiv detaljplan-JSON.`
+        );
+      }
+
+      const existing = motivByFeatureId.get(geometry.uuid);
+      if (existing && existing.tagUuid !== tag.uuid) {
+        throw new Error(
+          `Flera motiv-taggar pekar på samma geometri "${geometry.uuid}" (${existing.tagUuid} och ${tag.uuid}).`
+        );
+      }
+
+      motivByFeatureId.set(geometry.uuid, { motiv, tagUuid: tag.uuid });
+    }
+  }
+
+  for (const [featureId, { motiv }] of motivByFeatureId) {
+    const feature = featureById.get(featureId);
+    if (!feature) {
+      throw new Error(
+        `Motivexporten kunde inte hitta feature "${featureId}" i detaljplan-JSON:ens features[].id.`
+      );
+    }
+
+    const properties = feature['properties'];
+    if (!isJsonObject(properties)) {
+      throw new Error(`Feature "${featureId}" saknar ett properties-objekt i detaljplan-JSON.`);
+    }
+
+    const featureType = properties['feature:typ'];
+    if (typeof featureType !== 'string' || !isBestammelseFeatureType(featureType)) {
+      throw new Error(`Feature "${featureId}" är inte en planbestämmelse i detaljplan-JSON.`);
+    }
+
+    const existingDescription = properties['planbestammelsebeskrivning'];
+    if (existingDescription === undefined) {
+      properties['planbestammelsebeskrivning'] = { motiv };
+      continue;
+    }
+
+    if (!isJsonObject(existingDescription)) {
+      throw new Error(
+        `Feature "${featureId}" har planbestammelsebeskrivning som inte är ett objekt.`
+      );
+    }
+
+    existingDescription['motiv'] = motiv;
+  }
+
+  return JSON.stringify(clonedRawJson, null, 2);
 }
