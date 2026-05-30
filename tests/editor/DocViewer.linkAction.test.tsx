@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { DocViewer } from '../../src/editor/DocViewer';
 import { flattenCategories } from '../../src/data/categoryUtils';
 import { useDocumentStore } from '../../src/store/useDocumentStore';
@@ -179,5 +179,52 @@ describe('DocViewer inline geometry link action', () => {
     expect(within(badge).queryByRole('button', { name: 'Länka geometri' })).toBeNull();
     expect(within(badge).getByRole('button', { name: 'Ta bort tagg' })).toBeTruthy();
     expect(useDocumentStore.getState().linkingTagUuid).toBeNull();
+  });
+});
+
+describe('DocViewer search controls', () => {
+  beforeEach(() => {
+    Object.defineProperty(Element.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: vi.fn(),
+    });
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
+
+  it('renders a compact search button without the canvas hint text', async () => {
+    resetStore([], []);
+
+    render(<DocViewer docModel={docModel} categories={categories} />);
+
+    expect(await screen.findByRole('button', { name: 'Sök i dokument' })).toBeTruthy();
+    expect(screen.queryByText('Markera text och klicka bild för att skapa en tagg.')).toBeNull();
+    expect(screen.queryByRole('search', { name: 'Sök i dokument' })).toBeNull();
+  });
+
+  it('opens the search bar from the compact search button', async () => {
+    resetStore([], []);
+
+    render(<DocViewer docModel={docModel} categories={categories} />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Sök i dokument' }));
+
+    expect(screen.getByRole('search', { name: 'Sök i dokument' })).toBeTruthy();
+    expect(screen.getByLabelText('Söktext')).toBeTruthy();
+  });
+
+  it('opens the search bar with Ctrl+F', async () => {
+    resetStore([], []);
+
+    render(<DocViewer docModel={docModel} categories={categories} />);
+
+    fireEvent.keyDown(window, { key: 'f', ctrlKey: true });
+
+    await waitFor(() => {
+      expect(screen.getByRole('search', { name: 'Sök i dokument' })).toBeTruthy();
+    });
   });
 });

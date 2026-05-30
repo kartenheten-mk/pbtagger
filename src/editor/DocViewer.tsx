@@ -878,50 +878,37 @@ export const DocViewer: React.FC<DocViewerProps> = ({ docModel, categories }) =>
 
   return (
     <div className="relative min-h-full" ref={editorContainerRef}>
-      {/* Sticky top bar: hint + optional search bar */}
-      <div className="sticky top-0 z-10 bg-blue-50 border-b border-blue-100 px-4 py-2 flex items-center gap-3">
-        {/* Info hint — shrinks when search bar is open */}
-        {!searchOpen && (
-          <>
-            <svg className="w-4 h-4 text-blue-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <p className="text-xs text-blue-600 flex-1">
-              Markera text och klicka bild för att skapa en tagg.
-            </p>
-          </>
-        )}
+      {/* Floating search control */}
+      <div className="sticky top-0 z-10 h-0 pointer-events-none">
+        <div className="flex justify-end px-4 pt-3">
+          {searchOpen && (
+            <div className="pointer-events-auto w-full max-w-sm">
+              <SearchBar
+                query={searchQuery}
+                matchCount={searchMatchCount}
+                currentMatch={searchCurrentIndex}
+                onQueryChange={handleSearchQueryChange}
+                onNext={handleSearchNext}
+                onPrevious={handleSearchPrevious}
+                onClose={handleSearchClose}
+              />
+            </div>
+          )}
 
-        {/* Search bar (shown when open) */}
-        {searchOpen && (
-          <div className="flex-1">
-            <SearchBar
-              query={searchQuery}
-              matchCount={searchMatchCount}
-              currentMatch={searchCurrentIndex}
-              onQueryChange={handleSearchQueryChange}
-              onNext={handleSearchNext}
-              onPrevious={handleSearchPrevious}
-              onClose={handleSearchClose}
-            />
-          </div>
-        )}
-
-        {/* Search toggle button (always visible) */}
-        <button
-          onClick={() => setSearchOpen((v) => !v)}
-          title="Sök i dokument (Ctrl+F)"
-          className={`p-1.5 rounded-lg transition-colors flex-shrink-0 ${
-            searchOpen
-              ? 'text-blue-600 bg-blue-100'
-              : 'text-blue-400 hover:text-blue-600 hover:bg-blue-100'
-          }`}
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-              d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
-          </svg>
-        </button>
+          {!searchOpen && (
+            <button
+              onClick={() => setSearchOpen(true)}
+              title="Sök i dokument (Ctrl+F)"
+              aria-label="Sök i dokument"
+              className="pointer-events-auto p-2 rounded-full border border-gray-200 bg-white text-gray-500 shadow-sm transition-colors hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
+              </svg>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* TipTap editor */}
