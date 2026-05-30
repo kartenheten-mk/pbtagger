@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { Geometry } from '../../src/types';
-import { inferGeometrySource, splitGeometriesBySource } from '../../src/geometry/geometrySource';
+import {
+  canEditGeometryLinks,
+  inferGeometrySource,
+  splitGeometriesBySource,
+} from '../../src/geometry/geometrySource';
 
 function makeGeometry(overrides: Partial<Geometry> = {}): Geometry {
   return {
@@ -46,5 +50,17 @@ describe('geometrySource', () => {
     const { json, docxGml } = splitGeometriesBySource(geos);
     expect(json.map((g) => g.uuid)).toEqual(['j1']);
     expect(docxGml.map((g) => g.uuid)).toEqual(['g1']);
+  });
+
+  it('allows editing geometry links when JSON geometries are loaded', () => {
+    expect(canEditGeometryLinks([makeGeometry({ source: 'json' })])).toBe(true);
+  });
+
+  it('allows editing geometry links before any geometry source is loaded', () => {
+    expect(canEditGeometryLinks([])).toBe(true);
+  });
+
+  it('blocks editing geometry links when only DOCX-GML geometries are loaded', () => {
+    expect(canEditGeometryLinks([makeGeometry({ source: 'docx_gml' })])).toBe(false);
   });
 });

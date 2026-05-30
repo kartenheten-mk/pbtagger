@@ -51,3 +51,8 @@ export function splitGeometriesBySource(geometries: Geometry[]): {
 
   return { json, docxGml };
 }
+
+export function canEditGeometryLinks(geometries: Geometry[]): boolean {
+  const { json, docxGml } = splitGeometriesBySource(geometries);
+  return json.length > 0 || docxGml.length === 0;
+}

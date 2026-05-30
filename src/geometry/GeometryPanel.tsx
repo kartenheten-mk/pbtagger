@@ -797,9 +797,14 @@ export const GeometryPanel: React.FC = () => {
         <div className="mx-3 mt-3 px-3 py-2 bg-blue-50 border border-blue-200 rounded-xl flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
             <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse flex-shrink-0" />
-            <p className="text-xs text-blue-700 font-medium truncate">
-              Väljer geometrier för: <span className="italic">"{linkingTag?.text?.slice(0, 20)}…"</span>
-            </p>
+            <div className="min-w-0">
+              <p className="text-xs text-blue-700 font-medium truncate">
+                Väljer geometrier för: <span className="italic">"{linkingTag?.text?.slice(0, 20)}…"</span>
+              </p>
+              <p className="text-[10px] text-blue-600 mt-0.5">
+                Klicka geometrier i kartan eller listan och bekräfta med Länka.
+              </p>
+            </div>
           </div>
           <button
             onClick={cancelLinking}

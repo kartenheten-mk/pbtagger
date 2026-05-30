@@ -23,6 +23,8 @@ export interface TagMarkAttributes {
   color: string;
   /** Human-readable label shown in the badge, e.g. "TEMA: KATEGORI" */
   label: string;
+  canLinkGeometry?: boolean;
+  linkGeometryLabel?: string;
 }
 
 declare module '@tiptap/core' {
@@ -67,6 +69,18 @@ export const TagMark = Mark.create<Record<string, never>>({
         default: '',
         parseHTML: (el) => el.getAttribute('data-label') ?? '',
         renderHTML: (attrs) => ({ 'data-label': attrs.label }),
+      },
+      canLinkGeometry: {
+        default: false,
+        parseHTML: (el) => el.getAttribute('data-can-link-geometry') === 'true',
+        renderHTML: (attrs) => ({
+          'data-can-link-geometry': attrs.canLinkGeometry ? 'true' : 'false',
+        }),
+      },
+      linkGeometryLabel: {
+        default: '',
+        parseHTML: (el) => el.getAttribute('data-link-geometry-label') ?? '',
+        renderHTML: (attrs) => ({ 'data-link-geometry-label': attrs.linkGeometryLabel }),
       },
     };
   },
@@ -157,11 +171,16 @@ export const TagMark = Mark.create<Record<string, never>>({
 
                 const color: string = mark.attrs.color ?? '#3b82f6';
                 const label: string = mark.attrs.label ?? '';
+                const canLinkGeometry = mark.attrs.canLinkGeometry === true;
+                const linkGeometryLabel: string = mark.attrs.linkGeometryLabel || 'Länka geometri';
 
                 // ── Build badge DOM element ─────────────────────────────
                 const badge = document.createElement('span');
                 badge.className = 'tag-badge-widget';
                 badge.setAttribute('data-tag-uuid', uuid);
+                badge.setAttribute('tabindex', '0');
+                badge.setAttribute('role', 'group');
+                badge.setAttribute('aria-label', `Tagg ${label}`);
                 badge.style.setProperty('--tag-color', color);
                 badge.style.setProperty('--tag-bg', hexToRgba(color, 0.1));
                 badge.style.setProperty('--tag-border', hexToRgba(color, 0.4));
@@ -170,7 +189,7 @@ export const TagMark = Mark.create<Record<string, never>>({
                 badge.addEventListener('mousedown', (e) => {
                   // Only select if we're not clicking the close button
                   const target = e.target as HTMLElement;
-                  if (!target.closest('.tag-badge-close')) {
+                  if (!target.closest('.tag-badge-action')) {
                     e.preventDefault();
                     e.stopPropagation();
                     useDocumentStore.getState().selectTag(uuid);
@@ -181,10 +200,33 @@ export const TagMark = Mark.create<Record<string, never>>({
                 labelSpan.className = 'tag-badge-label';
                 labelSpan.textContent = label.toUpperCase();
 
+                const linkBtn = document.createElement('button');
+                linkBtn.className = 'tag-badge-action tag-badge-link';
+                linkBtn.setAttribute('type', 'button');
+                linkBtn.setAttribute('aria-label', linkGeometryLabel);
+                linkBtn.setAttribute('title', linkGeometryLabel);
+                linkBtn.appendChild(createLinkIconSvg());
+
+                linkBtn.addEventListener('mousedown', (e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  const store = useDocumentStore.getState();
+                  if (store.selectedTagUuid !== uuid) {
+                    store.selectTag(uuid);
+                  }
+                  store.startLinking(uuid);
+                });
+
+                linkBtn.addEventListener('click', (e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                });
+
                 const closeBtn = document.createElement('button');
-                closeBtn.className = 'tag-badge-close';
+                closeBtn.className = 'tag-badge-action tag-badge-close';
                 closeBtn.setAttribute('type', 'button');
                 closeBtn.setAttribute('aria-label', 'Ta bort tagg');
+                closeBtn.setAttribute('title', 'Ta bort tagg');
                 closeBtn.textContent = '×';
 
                 // Use mousedown so we act before ProseMirror's own
@@ -199,6 +241,9 @@ export const TagMark = Mark.create<Record<string, never>>({
                 });
 
                 badge.appendChild(labelSpan);
+                if (canLinkGeometry) {
+                  badge.appendChild(linkBtn);
+                }
                 badge.appendChild(closeBtn);
 
                 decorations.push(
@@ -211,8 +256,7 @@ export const TagMark = Mark.create<Record<string, never>>({
                     stopEvent: (event) => {
                       const target = event.target as HTMLElement;
                       return (
-                        target === closeBtn ||
-                        target.closest('.tag-badge-close') !== null
+                        target.closest('.tag-badge-action') !== null
                       );
                     },
                   })
@@ -237,4 +281,25 @@ function hexToRgba(hex: string, alpha: number): string {
   const b = parseInt(clean.substring(4, 6), 16);
   if (isNaN(r) || isNaN(g) || isNaN(b)) return `rgba(59,130,246,${alpha})`;
   return `rgba(${r},${g},${b},${alpha})`;
+}
+
+function createLinkIconSvg(): SVGSVGElement {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('fill', 'none');
+  svg.setAttribute('stroke', 'currentColor');
+  svg.setAttribute('stroke-width', '2');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.classList.add('tag-badge-action-icon');
+
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  path.setAttribute('stroke-linecap', 'round');
+  path.setAttribute('stroke-linejoin', 'round');
+  path.setAttribute(
+    'd',
+    'M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1'
+  );
+  svg.appendChild(path);
+
+  return svg;
 }

@@ -21,6 +21,7 @@ import { parseNumberedHeading, type NumberedHeading } from './headingLayout';
 import { buildTocDecorations, type TocEntry } from './tocLayout';
 import type { Category, DocModel, DocRun, Tag, PendingSelection } from '../types';
 import { getCategoryLabel } from '../data/categoryUtils';
+import { canEditGeometryLinks } from '../geometry/geometrySource';
 
 const OBJECT_ALT_PREFIX = '__pb_obj__';
 const GRAPH_PLACEHOLDER_SRC = createGraphPlaceholderDataUri();
@@ -56,9 +57,16 @@ interface ParaTagSegment {
   categoryId: string;
   startOffset: number;
   endOffset: number; // Number.MAX_SAFE_INTEGER → clamp to paragraph length
+  canLinkGeometry: boolean;
+  linkGeometryLabel: string;
 }
 
-function docModelToTipTap(model: DocModel, tags: Tag[], categoryById: Map<string, Category>): TipTapDoc {
+function docModelToTipTap(
+  model: DocModel,
+  tags: Tag[],
+  categoryById: Map<string, Category>,
+  canEditLinks: boolean
+): TipTapDoc {
   // Build quick lookups, expanding multi-paragraph tags across all spanned
   // paragraphs so the rendering loop stays per-paragraph.
   const textTagsByPara = new Map<number, ParaTagSegment[]>();
@@ -72,25 +80,53 @@ function docModelToTipTap(model: DocModel, tags: Tag[], categoryById: Map<string
       if (endParaIdx <= tag.paragraphIndex) {
         // Single-paragraph tag
         const arr = textTagsByPara.get(tag.paragraphIndex) ?? [];
-        arr.push({ uuid: tag.uuid, categoryId: tag.categoryId, startOffset: tag.startOffset, endOffset: tag.endOffset });
+        arr.push({
+          uuid: tag.uuid,
+          categoryId: tag.categoryId,
+          startOffset: tag.startOffset,
+          endOffset: tag.endOffset,
+          canLinkGeometry: canEditLinks,
+          linkGeometryLabel: getGeometryLinkLabel(tag),
+        });
         textTagsByPara.set(tag.paragraphIndex, arr);
       } else {
         // Multi-paragraph tag – expand into per-paragraph segments
         // First paragraph: startOffset → end of paragraph
         const firstArr = textTagsByPara.get(tag.paragraphIndex) ?? [];
-        firstArr.push({ uuid: tag.uuid, categoryId: tag.categoryId, startOffset: tag.startOffset, endOffset: Number.MAX_SAFE_INTEGER });
+        firstArr.push({
+          uuid: tag.uuid,
+          categoryId: tag.categoryId,
+          startOffset: tag.startOffset,
+          endOffset: Number.MAX_SAFE_INTEGER,
+          canLinkGeometry: canEditLinks,
+          linkGeometryLabel: getGeometryLinkLabel(tag),
+        });
         textTagsByPara.set(tag.paragraphIndex, firstArr);
 
         // Middle paragraphs: whole paragraph
         for (let pi = tag.paragraphIndex + 1; pi < endParaIdx; pi++) {
           const arr = textTagsByPara.get(pi) ?? [];
-          arr.push({ uuid: tag.uuid, categoryId: tag.categoryId, startOffset: 0, endOffset: Number.MAX_SAFE_INTEGER });
+          arr.push({
+            uuid: tag.uuid,
+            categoryId: tag.categoryId,
+            startOffset: 0,
+            endOffset: Number.MAX_SAFE_INTEGER,
+            canLinkGeometry: canEditLinks,
+            linkGeometryLabel: getGeometryLinkLabel(tag),
+          });
           textTagsByPara.set(pi, arr);
         }
 
         // Last paragraph: 0 → endOffset
         const lastArr = textTagsByPara.get(endParaIdx) ?? [];
-        lastArr.push({ uuid: tag.uuid, categoryId: tag.categoryId, startOffset: 0, endOffset: tag.endOffset });
+        lastArr.push({
+          uuid: tag.uuid,
+          categoryId: tag.categoryId,
+          startOffset: 0,
+          endOffset: tag.endOffset,
+          canLinkGeometry: canEditLinks,
+          linkGeometryLabel: getGeometryLinkLabel(tag),
+        });
         textTagsByPara.set(endParaIdx, lastArr);
       }
       continue;
@@ -166,6 +202,8 @@ function docModelToTipTap(model: DocModel, tags: Tag[], categoryById: Map<string
                     categoryId: tag.categoryId,
                     color,
                     label,
+                    canLinkGeometry: tag.canLinkGeometry,
+                    linkGeometryLabel: tag.linkGeometryLabel,
                   },
                 },
               ],
@@ -215,9 +253,14 @@ function buildTagRenderKey(tags: Tag[]): string {
         tag.endParagraphIndex ?? '',
         tag.runId ?? '',
         tag.tableId ?? '',
+        (tag.geometryIds ?? []).join(','),
       ].join('\u0001')
     )
     .join('\u0002');
+}
+
+function getGeometryLinkLabel(tag: Tag): string {
+  return (tag.geometryIds?.length ?? 0) > 0 ? 'Ändra geometrier' : 'Länka geometri';
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -229,6 +272,7 @@ interface DocViewerProps {
 
 export const DocViewer: React.FC<DocViewerProps> = ({ docModel, categories }) => {
   const {
+    geometries,
     tags,
     pendingSelection,
     setPendingSelection,
@@ -257,19 +301,24 @@ export const DocViewer: React.FC<DocViewerProps> = ({ docModel, categories }) =>
     () => (showTags ? tags : tags.filter((t) => t.uuid === selectedTagUuid)),
     [showTags, tags, selectedTagUuid]
   );
+  const canEditLinks = useMemo(
+    () => canEditGeometryLinks(geometries),
+    [geometries]
+  );
   const visibleTagRenderKey = useMemo(
     () => buildTagRenderKey(visibleTags),
     [visibleTags]
   );
   const initialContent = useMemo(
-    () => docModelToTipTap(docModel, visibleTags, categoryById),
-    [docModel, visibleTags, categoryById]
+    () => docModelToTipTap(docModel, visibleTags, categoryById, canEditLinks),
+    [docModel, visibleTags, categoryById, canEditLinks]
   );
   const lastUpdateRef = useRef({
     tagRenderKey: visibleTagRenderKey,
     docModel,
     showTags,
     categoryById,
+    canEditLinks,
   });
 
   const editor = useEditor({
@@ -313,6 +362,7 @@ export const DocViewer: React.FC<DocViewerProps> = ({ docModel, categories }) =>
       docModel,
       showTags,
       categoryById,
+      canEditLinks,
     };
 
     // Geometry links/notes can update tag objects without changing document marks.
@@ -320,16 +370,17 @@ export const DocViewer: React.FC<DocViewerProps> = ({ docModel, categories }) =>
       prev.showTags === showTags &&
       prev.docModel === docModel &&
       prev.categoryById === categoryById &&
+      prev.canEditLinks === canEditLinks &&
       prev.tagRenderKey === visibleTagRenderKey
     ) {
       return;
     }
 
-    const newContent = docModelToTipTap(docModel, visibleTags, categoryById);
+    const newContent = docModelToTipTap(docModel, visibleTags, categoryById, canEditLinks);
 
     // TipTap setContent replaces the DOM synchronously.
     editor.commands.setContent(newContent, { emitUpdate: false });
-  }, [editor, visibleTags, visibleTagRenderKey, docModel, categoryById, showTags]);
+  }, [editor, visibleTags, visibleTagRenderKey, docModel, categoryById, showTags, canEditLinks]);
 
   // ── Persistent object highlight + badges for tagged images/graphs ────────
   useEffect(() => {
@@ -375,6 +426,9 @@ export const DocViewer: React.FC<DocViewerProps> = ({ docModel, categories }) =>
       const badge = document.createElement('span');
       badge.className = 'tag-badge-widget pb-object-tag-badge';
       badge.setAttribute('data-tag-uuid', tag.uuid);
+      badge.setAttribute('tabindex', '0');
+      badge.setAttribute('role', 'group');
+      badge.setAttribute('aria-label', `Tagg ${getObjectTagLabel(tag, categoryById)}`);
       badge.style.setProperty('--tag-color', color);
       badge.style.setProperty('--tag-bg', hexToRgba(color, 0.12));
       badge.style.setProperty('--tag-border', hexToRgba(color, 0.4));
@@ -383,10 +437,34 @@ export const DocViewer: React.FC<DocViewerProps> = ({ docModel, categories }) =>
       labelSpan.className = 'tag-badge-label';
       labelSpan.textContent = getObjectTagLabel(tag, categoryById).toUpperCase();
 
+      const linkLabel = getGeometryLinkLabel(tag);
+      const linkBtn = document.createElement('button');
+      linkBtn.className = 'tag-badge-action tag-badge-link';
+      linkBtn.setAttribute('type', 'button');
+      linkBtn.setAttribute('aria-label', linkLabel);
+      linkBtn.setAttribute('title', linkLabel);
+      linkBtn.appendChild(createLinkIconSvg());
+
+      linkBtn.addEventListener('mousedown', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const state = useDocumentStore.getState();
+        if (state.selectedTagUuid !== tag.uuid) {
+          state.selectTag(tag.uuid);
+        }
+        state.startLinking(tag.uuid);
+      });
+
+      linkBtn.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+      });
+
       const closeBtn = document.createElement('button');
-      closeBtn.className = 'tag-badge-close';
+      closeBtn.className = 'tag-badge-action tag-badge-close';
       closeBtn.setAttribute('type', 'button');
       closeBtn.setAttribute('aria-label', 'Ta bort tagg');
+      closeBtn.setAttribute('title', 'Ta bort tagg');
       closeBtn.textContent = '×';
 
       closeBtn.addEventListener('mousedown', (event) => {
@@ -404,11 +482,14 @@ export const DocViewer: React.FC<DocViewerProps> = ({ docModel, categories }) =>
       });
 
       badge.appendChild(labelSpan);
+      if (canEditLinks) {
+        badge.appendChild(linkBtn);
+      }
       badge.appendChild(closeBtn);
 
       badge.addEventListener('mousedown', (event) => {
         const target = event.target as HTMLElement;
-        if (target.closest('.tag-badge-close')) return;
+        if (target.closest('.tag-badge-action')) return;
         event.preventDefault();
         event.stopPropagation();
         selectTag(tag.uuid);
@@ -425,7 +506,7 @@ export const DocViewer: React.FC<DocViewerProps> = ({ docModel, categories }) =>
         parent.appendChild(badge);
       }
     }
-  }, [visibleTags, selectedTagUuid, categoryById, docModel, selectTag, removeTag]);
+  }, [visibleTags, selectedTagUuid, categoryById, docModel, canEditLinks, selectTag, removeTag]);
 
   // ── Highlight and scroll to selected tag ───────────────────────────────────
   useEffect(() => {
@@ -951,6 +1032,27 @@ export const DocViewer: React.FC<DocViewerProps> = ({ docModel, categories }) =>
 };
 
 // ─── DOM helpers ──────────────────────────────────────────────────────────────
+
+function createLinkIconSvg(): SVGSVGElement {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('fill', 'none');
+  svg.setAttribute('stroke', 'currentColor');
+  svg.setAttribute('stroke-width', '2');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.classList.add('tag-badge-action-icon');
+
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  path.setAttribute('stroke-linecap', 'round');
+  path.setAttribute('stroke-linejoin', 'round');
+  path.setAttribute(
+    'd',
+    'M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1'
+  );
+  svg.appendChild(path);
+
+  return svg;
+}
 
 /**
  * TreeWalker NodeFilter that rejects text nodes living inside a badge widget.

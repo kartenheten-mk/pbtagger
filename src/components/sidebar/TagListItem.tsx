@@ -151,7 +151,7 @@ export const TagListItem: React.FC<TagListItemProps> = ({
                   e.stopPropagation();
                   onLinkGeometry();
                 }}
-                className="flex items-center gap-1 text-xs text-blue-500 hover:text-blue-700 transition-colors mt-0.5"
+                className="mt-1 inline-flex items-center gap-1.5 rounded-md border border-blue-200 bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700 transition-colors hover:border-blue-300 hover:bg-blue-100"
               >
                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path
@@ -171,7 +171,7 @@ export const TagListItem: React.FC<TagListItemProps> = ({
               e.stopPropagation();
               onLinkGeometry();
             }}
-            className="flex items-center gap-1 text-xs text-gray-400 hover:text-blue-500 transition-colors"
+            className="inline-flex items-center gap-1.5 rounded-md border border-blue-200 bg-white px-2 py-1 text-xs font-semibold text-blue-600 shadow-sm transition-colors hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
           >
             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path

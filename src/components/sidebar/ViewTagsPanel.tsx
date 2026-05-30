@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import type { Tema, Tag, Category, Geometry } from '../../types';
-import { splitGeometriesBySource } from '../../geometry/geometrySource';
+import { canEditGeometryLinks, splitGeometriesBySource } from '../../geometry/geometrySource';
 import { buildMirroredDisplayLinks } from '../../geometry/tagLinkMirror';
 import { TagListItem, type LinkedGeometryView } from './TagListItem';
 import { hexToRgba } from './utils';
@@ -105,7 +105,7 @@ export const ViewTagsPanel: React.FC<ViewTagsPanelProps> = ({
     () => new Set(docxGmlGeometries.map((geometry) => geometry.uuid)),
     [docxGmlGeometries]
   );
-  const canEditGeometryLinks = jsonGeometries.length > 0 || docxGmlGeometries.length === 0;
+  const canEditLinks = canEditGeometryLinks(geometries);
 
   const mirroredDisplayLinksByTagUuid = useMemo(
     () => buildMirroredDisplayLinks(tags, jsonGeometryIdSet, docxGmlGeometries),
@@ -269,7 +269,7 @@ export const ViewTagsPanel: React.FC<ViewTagsPanelProps> = ({
                   onSelect={() => onSelectTag(tag.uuid)}
                   onRemove={() => onRemoveTag(tag.uuid)}
                   onLinkGeometry={() => onLinkGeometry(tag.uuid)}
-                  canEditGeometryLinks={canEditGeometryLinks}
+                  canEditGeometryLinks={canEditLinks}
                   onUnlinkGeometry={(geoUuid) => onUnlinkGeometry(tag.uuid, geoUuid)}
                 />
               );
