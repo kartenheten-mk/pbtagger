@@ -16,12 +16,14 @@ vi.mock('../../src/geometry/MapView', () => ({
   MapView: ({
     geometries,
     selectedGeometryUuids,
+    pendingGeometryUuids = [],
     previewGeometryUuid,
     onFeatureClick,
     onMultiFeatureClick,
   }: {
     geometries: Geometry[];
     selectedGeometryUuids: string[];
+    pendingGeometryUuids?: string[];
     previewGeometryUuid?: string | null;
     onFeatureClick: (uuid: string) => void;
     onMultiFeatureClick: (
@@ -36,13 +38,14 @@ vi.mock('../../src/geometry/MapView', () => ({
       y: number
     ) => void;
   }) => {
-    mapViewRenderMock({ geometries, selectedGeometryUuids, previewGeometryUuid });
+    mapViewRenderMock({ geometries, selectedGeometryUuids, pendingGeometryUuids, previewGeometryUuid });
 
     return (
       <div
         data-testid="mock-map-view"
         data-geometry-uuids={geometries.map((geometry) => geometry.uuid).join(',')}
         data-selected-uuids={selectedGeometryUuids.join(',')}
+        data-pending-uuids={pendingGeometryUuids.join(',')}
         data-preview-uuid={previewGeometryUuid ?? ''}
       >
         {geometries.map((geometry) => (
@@ -64,7 +67,9 @@ vi.mock('../../src/geometry/MapView', () => ({
                   name: geometry.name,
                   featureType: geometry.featureType,
                   color: '#3b82f6',
-                  isChecked: selectedGeometryUuids.includes(geometry.uuid),
+                  isChecked:
+                    selectedGeometryUuids.includes(geometry.uuid) ||
+                    pendingGeometryUuids.includes(geometry.uuid),
                 })),
                 24,
                 16
@@ -269,8 +274,51 @@ describe('GeometryPanel unlinked geometry selection', () => {
     fireEvent.click(screen.getByText('map-select-geo-b'));
 
     expect(getGeometryRow('geo-b', container).className).toContain('bg-emerald-50');
-    expect(useDocumentStore.getState().tags[0].geometryIds).toEqual(['geo-b']);
+    expect(screen.getByTestId('mock-map-view').getAttribute('data-pending-uuids')).toBe(
+      'geo-b'
+    );
+    expect(useDocumentStore.getState().tags[0].geometryIds).toBeUndefined();
     expectScrolledToGeometry('geo-b', container);
+  });
+
+  it('keeps the untagged filter on committed links until linking is confirmed', () => {
+    const tag = makeTag({ uuid: 'tag-to-link' });
+    resetStore(
+      [
+        makeGeometry('geo-a', 'Unlinked A'),
+        makeGeometry('geo-b', 'Unlinked B'),
+      ],
+      {
+        tags: [tag],
+      }
+    );
+
+    render(<GeometryPanel />);
+
+    fireEvent.click(screen.getByRole('button', { name: /^Otaggade\s*2$/ }));
+
+    act(() => {
+      useDocumentStore.setState({ linkingTagUuid: tag.uuid });
+    });
+
+    fireEvent.click(screen.getByText('map-select-geo-b'));
+
+    expect(screen.getByText('Unlinked B')).toBeTruthy();
+    expect(getMapGeometryUuids()).toEqual(['geo-a', 'geo-b']);
+    expect(screen.getByTestId('mock-map-view').getAttribute('data-pending-uuids')).toBe(
+      'geo-b'
+    );
+    expect(useDocumentStore.getState().tags[0].geometryIds).toBeUndefined();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Länka' }));
+
+    expect(useDocumentStore.getState().tags[0].geometryIds).toEqual(['geo-b']);
+    expect(screen.queryByText('Unlinked B')).toBeNull();
+    expect(screen.getByText('Unlinked A')).toBeTruthy();
+    expect(getMapGeometryUuids()).toEqual(['geo-a']);
+    expect(screen.getByRole('button', { name: /^Otaggade\s*1$/ }).getAttribute('aria-pressed')).toBe(
+      'true'
+    );
   });
 
   it('previews an overlap picker geometry on hover without selecting it', () => {
@@ -454,7 +502,7 @@ describe('GeometryPanel unlinked geometry selection', () => {
     render(<GeometryPanel />);
 
     fireEvent.click(screen.getByText('Linked A'));
-    fireEvent.click(screen.getByText('Selected multi geometry tag'));
+    fireEvent.click(screen.getAllByText('Selected multi geometry tag')[0]);
 
     await waitFor(() => {
       expect(screen.getAllByText('Selected multi geometry tag')).toHaveLength(2);
@@ -522,13 +570,12 @@ describe('GeometryPanel unlinked geometry selection', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /^Taggade\s*1$/ }));
 
-    expect(screen.getByText('Mirrored GML')).toBeTruthy();
     expect(screen.queryByText('Unlinked GML')).toBeNull();
     expect(getMapGeometryUuids()).toEqual(['docx-linked']);
 
     fireEvent.click(screen.getByRole('button', { name: /^Otaggade\s*1$/ }));
 
-    expect(screen.queryByText('Mirrored GML')).toBeNull();
+    expect(screen.queryByText('map-select-docx-linked')).toBeNull();
     expect(screen.getByText('Unlinked GML')).toBeTruthy();
     expect(getMapGeometryUuids()).toEqual(['docx-unlinked']);
   });

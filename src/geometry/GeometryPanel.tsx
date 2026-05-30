@@ -99,7 +99,6 @@ export const GeometryPanel: React.FC = () => {
     linkingTagUuid,
     selectedTagUuid,
     activeGeometryDocId,
-    finishLinking,
     batchLinkGeometries,
     cancelLinking,
     selectTag,
@@ -111,7 +110,6 @@ export const GeometryPanel: React.FC = () => {
       linkingTagUuid: state.linkingTagUuid,
       selectedTagUuid: state.selectedTagUuid,
       activeGeometryDocId: state.activeGeometryDocId,
-      finishLinking: state.finishLinking,
       batchLinkGeometries: state.batchLinkGeometries,
       cancelLinking: state.cancelLinking,
       selectTag: state.selectTag,
@@ -624,9 +622,7 @@ export const GeometryPanel: React.FC = () => {
       else next.add(uuid);
       return next;
     });
-    // Also keep the store in sync so map reflects changes immediately
-    finishLinking(linkingTagUuid!, uuid);
-  }, [finishLinking, linkingTagUuid]);
+  }, []);
 
   // ── Confirm batch link ────────────────────────────────────────────────────
   const handleConfirmBatch = useCallback(() => {
