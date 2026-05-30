@@ -913,7 +913,7 @@ export const DocViewer: React.FC<DocViewerProps> = ({ docModel, categories }) =>
 
       {/* TipTap editor */}
       <div
-        className="px-8 py-6 cursor-text select-text"
+        className="px-4 py-6 cursor-text select-text sm:px-8"
         onMouseUp={handleMouseUp}
         onClick={(e) => {
           const target = e.target as HTMLElement;

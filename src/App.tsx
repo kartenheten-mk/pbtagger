@@ -337,7 +337,9 @@ export default function App() {
         {/* Left sidebar: tag list */}
         <ResizablePanel
           side="left"
+          label="Taggar"
           defaultWidth={288} // w-72 equivalent
+          autoCollapseBelow={900}
           storageKey="sidebar_width"
         >
           <Suspense fallback={<LoadingPanel label="Laddar sidopanel..." />}>
@@ -346,7 +348,7 @@ export default function App() {
         </ResizablePanel>
 
         {/* Centre: document viewer */}
-        <main className="flex-1 overflow-y-auto bg-white border-l border-r border-gray-200">
+        <main className="min-w-0 flex-1 overflow-y-auto bg-white border-l border-r border-gray-200">
           <Suspense fallback={<LoadingPanel label="Laddar dokumentvy..." />}>
             <DocViewer docModel={docModel} categories={categories} />
           </Suspense>
@@ -355,7 +357,9 @@ export default function App() {
         {/* Right: geometry panel */}
         <ResizablePanel
           side="right"
+          label="Karta"
           defaultWidth={320} // w-80 equivalent
+          autoCollapseBelow={1200}
           storageKey="geometry_panel_width"
         >
           <Suspense fallback={<LoadingPanel label="Laddar karta..." />}>
