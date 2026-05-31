@@ -9,7 +9,7 @@
  */
 
 import { openDB, type IDBPDatabase } from 'idb';
-import type { Tag, Geometry, DocModel } from '../types';
+import type { AppConfig, Tag, Geometry, DocModel } from '../types';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -21,6 +21,7 @@ export interface SavedDocument {
     docModel: DocModel;
     tags: Tag[];
     geometries: Geometry[];
+    appConfig?: AppConfig;
     createdAt: string;
     updatedAt: string;
 }

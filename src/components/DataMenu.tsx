@@ -15,6 +15,7 @@
 import React, { Suspense, lazy, useRef, useState, useEffect, useCallback } from 'react';
 import { saveAs } from 'file-saver';
 import { useDocumentStore } from '../store/useDocumentStore';
+import { CONFIG_FILE_NAME, parseAppConfig, serializeAppConfig } from '../config/appConfig';
 
 const PlanbeskrivningConfigPanel = lazy(() =>
   import('./PlanbeskrivningConfigPanel').then((mod) => ({
@@ -125,6 +126,8 @@ export const DataMenu: React.FC = () => {
     togglePlanbeskrivningCompliance,
     setPlanbeskrivningConfig,
     setDocxGmlGeometries,
+    appConfig,
+    setAppConfig,
   } = useDocumentStore();
 
   const [open, setOpen] = useState(false);
@@ -136,8 +139,10 @@ export const DataMenu: React.FC = () => {
   const [exportingGeoOriginal, setExportingGeoOriginal] = useState(false);
   const [exportingGeoWithMotiv, setExportingGeoWithMotiv] = useState(false);
   const [exportingProject, setExportingProject]  = useState(false);
+  const [exportingConfig, setExportingConfig] = useState(false);
   const [importingDocx,    setImportingDocx]    = useState(false);
   const [importingGeo,     setImportingGeo]      = useState(false);
+  const [importingConfig, setImportingConfig] = useState(false);
 
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -147,6 +152,7 @@ export const DataMenu: React.FC = () => {
   const popoverRef = useRef<HTMLDivElement>(null);
   const docxInputRef = useRef<HTMLInputElement>(null);
   const geoInputRef  = useRef<HTMLInputElement>(null);
+  const configInputRef = useRef<HTMLInputElement>(null);
 
   // ── close on click-outside or Escape ──────────────────────────────────────
   useEffect(() => {
@@ -278,7 +284,7 @@ export const DataMenu: React.FC = () => {
     try {
       const { exportProject } = await import('../project/ProjectManager');
       const bufferCopy = zipBuffer.slice(0);
-      await exportProject(fileName, bufferCopy, tags, geometries, activeGeometryDocId);
+      await exportProject(fileName, bufferCopy, tags, geometries, activeGeometryDocId, appConfig);
       setSuccess('Projekt exporterat!');
       setOpen(false);
     } catch (e) {
@@ -287,7 +293,24 @@ export const DataMenu: React.FC = () => {
     } finally {
       setExportingProject(false);
     }
-  }, [zipBuffer, fileName, tags, geometries, activeGeometryDocId]);
+  }, [zipBuffer, fileName, tags, geometries, activeGeometryDocId, appConfig]);
+
+  // ── Export config.json ───────────────────────────────────────────────────
+  const handleExportConfig = useCallback(async () => {
+    setExportingConfig(true);
+    setError(null);
+    try {
+      const blob = new Blob([serializeAppConfig(appConfig)], { type: 'application/json' });
+      saveAs(blob, CONFIG_FILE_NAME);
+      setSuccess('config.json nedladdad!');
+      setOpen(false);
+    } catch (e) {
+      setError('Export av config.json misslyckades.');
+      console.error(e);
+    } finally {
+      setExportingConfig(false);
+    }
+  }, [appConfig]);
 
   // ── Import replacement .docx ───────────────────────────────────────────────
   const handleDocxFileChange = useCallback(
@@ -362,14 +385,45 @@ export const DataMenu: React.FC = () => {
     [importGeometryJson]
   );
 
+  // ── Import config.json ───────────────────────────────────────────────────
+  const handleConfigFileChange = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      setImportingConfig(true);
+      setError(null);
+      try {
+        const text = await file.text();
+        const parsed = JSON.parse(text) as unknown;
+        const config = parseAppConfig(parsed);
+        setAppConfig(config);
+        setSuccess('config.json importerad!');
+        setOpen(false);
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : 'Kunde inte importera config.json.';
+        setError(`Kunde inte importera config.json. ${message}`);
+        console.error(error);
+      } finally {
+        setImportingConfig(false);
+        if (configInputRef.current) configInputRef.current.value = '';
+      }
+    },
+    [setAppConfig]
+  );
+
   const anyLoading =
     exportingOriginalDocx ||
     exportingDocx ||
     exportingGeoOriginal ||
     exportingGeoWithMotiv ||
     exportingProject ||
+    exportingConfig ||
     importingDocx ||
-    importingGeo;
+    importingGeo ||
+    importingConfig;
 
   return (
     <div className="relative">
@@ -582,6 +636,52 @@ export const DataMenu: React.FC = () => {
             {/* Divider */}
             <div className="border-t border-gray-100" />
 
+            {/* ──────────── CONFIG ──────────────────────────────────── */}
+            <div>
+              <SectionLabel
+                label="Konfiguration"
+                icon={
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                      d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                }
+              />
+
+              <div className="space-y-2">
+                <ActionCard
+                  color="gray"
+                  icon={
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                    </svg>
+                  }
+                  title="Importera config.json"
+                  description="Läs in kartinställningar och andra projektinställningar från config.json."
+                  loading={importingConfig}
+                  onClick={() => configInputRef.current?.click()}
+                />
+                <ActionCard
+                  color="gray"
+                  icon={
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                  }
+                  title="Exportera config.json"
+                  description="Ladda ner aktuell projektkonfiguration som config.json."
+                  loading={exportingConfig}
+                  onClick={handleExportConfig}
+                />
+              </div>
+            </div>
+
+            {/* Divider */}
+            <div className="border-t border-gray-100" />
+
             {/* ──────────── EXPORT SETTINGS ─────────────────────────── */}
             <div>
               <SectionLabel
@@ -726,6 +826,14 @@ export const DataMenu: React.FC = () => {
         accept=".json,application/json"
         className="hidden"
         onChange={handleGeoFileChange}
+      />
+      <input
+        ref={configInputRef}
+        type="file"
+        accept=".json,application/json"
+        className="hidden"
+        data-testid="config-file-input"
+        onChange={handleConfigFileChange}
       />
 
       {/* Planbeskrivning config modal */}

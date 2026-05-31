@@ -5,8 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, cleanup, waitFor } from '@testing-library/react';
 import { GeometryPanel } from '../../src/geometry/GeometryPanel';
 import { useDocumentStore } from '../../src/store/useDocumentStore';
-import type { Geometry, Tag } from '../../src/types';
+import type { Geometry, Tag, WmsBackgroundMap } from '../../src/types';
 import { generateBookmarkName } from '../../src/docx/bookmarkUtils';
+import { buildDefaultAppConfig } from '../../src/config/appConfig';
 
 const { mapViewRenderMock } = vi.hoisted(() => ({
   mapViewRenderMock: vi.fn(),
@@ -18,10 +19,12 @@ vi.mock('../../src/geometry/MapView', () => ({
     selectedGeometryUuids,
     pendingGeometryUuids = [],
     previewGeometryUuid,
+    backgroundMap,
     onFeatureClick,
     onMultiFeatureClick,
   }: {
     geometries: Geometry[];
+    backgroundMap?: WmsBackgroundMap | null;
     selectedGeometryUuids: string[];
     pendingGeometryUuids?: string[];
     previewGeometryUuid?: string | null;
@@ -38,7 +41,7 @@ vi.mock('../../src/geometry/MapView', () => ({
       y: number
     ) => void;
   }) => {
-    mapViewRenderMock({ geometries, selectedGeometryUuids, pendingGeometryUuids, previewGeometryUuid });
+    mapViewRenderMock({ geometries, selectedGeometryUuids, pendingGeometryUuids, previewGeometryUuid, backgroundMap });
 
     return (
       <div
@@ -151,6 +154,7 @@ function resetStore(
     activeGeometryDocId: null,
     planbeskrivningConfig: null,
     enforcePlanbeskrivningCompliance: true,
+    appConfig: buildDefaultAppConfig(),
   });
 }
 
@@ -379,6 +383,59 @@ describe('GeometryPanel unlinked geometry selection', () => {
     expect(container.textContent).not.toContain('JSON-länkar');
     expect(container.textContent).not.toContain('Vald tagg');
     expect(container.textContent).not.toContain('Preview-GML');
+  });
+
+  it('opens map settings, saves a WMS background, and falls back to OSM when it is removed', async () => {
+    render(<GeometryPanel />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Kartinställningar' }));
+
+    expect(screen.getByRole('dialog', { name: 'Kartinställningar' })).toBeTruthy();
+    expect(
+      screen.getByText(
+        /Översta lagret i listan hamnar överst i kartan\./
+      )
+    ).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText('Namn'), {
+      target: { value: 'Kommun WMS' },
+    });
+    fireEvent.change(screen.getByLabelText('WMS-adress'), {
+      target: { value: 'https://example.test/wms' },
+    });
+    fireEvent.change(screen.getByLabelText('Lagernamn'), {
+      target: { value: 'layer_a\nlayer_b' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Spara karta' }));
+
+    await waitFor(() => {
+      expect(useDocumentStore.getState().appConfig.map.backgroundMaps).toHaveLength(1);
+    });
+
+    let lastRender = mapViewRenderMock.mock.calls[mapViewRenderMock.mock.calls.length - 1][0];
+    expect(lastRender.backgroundMap?.name).toBe('Kommun WMS');
+    expect(lastRender.backgroundMap?.layers).toEqual(['layer_a', 'layer_b']);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ta bort Kommun WMS' }));
+
+    await waitFor(() => {
+      expect(useDocumentStore.getState().appConfig.map.backgroundMaps).toHaveLength(0);
+    });
+
+    lastRender = mapViewRenderMock.mock.calls[mapViewRenderMock.mock.calls.length - 1][0];
+    expect(lastRender.backgroundMap).toBeNull();
+  });
+
+  it('validates WMS map settings before saving', () => {
+    render(<GeometryPanel />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Kartinställningar' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Spara karta' }));
+
+    expect(screen.getByText('Ange ett namn.')).toBeTruthy();
+    expect(screen.getByText('Ange en WMS-adress.')).toBeTruthy();
+    expect(screen.getByText('Ange minst ett lagernamn.')).toBeTruthy();
+    expect(useDocumentStore.getState().appConfig.map.backgroundMaps).toHaveLength(0);
   });
 
   it('filters JSON geometries by tagged status in both map and list', () => {

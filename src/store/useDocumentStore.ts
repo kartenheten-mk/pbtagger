@@ -2,8 +2,9 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { temporal } from 'zundo';
 import { v4 as uuidv4 } from 'uuid';
-import type { Tag, Geometry, DocModel, AppState, PendingSelection, PlanbeskrivningConfig } from '../types';
+import type { Tag, Geometry, DocModel, AppState, PendingSelection, PlanbeskrivningConfig, AppConfig, MapConfig } from '../types';
 import { buildDefaultConfig } from '../docx/PlanbeskrivningXmlBuilder';
+import { buildDefaultAppConfig, normalizeAppConfig } from '../config/appConfig';
 import {
   saveDocument as dbSave,
   getDocument as dbGet,
@@ -56,7 +57,8 @@ interface DocumentActions {
     tags: Tag[],
     geometries: Geometry[],
     activeGeometryDocId: string | null,
-    geometryDoc: import('../types').GeometryDoc | null
+    geometryDoc: import('../types').GeometryDoc | null,
+    appConfig: AppConfig
   ) => Promise<void>;
 
   // ─── Tag management ─────────────────────────────────────────────────────
@@ -119,23 +121,34 @@ interface DocumentActions {
   resetPlanbeskrivningConfig: (detaljplansreferens?: string) => void;
   /** Toggle whether compliance errors should block export */
   togglePlanbeskrivningCompliance: () => void;
+
+  // ─── App/project config ─────────────────────────────────────────────────
+  /** Replace the full versioned app config, e.g. after importing config.json */
+  setAppConfig: (config: AppConfig) => void;
+  /** Replace only the map config section */
+  setMapConfig: (mapConfig: MapConfig) => void;
 }
 
-const initialState: AppState = {
-  documentId: null,
-  zipBuffer: null,
-  docModel: null,
-  fileName: '',
-  tags: [],
-  geometries: [],
-  selectedTagUuid: null,
-  linkingTagUuid: null,
-  pendingSelection: null,
-  showTags: true,
-  activeGeometryDocId: null,
-  planbeskrivningConfig: null,
-  enforcePlanbeskrivningCompliance: true,
-};
+function createInitialState(): AppState {
+  return {
+    documentId: null,
+    zipBuffer: null,
+    docModel: null,
+    fileName: '',
+    tags: [],
+    geometries: [],
+    selectedTagUuid: null,
+    linkingTagUuid: null,
+    pendingSelection: null,
+    showTags: true,
+    activeGeometryDocId: null,
+    planbeskrivningConfig: null,
+    enforcePlanbeskrivningCompliance: true,
+    appConfig: buildDefaultAppConfig(),
+  };
+}
+
+const initialState: AppState = createInitialState();
 
 // ─── Debounced auto-save to IndexedDB ──────────────────────────────────────
 
@@ -152,6 +165,7 @@ function debouncedSave(state: AppState) {
       docModel: state.docModel!,
       tags: state.tags,
       geometries: state.geometries,
+      appConfig: normalizeAppConfig(state.appConfig),
       createdAt: '', // will be set by the save logic below
       updatedAt: new Date().toISOString(),
     };
@@ -198,7 +212,8 @@ export const useDocumentStore = create<AppState & DocumentActions>()(
           tags,
           geometries,
           activeGeometryDocId,
-          geometryDoc
+          geometryDoc,
+          appConfig
         ) => {
           const documentId = uuidv4();
           const now = new Date().toISOString();
@@ -219,6 +234,7 @@ export const useDocumentStore = create<AppState & DocumentActions>()(
             pendingSelection: null,
             showTags: true,
             activeGeometryDocId,
+            appConfig: normalizeAppConfig(appConfig),
           });
 
           useDocumentStore.temporal.getState().clear();
@@ -230,6 +246,7 @@ export const useDocumentStore = create<AppState & DocumentActions>()(
             docModel,
             tags: migratedTags,
             geometries: normalizedGeometries,
+            appConfig: normalizeAppConfig(appConfig),
             createdAt: now,
             updatedAt: now,
           });
@@ -239,7 +256,8 @@ export const useDocumentStore = create<AppState & DocumentActions>()(
           const documentId = uuidv4();
           const now = new Date().toISOString();
           const tags = migrateTagsGeometryIds(initialTags ?? []);
-          set({ documentId, zipBuffer, docModel, fileName, tags, geometries: [], pendingSelection: null, showTags: true });
+          const appConfig = buildDefaultAppConfig();
+          set({ documentId, zipBuffer, docModel, fileName, tags, geometries: [], pendingSelection: null, showTags: true, appConfig });
           // Clear undo/redo history — it belongs to the previous document
           useDocumentStore.temporal.getState().clear();
           // Save to IndexedDB immediately
@@ -250,6 +268,7 @@ export const useDocumentStore = create<AppState & DocumentActions>()(
             docModel,
             tags,
             geometries: [],
+            appConfig,
             createdAt: now,
             updatedAt: now,
           });
@@ -275,6 +294,7 @@ export const useDocumentStore = create<AppState & DocumentActions>()(
               docModel,
               tags: migratedTags,
               geometries: get().geometries,
+              appConfig: normalizeAppConfig(get().appConfig),
               createdAt: existing?.createdAt ?? now,
               updatedAt: now,
             });
@@ -282,7 +302,7 @@ export const useDocumentStore = create<AppState & DocumentActions>()(
         },
 
         clearDocument: () => {
-          set(initialState);
+          set(createInitialState());
           useDocumentStore.temporal.getState().clear();
         },
 
@@ -305,6 +325,7 @@ export const useDocumentStore = create<AppState & DocumentActions>()(
             pendingSelection: null,
             showTags: true,
             activeGeometryDocId: restoredGeoDocId,
+            appConfig: normalizeAppConfig(doc.appConfig),
           });
           useDocumentStore.temporal.getState().clear();
         },
@@ -313,7 +334,7 @@ export const useDocumentStore = create<AppState & DocumentActions>()(
           await dbDelete(id);
           // If the deleted document is the currently loaded one, clear the store
           if (get().documentId === id) {
-            set(initialState);
+            set(createInitialState());
             useDocumentStore.temporal.getState().clear();
           }
         },
@@ -613,6 +634,26 @@ export const useDocumentStore = create<AppState & DocumentActions>()(
               !state.enforcePlanbeskrivningCompliance,
           })),
 
+        // ─── App/project config ─────────────────────────────────────────────
+        setAppConfig: (config) =>
+          set((state) => {
+            const next = { appConfig: normalizeAppConfig(config) };
+            debouncedSave({ ...state, ...next });
+            return next;
+          }),
+
+        setMapConfig: (mapConfig) =>
+          set((state) => {
+            const next = {
+              appConfig: normalizeAppConfig({
+                ...(state.appConfig ?? buildDefaultAppConfig()),
+                map: mapConfig,
+              }),
+            };
+            debouncedSave({ ...state, ...next });
+            return next;
+          }),
+
       }),
       {
         name: 'pb-tagger-storage',
@@ -625,6 +666,7 @@ export const useDocumentStore = create<AppState & DocumentActions>()(
           planbeskrivningConfig: state.planbeskrivningConfig,
           enforcePlanbeskrivningCompliance:
             state.enforcePlanbeskrivningCompliance,
+          appConfig: normalizeAppConfig(state.appConfig),
         }),
       },
     ),

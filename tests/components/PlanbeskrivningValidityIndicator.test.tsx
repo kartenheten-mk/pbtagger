@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { PlanbeskrivningValidityIndicator } from '../../src/components/PlanbeskrivningValidityIndicator';
 import { useDocumentStore } from '../../src/store/useDocumentStore';
+import { buildDefaultAppConfig } from '../../src/config/appConfig';
 import type { Tag } from '../../src/types';
 
 function makeTag(overrides: Partial<Tag> = {}): Tag {
@@ -36,6 +37,7 @@ function resetStore() {
     activeGeometryDocId: null,
     planbeskrivningConfig: null,
     enforcePlanbeskrivningCompliance: true,
+    appConfig: buildDefaultAppConfig(),
   });
   useDocumentStore.temporal.getState().clear();
 }

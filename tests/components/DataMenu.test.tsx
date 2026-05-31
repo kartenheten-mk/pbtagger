@@ -7,7 +7,8 @@ import { saveAs } from 'file-saver';
 import { DataMenu } from '../../src/components/DataMenu';
 import { exportDocx } from '../../src/docx/DocxExporter';
 import { useDocumentStore } from '../../src/store/useDocumentStore';
-import type { DocModel, Tag } from '../../src/types';
+import { buildDefaultAppConfig } from '../../src/config/appConfig';
+import type { AppConfig, DocModel, Tag } from '../../src/types';
 
 vi.mock('file-saver', () => ({
   saveAs: vi.fn(),
@@ -50,14 +51,16 @@ function resetStore(overrides: Partial<ReturnType<typeof useDocumentStore.getSta
     activeGeometryDocId: null,
     planbeskrivningConfig: null,
     enforcePlanbeskrivningCompliance: true,
+    appConfig: buildDefaultAppConfig(),
     ...overrides,
   });
   useDocumentStore.temporal.getState().clear();
 }
 
 function openMenu() {
-  render(<DataMenu />);
+  const result = render(<DataMenu />);
   fireEvent.click(screen.getByRole('button', { name: 'Data' }));
+  return result;
 }
 
 describe('DataMenu export grouping', () => {
@@ -78,6 +81,7 @@ describe('DataMenu export grouping', () => {
     expect(screen.getByText('Original')).toBeTruthy();
     expect(screen.getByText('Med taggar och motiv')).toBeTruthy();
     expect(screen.getByText('Projekt')).toBeTruthy();
+    expect(screen.getByText('Konfiguration')).toBeTruthy();
     expect(screen.getByText('Exportinställningar')).toBeTruthy();
 
     expect(screen.getByRole('button', { name: /Exportera originaldokument/i })).toBeTruthy();
@@ -85,6 +89,8 @@ describe('DataMenu export grouping', () => {
     expect(screen.getByRole('button', { name: /Exportera taggat dokument/i })).toBeTruthy();
     expect(screen.getByRole('button', { name: /Exportera geometri med motiv/i })).toBeTruthy();
     expect(screen.getByRole('button', { name: /Exportera hela projektet/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Importera config\.json/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Exportera config\.json/i })).toBeTruthy();
   });
 
   it('moves action descriptions into hover tooltips instead of visible helper text', () => {
@@ -164,5 +170,74 @@ describe('DataMenu export grouping', () => {
     expect((blob as Blob).type).toBe('application/vnd.openxmlformats-officedocument.wordprocessingml.document');
     expect(Array.from(new Uint8Array(await (blob as Blob).arrayBuffer()))).toEqual([80, 75, 3, 4, 20]);
     expect(exportDocx).not.toHaveBeenCalled();
+  });
+
+  it('exports config.json separately', async () => {
+    const config: AppConfig = {
+      version: 1,
+      map: {
+        activeBackgroundMapId: 'wms-1',
+        backgroundMaps: [
+          {
+            id: 'wms-1',
+            type: 'wms',
+            name: 'Kommun WMS',
+            url: 'https://example.test/wms',
+            layers: ['layer_a'],
+          },
+        ],
+      },
+    };
+    resetStore({ appConfig: config });
+
+    openMenu();
+
+    fireEvent.click(screen.getByRole('button', { name: /Exportera config\.json/i }));
+
+    await waitFor(() => {
+      expect(saveAs).toHaveBeenCalledTimes(1);
+    });
+
+    const [blob, fileName] = vi.mocked(saveAs).mock.calls[0];
+    expect(fileName).toBe('config.json');
+    expect(JSON.parse(await (blob as Blob).text())).toEqual(config);
+  });
+
+  it('imports config.json without changing document data', async () => {
+    const config: AppConfig = {
+      version: 1,
+      map: {
+        activeBackgroundMapId: 'wms-1',
+        backgroundMaps: [
+          {
+            id: 'wms-1',
+            type: 'wms',
+            name: 'Importerad WMS',
+            url: 'https://example.test/wms',
+            layers: ['layer_a', 'layer_b'],
+          },
+        ],
+      },
+    };
+    resetStore({
+      fileName: 'Keep.docx',
+      tags: [makeTag()],
+    });
+
+    const { container } = openMenu();
+    const input = container.querySelector<HTMLInputElement>('[data-testid="config-file-input"]');
+    expect(input).toBeTruthy();
+
+    fireEvent.change(input!, {
+      target: {
+        files: [new File([JSON.stringify(config)], 'config.json', { type: 'application/json' })],
+      },
+    });
+
+    await waitFor(() => {
+      expect(useDocumentStore.getState().appConfig).toEqual(config);
+    });
+    expect(useDocumentStore.getState().fileName).toBe('Keep.docx');
+    expect(useDocumentStore.getState().tags).toHaveLength(1);
   });
 });

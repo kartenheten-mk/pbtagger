@@ -105,7 +105,8 @@ export default function App() {
         imported.tags,
         imported.geometries,
         imported.activeGeometryDocId,
-        imported.geometryDoc
+        imported.geometryDoc,
+        imported.appConfig
       );
     } catch (err) {
       console.error('Failed to import project:', err);

@@ -1,7 +1,13 @@
 import PizZip from 'pizzip';
 import { saveAs } from 'file-saver';
 import { getGeometryDoc } from '../geometry/geometryDb';
-import type { Tag, Geometry, GeometryDoc, DocModel } from '../types';
+import type { Tag, Geometry, GeometryDoc, DocModel, AppConfig } from '../types';
+import {
+    CONFIG_FILE_NAME,
+    buildDefaultAppConfig,
+    parseAppConfig,
+    serializeAppConfig,
+} from '../config/appConfig';
 
 /**
  * The structure of the project metadata saved in project.json inside the .pbproject file
@@ -21,6 +27,7 @@ export interface ImportedProject {
     tags: Tag[];
     geometries: Geometry[];
     activeGeometryDocId: string | null;
+    appConfig: AppConfig;
     geometryDoc: GeometryDoc | null;
 }
 
@@ -29,7 +36,8 @@ export async function exportProject(
     zipBuffer: ArrayBuffer,
     tags: Tag[],
     geometries: Geometry[],
-    activeGeometryDocId: string | null
+    activeGeometryDocId: string | null,
+    appConfig: AppConfig
 ): Promise<void> {
     const zip = new PizZip();
 
@@ -45,6 +53,7 @@ export async function exportProject(
         activeGeometryDocId,
     };
     zip.file('project.json', JSON.stringify(metadata, null, 2));
+    zip.file(CONFIG_FILE_NAME, serializeAppConfig(appConfig));
 
     // 3. Add the raw geometry document JSON if we have one active
     if (activeGeometryDocId) {
@@ -93,6 +102,12 @@ export async function importProject(file: File): Promise<ImportedProject> {
         geometryDoc = JSON.parse(geoDocFile.asText()) as GeometryDoc;
     }
 
+    // 5. Extract versioned app config if present. Older projects did not have it.
+    const configFile = zip.file(CONFIG_FILE_NAME);
+    const appConfig = configFile
+        ? parseAppConfig(JSON.parse(configFile.asText()))
+        : buildDefaultAppConfig();
+
     return {
         fileName: metadata.fileName,
         zipBuffer: docxBuffer,
@@ -100,6 +115,7 @@ export async function importProject(file: File): Promise<ImportedProject> {
         tags: metadata.tags,
         geometries: metadata.geometries,
         activeGeometryDocId: metadata.activeGeometryDocId,
+        appConfig,
         geometryDoc,
     };
 }

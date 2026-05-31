@@ -228,6 +228,29 @@ export interface PlanbeskrivningConfig {
   arkividentitetKommun: string;
 }
 
+// ─── App config ──────────────────────────────────────────────────────────────
+
+export interface WmsBackgroundMap {
+  id: string;
+  type: 'wms';
+  name: string;
+  url: string;
+  /** WMS layer names, sent as a comma-separated LAYERS parameter */
+  layers: string[];
+}
+
+export interface MapConfig {
+  /** Null means use the built-in OpenStreetMap background */
+  activeBackgroundMapId: string | null;
+  /** User-defined WMS background maps */
+  backgroundMaps: WmsBackgroundMap[];
+}
+
+export interface AppConfig {
+  version: 1;
+  map: MapConfig;
+}
+
 // ─── App State ───────────────────────────────────────────────────────────────
 
 export interface AppState {
@@ -257,4 +280,6 @@ export interface AppState {
   planbeskrivningConfig: PlanbeskrivningConfig | null;
   /** If true, compliance errors block Planbeskrivning export */
   enforcePlanbeskrivningCompliance: boolean;
+  /** Versioned app/project configuration exported as config.json */
+  appConfig: AppConfig;
 }

@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import App from '../src/App';
 import { useDocumentStore } from '../src/store/useDocumentStore';
+import { buildDefaultAppConfig } from '../src/config/appConfig';
 
 vi.mock('../src/components/DocumentList', () => ({
   DocumentList: () => <div data-testid="document-list" />,
@@ -45,6 +46,7 @@ function resetStore() {
     activeGeometryDocId: null,
     planbeskrivningConfig: null,
     enforcePlanbeskrivningCompliance: true,
+    appConfig: buildDefaultAppConfig(),
   });
   useDocumentStore.temporal.getState().clear();
 }

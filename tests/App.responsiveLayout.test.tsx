@@ -6,6 +6,7 @@ import { cleanup, render, screen } from '@testing-library/react';
 import App from '../src/App';
 import { useDocumentStore } from '../src/store/useDocumentStore';
 import type { DocModel } from '../src/types';
+import { buildDefaultAppConfig } from '../src/config/appConfig';
 
 vi.mock('../src/components/Header', () => ({
   Header: () => <header data-testid="header" />,
@@ -51,6 +52,7 @@ function resetStore() {
     activeGeometryDocId: null,
     planbeskrivningConfig: null,
     enforcePlanbeskrivningCompliance: true,
+    appConfig: buildDefaultAppConfig(),
   });
   useDocumentStore.temporal.getState().clear();
 }

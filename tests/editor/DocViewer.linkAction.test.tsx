@@ -6,6 +6,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { DocViewer } from '../../src/editor/DocViewer';
 import { flattenCategories } from '../../src/data/categoryUtils';
 import { useDocumentStore } from '../../src/store/useDocumentStore';
+import { buildDefaultAppConfig } from '../../src/config/appConfig';
 import type { DocModel, Geometry, Tag, Tema } from '../../src/types';
 
 const teman: Tema[] = [
@@ -86,6 +87,7 @@ function resetStore(tags: Tag[], geometries: Geometry[]) {
     activeGeometryDocId: null,
     planbeskrivningConfig: null,
     enforcePlanbeskrivningCompliance: true,
+    appConfig: buildDefaultAppConfig(),
   });
   useDocumentStore.temporal.getState().clear();
 }

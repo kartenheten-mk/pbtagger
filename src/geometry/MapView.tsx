@@ -2,7 +2,7 @@
  * MapView.tsx
  *
  * OpenLayers map component with:
- *  - OSM tile layer as background
+ *  - OSM or ordered user-configured WMS tile layers as background
  *  - Vector layer rendering imported detaljplan features (GeoJSON)
  *  - Click-to-link support: fires onFeatureClick(uuid) when linking mode is active
  *  - Auto-fit to imported feature extent
@@ -26,6 +26,7 @@ import TileLayer from 'ol/layer/Tile';
 import VectorImageLayer from 'ol/layer/VectorImage';
 import VectorSource from 'ol/source/Vector';
 import OSM from 'ol/source/OSM';
+import TileWMS from 'ol/source/TileWMS';
 import GeoJSON from 'ol/format/GeoJSON';
 import { fromLonLat } from 'ol/proj';
 import { Style, Fill, Stroke, Circle as CircleStyle } from 'ol/style';
@@ -38,7 +39,7 @@ import { isEmpty, extend as extendExtent, createEmpty } from 'ol/extent';
 // OpenLayers CSS (required for map rendering)
 import 'ol/ol.css';
 
-import type { Geometry } from '../types';
+import type { Geometry, WmsBackgroundMap } from '../types';
 import { geometriesToGeoJson } from './geoJsonConverter';
 
 // ─── Exported types (shared with GeometryPanel) ───────────────────────────────
@@ -57,6 +58,8 @@ export interface PickerItem {
 
 interface MapViewProps {
   geometries: Geometry[];
+  /** Active user-configured WMS background map. Null uses OpenStreetMap. */
+  backgroundMap?: WmsBackgroundMap | null;
   /** UUIDs of currently selected / highlighted features */
   selectedGeometryUuids: string[];
   /** UUIDs of features being staged for batch-link (shown with checkbox style) */
@@ -233,10 +236,49 @@ function prepareFeatureSet(geometries: Geometry[], geometryDataKey: string): Pre
   return prepared;
 }
 
+function buildBackgroundMapKey(backgroundMap: WmsBackgroundMap | null | undefined): string {
+  if (!backgroundMap) return 'osm';
+  return [
+    backgroundMap.id,
+    backgroundMap.url,
+    backgroundMap.layers.join('\u0001'),
+  ].join('\u0002');
+}
+
+function createOsmBackgroundLayer(): TileLayer<OSM | TileWMS> {
+  return new TileLayer({
+    source: new OSM(),
+  });
+}
+
+function createBackgroundLayers(
+  backgroundMap: WmsBackgroundMap | null | undefined
+): Array<TileLayer<OSM | TileWMS>> {
+  if (!backgroundMap || backgroundMap.layers.length === 0) {
+    return [createOsmBackgroundLayer()];
+  }
+
+  return [...backgroundMap.layers].reverse().map(
+    (layerName) =>
+      new TileLayer({
+        source: new TileWMS({
+          url: backgroundMap.url,
+          params: {
+            LAYERS: layerName,
+            TILED: true,
+            TRANSPARENT: true,
+          },
+          crossOrigin: 'anonymous',
+        }),
+      })
+  );
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export const MapView: React.FC<MapViewProps> = ({
   geometries,
+  backgroundMap = null,
   selectedGeometryUuids,
   pendingGeometryUuids = [],
   previewGeometryUuid = null,
@@ -248,6 +290,8 @@ export const MapView: React.FC<MapViewProps> = ({
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<Map | null>(null);
+  const backgroundLayerRefs = useRef<Array<TileLayer<OSM | TileWMS>>>([]);
+  const backgroundMapKeyRef = useRef<string | null>(null);
   const vectorSourceRef = useRef<VectorSource | null>(null);
   const vectorLayerRef = useRef<VectorImageLayer | null>(null);
   const featureByUuidRef = useRef(new globalThis.Map<string, OlFeature<OlGeometry>>());
@@ -272,6 +316,10 @@ export const MapView: React.FC<MapViewProps> = ({
     () => buildGeometryDataKey(geometries),
     [geometries]
   );
+  const backgroundMapKey = useMemo(
+    () => buildBackgroundMapKey(backgroundMap),
+    [backgroundMap]
+  );
 
   // Keep fresh refs so OL event closures always see the latest callbacks/state
   const onFeatureClickRef = useRef(onFeatureClick);
@@ -290,6 +338,10 @@ export const MapView: React.FC<MapViewProps> = ({
   // ── Initialise map once ───────────────────────────────────────────────────
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return;
+
+    const backgroundLayers = createBackgroundLayers(backgroundMap);
+    backgroundLayerRefs.current = backgroundLayers;
+    backgroundMapKeyRef.current = backgroundMapKey;
 
     const vectorSource = new VectorSource();
     vectorSourceRef.current = vectorSource;
@@ -312,7 +364,7 @@ export const MapView: React.FC<MapViewProps> = ({
     const map = new Map({
       target: mapContainerRef.current,
       layers: [
-        new TileLayer({ source: new OSM() }),
+        ...backgroundLayers,
         vectorLayer,
       ],
       view: new View({
@@ -394,9 +446,34 @@ export const MapView: React.FC<MapViewProps> = ({
       if (currentContainer) resizeObserver.unobserve(currentContainer);
       map.setTarget(undefined);
       mapRef.current = null;
+      backgroundLayerRefs.current = [];
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ── Swap background map when the selected WMS config changes ─────────────
+  useEffect(() => {
+    const map = mapRef.current;
+    const vectorLayer = vectorLayerRef.current;
+    if (!map || !vectorLayer || backgroundMapKeyRef.current === backgroundMapKey) return;
+
+    for (const layer of backgroundLayerRefs.current) {
+      map.removeLayer(layer);
+    }
+
+    const nextBackgroundLayers = createBackgroundLayers(backgroundMap);
+    const layers = map.getLayers();
+    const currentLayers = layers.getArray();
+    const vectorIndex = currentLayers.indexOf(vectorLayer);
+    const insertIndex = vectorIndex >= 0 ? vectorIndex : currentLayers.length;
+
+    nextBackgroundLayers.forEach((layer, index) => {
+      layers.insertAt(insertIndex + index, layer);
+    });
+
+    backgroundLayerRefs.current = nextBackgroundLayers;
+    backgroundMapKeyRef.current = backgroundMapKey;
+  }, [backgroundMap, backgroundMapKey]);
 
   // ── Update vector layer features when geometries change ──────────────────
   useEffect(() => {
