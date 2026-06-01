@@ -189,6 +189,19 @@ function getMapGeometryUuids(): string[] {
   return raw ? raw.split(',') : [];
 }
 
+function getWmsLayerOrder(): string[] {
+  return Array.from(document.querySelectorAll<HTMLElement>('[data-wms-layer-name]'))
+    .map((element) => element.dataset.wmsLayerName ?? '');
+}
+
+function addManualWmsLayer(layerName: string) {
+  fireEvent.click(screen.getByRole('button', { name: 'Lägg till lager' }));
+  fireEvent.change(screen.getByLabelText('Nytt lagernamn'), {
+    target: { value: layerName },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Lägg till' }));
+}
+
 describe('GeometryPanel unlinked geometry selection', () => {
   beforeEach(() => {
     window.localStorage.clear();
@@ -403,9 +416,8 @@ describe('GeometryPanel unlinked geometry selection', () => {
     fireEvent.change(screen.getByLabelText('WMS-adress'), {
       target: { value: 'https://example.test/wms' },
     });
-    fireEvent.change(screen.getByLabelText('Lagernamn'), {
-      target: { value: 'layer_a\nlayer_b' },
-    });
+    addManualWmsLayer('layer_a');
+    addManualWmsLayer('layer_b');
     fireEvent.click(screen.getByRole('button', { name: 'Spara karta' }));
 
     await waitFor(() => {
@@ -424,6 +436,104 @@ describe('GeometryPanel unlinked geometry selection', () => {
 
     lastRender = mapViewRenderMock.mock.calls[mapViewRenderMock.mock.calls.length - 1][0];
     expect(lastRender.backgroundMap).toBeNull();
+  });
+
+  it('fetches WMS capabilities, filters available layers, and selects a layer into the draft', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      text: () => Promise.resolve(`<?xml version="1.0"?>
+        <WMS_Capabilities>
+          <Capability>
+            <Layer>
+              <Title>Root</Title>
+              <Layer>
+                <Name>workspace:plan</Name>
+                <Title>Detaljplan</Title>
+              </Layer>
+              <Layer>
+                <Name>workspace:ortho</Name>
+                <Title>Ortofoto</Title>
+              </Layer>
+            </Layer>
+          </Capability>
+        </WMS_Capabilities>`),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<GeometryPanel />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Kartinställningar' }));
+    fireEvent.change(screen.getByLabelText('Namn'), {
+      target: { value: 'Kommun WMS' },
+    });
+    fireEvent.change(screen.getByLabelText('WMS-adress'), {
+      target: { value: 'https://example.test/geoserver/wms?foo=bar' },
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Lägg till lager' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Hämta lager från WMS' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Detaljplan')).toBeTruthy();
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://example.test/geoserver/wms?foo=bar&SERVICE=WMS&REQUEST=GetCapabilities',
+      expect.any(Object)
+    );
+
+    fireEvent.change(screen.getByLabelText('Sök lager'), {
+      target: { value: 'orto' },
+    });
+
+    expect(screen.queryByText('Detaljplan')).toBeNull();
+    expect(screen.getByText('Ortofoto')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: /Ortofoto/ }));
+    expect(getWmsLayerOrder()).toEqual(['workspace:ortho']);
+    expect(screen.queryByLabelText('Nytt lagernamn')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Spara karta' }));
+
+    await waitFor(() => {
+      expect(useDocumentStore.getState().appConfig.map.backgroundMaps[0]?.layers).toEqual([
+        'workspace:ortho',
+      ]);
+    });
+  });
+
+  it('reorders selected WMS layers with arrow controls before saving', async () => {
+    render(<GeometryPanel />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Kartinställningar' }));
+    fireEvent.change(screen.getByLabelText('Namn'), {
+      target: { value: 'Kommun WMS' },
+    });
+    fireEvent.change(screen.getByLabelText('WMS-adress'), {
+      target: { value: 'https://example.test/wms' },
+    });
+    addManualWmsLayer('bottom_layer');
+    addManualWmsLayer('middle_layer');
+    addManualWmsLayer('top_layer');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Flytta upp top_layer' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Flytta upp top_layer' }));
+
+    expect(getWmsLayerOrder()).toEqual(['top_layer', 'bottom_layer', 'middle_layer']);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Flytta ner top_layer' }));
+    expect(getWmsLayerOrder()).toEqual(['bottom_layer', 'top_layer', 'middle_layer']);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ta bort middle_layer' }));
+    expect(getWmsLayerOrder()).toEqual(['bottom_layer', 'top_layer']);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Spara karta' }));
+
+    await waitFor(() => {
+      expect(useDocumentStore.getState().appConfig.map.backgroundMaps[0]?.layers).toEqual([
+        'bottom_layer',
+        'top_layer',
+      ]);
+    });
   });
 
   it('validates WMS map settings before saving', () => {
