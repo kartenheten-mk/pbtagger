@@ -71,7 +71,17 @@ export const AssignTagPanel: React.FC<AssignTagPanelProps> = ({
     : [];
 
   const handleTemaChange = (temaId: string) => {
+    const tema = teman.find((t) => t.id === temaId);
+    const onlyGrupp = tema?.grupper.length === 1 ? tema.grupper[0] : undefined;
+
     setSelectedTemaId(temaId);
+
+    if (onlyGrupp) {
+      setSelectedGruppId(onlyGrupp.id);
+      setSelectedCategoryId(`${temaId}--${onlyGrupp.id}`);
+      return;
+    }
+
     setSelectedGruppId('');
     setSelectedCategoryId('');
   };

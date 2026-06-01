@@ -26,6 +26,23 @@ const teman: Tema[] = [
 
 const categories = flattenCategories(teman);
 
+const singleOptionTeman: Tema[] = [
+  {
+    id: 'motiv-till-detaljplanens-regleringar',
+    name: 'Motiv till detaljplanens regleringar',
+    color: '#f59e0b',
+    grupper: [
+      {
+        id: 'motiv-till-reglering',
+        name: 'Motiv till reglering',
+        undergrupper: [],
+      },
+    ],
+  },
+];
+
+const singleOptionCategories = flattenCategories(singleOptionTeman);
+
 describe('AssignTagPanel', () => {
   beforeEach(() => {
     Element.prototype.scrollIntoView = vi.fn();
@@ -36,7 +53,7 @@ describe('AssignTagPanel', () => {
     vi.restoreAllMocks();
   });
 
-  it('requires explicit confirmation and can assign a group without undergrupp', () => {
+  it('requires explicit confirmation and can assign an auto-selected only group', () => {
     const onApply = vi.fn();
 
     render(
@@ -53,6 +70,10 @@ describe('AssignTagPanel', () => {
     expect(applyButton.hasAttribute('disabled')).toBe(true);
 
     fireEvent.click(screen.getByRole('button', { name: 'Genomförandefrågor' }));
+
+    expect(onApply).not.toHaveBeenCalled();
+    expect(applyButton.hasAttribute('disabled')).toBe(false);
+
     fireEvent.click(screen.getByRole('button', { name: /Fastighetsrättsliga frågor/ }));
 
     expect(onApply).not.toHaveBeenCalled();
@@ -62,6 +83,35 @@ describe('AssignTagPanel', () => {
 
     expect(onApply).toHaveBeenCalledWith(
       'genomforandefragor--fastighetsrattsliga-fragor',
+      ''
+    );
+  });
+
+  it('auto-selects the only available group when a theme has one group and no undergroups', () => {
+    const onApply = vi.fn();
+
+    render(
+      <AssignTagPanel
+        teman={singleOptionTeman}
+        categories={singleOptionCategories}
+        pendingText="Markerad text"
+        onApply={onApply}
+        onCancel={vi.fn()}
+      />
+    );
+
+    const applyButton = screen.getByRole('button', { name: 'Tilldela tagg' });
+    expect(applyButton.hasAttribute('disabled')).toBe(true);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Motiv till detaljplanens regleringar' }));
+
+    expect(applyButton.hasAttribute('disabled')).toBe(false);
+    expect(screen.getByText('Motiv till detaljplanens regleringar › Motiv till reglering')).toBeTruthy();
+
+    fireEvent.click(applyButton);
+
+    expect(onApply).toHaveBeenCalledWith(
+      'motiv-till-detaljplanens-regleringar--motiv-till-reglering',
       ''
     );
   });
