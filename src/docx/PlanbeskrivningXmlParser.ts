@@ -17,7 +17,7 @@ import { v4 as uuidv4 } from 'uuid';
 import PizZip from 'pizzip';
 import { parseXml } from './XmlHelpers';
 import { findPlanbeskrivningXmlPath } from './zipUtils';
-import { PLANBESKRIVNING_NS } from './PlanbeskrivningXmlBuilder';
+import { APP_VERSION, PLANBESKRIVNING_NS } from './PlanbeskrivningXmlBuilder';
 import type { Geometry, GeometryType, PlanbeskrivningConfig } from '../types';
 
 // ─── Namespace constants ──────────────────────────────────────────────────────
@@ -175,8 +175,8 @@ function extractConfig(root: Element): PlanbeskrivningConfig {
       ? getChildText(objektmetadata, 'programvara') || 'PB Tagger'
       : 'PB Tagger',
     programvaruversion: objektmetadata
-      ? getChildText(objektmetadata, 'programvaruversion') || '0.0.1'
-      : '0.0.1',
+      ? getChildText(objektmetadata, 'programvaruversion') || APP_VERSION
+      : APP_VERSION,
     arkividentitetKommun: getChildText(root, 'arkividentitetKommun') || '',
   };
 }
@@ -419,6 +419,7 @@ function findElementByLocalName(root: Element, localName: string): Element | nul
   }
   return null;
 }
+
 
 
 

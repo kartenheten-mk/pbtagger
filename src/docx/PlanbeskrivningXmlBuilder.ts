@@ -34,6 +34,7 @@ const LMG_NS = 'http://namespace.lantmateriet.se/distribution/geometri/v2';
 const GML_NS = 'http://www.opengis.net/gml/3.2';
 const GML_SRS_NAME = 'urn:ogc:def:crs:EPSG::3006';
 const TARGET_CRS = 'EPSG:3006';
+export const APP_VERSION = '0.1.0';
 
 // ─── PLANB-005 validation regex ───────────────────────────────────────────────
 
@@ -929,7 +930,7 @@ export function buildDefaultConfig(
     versionGiltigFran: now,
     detaljplansreferens: detaljplansreferens ?? '',
     programvara: 'PB Tagger',
-    programvaruversion: '0.0.1',
+    programvaruversion: APP_VERSION,
     arkividentitetKommun: '',
   };
 }
