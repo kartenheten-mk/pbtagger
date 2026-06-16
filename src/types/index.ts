@@ -186,8 +186,39 @@ export interface DocParagraph {
   isTableStart?: boolean;
 }
 
+export interface DocParagraphBlock {
+  type: 'paragraph';
+  paragraphIndex: number;
+}
+
+export interface DocTableCell {
+  paragraphIndices: number[];
+  colSpan?: number;
+}
+
+export interface DocTableRow {
+  cells: DocTableCell[];
+}
+
+export interface DocTableBlock {
+  type: 'table';
+  tableId: string;
+  /** 1-based table number in document order */
+  tableIndex: number;
+  rows: DocTableRow[];
+}
+
+export type DocBlock = DocParagraphBlock | DocTableBlock;
+
 export interface DocModel {
   paragraphs: DocParagraph[];
+  /**
+   * Document-order block structure used for rendering. The flat `paragraphs`
+   * array remains the source of truth for tag offsets/export compatibility.
+   * Older persisted projects may not have this field, so consumers should
+   * gracefully fall back to rendering `paragraphs` directly.
+   */
+  blocks?: DocBlock[];
 }
 
 // ─── Pending Selection (selected in editor, awaiting tag assignment) ─────────

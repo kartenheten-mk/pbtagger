@@ -14,7 +14,17 @@ import type { PlanbeskrivningImportResult } from './PlanbeskrivningXmlParser';
  */
 
 import PizZip from 'pizzip';
-import type { DocModel, DocParagraph, DocRun, Tag, TagTargetType } from '../types';
+import type {
+  DocBlock,
+  DocModel,
+  DocParagraph,
+  DocRun,
+  DocTableBlock,
+  DocTableCell,
+  DocTableRow,
+  Tag,
+  TagTargetType,
+} from '../types';
 import { CUSTOM_XML_NS } from './ContentControlBuilder';
 import {
   parseXml,
@@ -82,7 +92,13 @@ export async function parseDocx(buffer: ArrayBuffer): Promise<ParseResult> {
   const extractedBookmarks: ExtractedBookmark[] = [];
   const activeBookmarks: Record<string, Partial<ExtractedBookmark>> = {};
 
-  const paragraphs = extractParagraphs(body, zip, relsMap, extractedBookmarks, activeBookmarks);
+  const { paragraphs, blocks } = extractParagraphs(
+    body,
+    zip,
+    relsMap,
+    extractedBookmarks,
+    activeBookmarks
+  );
 
   // Extract any embedded tags from a previously exported file
   let tags = extractTagsFromCustomXml(zip);
@@ -158,13 +174,20 @@ export async function parseDocx(buffer: ArrayBuffer): Promise<ParseResult> {
 
   return {
     zip,
-    docModel: { paragraphs },
+    docModel: { paragraphs, blocks },
     tags,
     planbeskrivning,
   };
 }
 
 // ─── Internal helpers ─────────────────────────────────────────────────────────
+
+interface ParseAccumulator {
+  paragraphs: DocParagraph[];
+  blocks: DocBlock[];
+  nextParagraphIndex: number;
+  nextTableIndex: number;
+}
 
 interface TableContext {
   tableId: string;
@@ -189,50 +212,147 @@ export interface ExtractedBookmark {
 }
 
 /**
- * Walk all top-level <w:p> elements in the body, including those inside
- * tables (<w:tbl> → <w:tr> → <w:tc> → <w:p>).
+ * Walk document body children and build two complementary views:
+ *
+ * - `paragraphs`: a flat paragraph array with stable 0-based indices used by
+ *   existing tag offsets/export code.
+ * - `blocks`: document-order render structure that preserves tables, rows and
+ *   cells for the text canvas.
  */
-function extractParagraphs(body: Element, zip: PizZip, relsMap: Record<string, string>, extractedBookmarks: ExtractedBookmark[], activeBookmarks: Record<string, Partial<ExtractedBookmark>>): DocParagraph[] {
-  const result: DocParagraph[] = [];
-  let index = 0;
-  let tableCounter = 0;
+function extractParagraphs(
+  body: Element,
+  zip: PizZip,
+  relsMap: Record<string, string>,
+  extractedBookmarks: ExtractedBookmark[],
+  activeBookmarks: Record<string, Partial<ExtractedBookmark>>
+): { paragraphs: DocParagraph[]; blocks: DocBlock[] } {
+  const acc: ParseAccumulator = {
+    paragraphs: [],
+    blocks: [],
+    nextParagraphIndex: 0,
+    nextTableIndex: 1,
+  };
 
-  function walkNode(node: Element, tableCtx?: TableContext) {
+  function parseParagraphIntoFlatList(
+    paraEl: Element,
+    tableCtx?: TableContext
+  ): DocParagraph {
+    const para = parseParagraph(
+      paraEl,
+      acc.nextParagraphIndex,
+      zip,
+      relsMap,
+      tableCtx,
+      extractedBookmarks,
+      activeBookmarks
+    );
+    acc.paragraphs.push(para);
+    acc.nextParagraphIndex++;
+
+    if (tableCtx) {
+      tableCtx.firstParagraphSeen = true;
+    }
+
+    return para;
+  }
+
+  function collectParagraphsFromContainer(
+    node: Element,
+    tableCtx: TableContext,
+    paragraphIndices: number[]
+  ): void {
     if (node.namespaceURI === NS.w && node.localName === 'p') {
-      const para = parseParagraph(node, index, zip, relsMap, tableCtx, extractedBookmarks, activeBookmarks);
-      result.push(para);
-      index++;
-      if (tableCtx) {
-        tableCtx.firstParagraphSeen = true;
-      }
+      const para = parseParagraphIntoFlatList(node, tableCtx);
+      paragraphIndices.push(para.index);
       return;
     }
 
-    // Each table gets a stable document-order table id/index.
-    if (node.namespaceURI === NS.w && node.localName === 'tbl') {
-      tableCounter++;
-      const nestedTableCtx: TableContext = {
-        tableId: `table_${tableCounter}`,
-        tableIndex: tableCounter,
-        firstParagraphSeen: false,
-      };
-
-      const tblChildren = node.childNodes;
-      for (let i = 0; i < tblChildren.length; i++) {
-        const child = tblChildren[i];
-        if (child.nodeType === 1) {
-          walkNode(child as Element, nestedTableCtx);
-        }
-      }
-      return;
-    }
-
-    // Recurse into child elements (handles w:tr, w:tc, w:sdt, etc.)
+    // Nested tables inside table cells are preserved in the flat paragraph list
+    // and share the parent table tag context. The render model intentionally
+    // flattens them into the current cell to keep table rendering predictable.
     const children = node.childNodes;
     for (let i = 0; i < children.length; i++) {
       const child = children[i];
       if (child.nodeType === 1) {
-        walkNode(child as Element, tableCtx);
+        collectParagraphsFromContainer(child as Element, tableCtx, paragraphIndices);
+      }
+    }
+  }
+
+  function parseTable(tblEl: Element): DocTableBlock {
+    const tableIndex = acc.nextTableIndex++;
+    const tableCtx: TableContext = {
+      tableId: `table_${tableIndex}`,
+      tableIndex,
+      firstParagraphSeen: false,
+    };
+
+    const rows: DocTableRow[] = [];
+    const tblChildren = tblEl.childNodes;
+
+    for (let i = 0; i < tblChildren.length; i++) {
+      const rowEl = tblChildren[i];
+      if (
+        rowEl.nodeType !== 1 ||
+        (rowEl as Element).namespaceURI !== NS.w ||
+        (rowEl as Element).localName !== 'tr'
+      ) {
+        continue;
+      }
+
+      const cells: DocTableCell[] = [];
+      const rowChildren = rowEl.childNodes;
+
+      for (let j = 0; j < rowChildren.length; j++) {
+        const cellEl = rowChildren[j];
+        if (
+          cellEl.nodeType !== 1 ||
+          (cellEl as Element).namespaceURI !== NS.w ||
+          (cellEl as Element).localName !== 'tc'
+        ) {
+          continue;
+        }
+
+        const paragraphIndices: number[] = [];
+        collectParagraphsFromContainer(cellEl as Element, tableCtx, paragraphIndices);
+        cells.push({
+          paragraphIndices,
+          colSpan: getTableCellGridSpan(cellEl as Element),
+        });
+      }
+
+      if (cells.length > 0) {
+        rows.push({ cells });
+      }
+    }
+
+    return {
+      type: 'table',
+      tableId: tableCtx.tableId,
+      tableIndex,
+      rows,
+    };
+  }
+
+  function walkTopLevelNode(node: Element): void {
+    if (node.namespaceURI === NS.w && node.localName === 'p') {
+      const para = parseParagraphIntoFlatList(node);
+      acc.blocks.push({ type: 'paragraph', paragraphIndex: para.index });
+      return;
+    }
+
+    if (node.namespaceURI === NS.w && node.localName === 'tbl') {
+      acc.blocks.push(parseTable(node));
+      return;
+    }
+
+    // Recurse into body-level wrappers such as w:sdt/w:sdtContent. Tables found
+    // there still become their own top-level render blocks.
+    const children = node.childNodes;
+    for (let i = 0; i < children.length; i++) {
+      const child = children[i];
+      if (child.nodeType === 1) {
+        walkTopLevelNode(child as Element);
       }
     }
   }
@@ -257,9 +377,9 @@ function extractParagraphs(body: Element, zip: PizZip, relsMap: Record<string, s
           id: bmId,
           name: bmName,
           // The bookmark starts at the very beginning of the next paragraph
-          paragraphIndex: index,
+          paragraphIndex: acc.nextParagraphIndex,
           startOffset: 0,
-          runId: `p${index}_r0`,
+          runId: `p${acc.nextParagraphIndex}_r0`,
         };
       }
       continue;
@@ -271,9 +391,9 @@ function extractParagraphs(body: Element, zip: PizZip, relsMap: Record<string, s
       if (bmId && activeBookmarks[bmId]) {
         const bm = activeBookmarks[bmId];
         if (bm.name && bm.paragraphIndex !== undefined && bm.startOffset !== undefined) {
-          const endParaIdx = index - 1;
+          const endParaIdx = acc.nextParagraphIndex - 1;
           if (endParaIdx >= 0) {
-            const endPara = result[endParaIdx];
+            const endPara = acc.paragraphs[endParaIdx];
             const endOffset = endPara
               ? endPara.runs.reduce((s, r) => s + r.text.length, 0)
               : 0;
@@ -294,10 +414,21 @@ function extractParagraphs(body: Element, zip: PizZip, relsMap: Record<string, s
       continue;
     }
 
-    walkNode(el);
+    walkTopLevelNode(el);
   }
 
-  return result;
+  return { paragraphs: acc.paragraphs, blocks: acc.blocks };
+}
+
+function getTableCellGridSpan(cellEl: Element): number | undefined {
+  const tcPr = wChild(cellEl, 'tcPr');
+  if (!tcPr) return undefined;
+
+  const gridSpan = wChild(tcPr, 'gridSpan');
+  if (!gridSpan) return undefined;
+
+  const val = parseInt(wAttr(gridSpan, 'val'), 10);
+  return Number.isFinite(val) && val > 1 ? val : undefined;
 }
 
 function parseParagraph(
@@ -862,7 +993,16 @@ function reconcileTagsWithBookmarks(
   if (bookmarkSuffixes.size > 0) {
     tags = tags.filter(tag => {
       const suffix = tag.uuid.replace(/-/g, '').slice(0, 8).toLowerCase();
-      return bookmarkSuffixes.has(suffix);
+      if (bookmarkSuffixes.has(suffix)) return true;
+
+      // Table tags are stored in our custom XML metadata and anchored by the
+      // stable document-order tableId rather than Word bookmarks. Keep them as
+      // long as the imported document still contains the referenced table.
+      return (
+        tag.targetType === 'table' &&
+        !!tag.tableId &&
+        paragraphs.some((paragraph) => paragraph.tableId === tag.tableId)
+      );
     });
   }
 

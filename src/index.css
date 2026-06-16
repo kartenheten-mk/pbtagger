@@ -355,6 +355,12 @@
   box-shadow: inset 3px 0 0 rgba(37, 99, 235, 0.7);
 }
 
+.ProseMirror table.is-selected-table {
+  outline: 3px solid rgba(37, 99, 235, 0.7);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 6px rgba(59, 130, 246, 0.12);
+}
+
 /* ── Text search highlights (CSS Custom Highlight API) ──────────────────── */
 
 /* All matches — subtle yellow tint */
@@ -380,4 +386,5 @@
     transform: translateY(0) scale(1);
   }
 }
+
 

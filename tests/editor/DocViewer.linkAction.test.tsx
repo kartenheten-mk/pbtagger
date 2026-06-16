@@ -36,6 +36,59 @@ const docModel: DocModel = {
   ],
 };
 
+const tableDocModel: DocModel = {
+  paragraphs: [
+    {
+      index: 0,
+      headingLevel: 0,
+      runs: [{ id: 'p0_r0', text: 'Before table' }],
+    },
+    {
+      index: 1,
+      headingLevel: 0,
+      tableId: 'table_1',
+      tableIndex: 1,
+      isTableStart: true,
+      runs: [{ id: 'p1_r0', text: 'A1' }],
+    },
+    {
+      index: 2,
+      headingLevel: 0,
+      tableId: 'table_1',
+      tableIndex: 1,
+      runs: [{ id: 'p2_r0', text: 'B1' }],
+    },
+    {
+      index: 3,
+      headingLevel: 0,
+      tableId: 'table_1',
+      tableIndex: 1,
+      runs: [{ id: 'p3_r0', text: 'A2+B2' }],
+    },
+  ],
+  blocks: [
+    { type: 'paragraph', paragraphIndex: 0 },
+    {
+      type: 'table',
+      tableId: 'table_1',
+      tableIndex: 1,
+      rows: [
+        {
+          cells: [
+            { paragraphIndices: [1] },
+            { paragraphIndices: [2] },
+          ],
+        },
+        {
+          cells: [
+            { paragraphIndices: [3], colSpan: 2 },
+          ],
+        },
+      ],
+    },
+  ],
+};
+
 function makeTag(overrides: Partial<Tag> = {}): Tag {
   return {
     uuid: 'tag-1',
@@ -72,11 +125,11 @@ function makeGeometry(overrides: Partial<Geometry> = {}): Geometry {
   };
 }
 
-function resetStore(tags: Tag[], geometries: Geometry[]) {
+function resetStore(tags: Tag[], geometries: Geometry[], model: DocModel = docModel) {
   useDocumentStore.setState({
     documentId: 'doc-1',
     zipBuffer: null,
-    docModel,
+    docModel: model,
     fileName: 'test.docx',
     tags,
     geometries,
@@ -109,6 +162,76 @@ async function findTagBadge(tagUuid: string): Promise<HTMLElement> {
   });
   return badge!;
 }
+
+describe('DocViewer table rendering', () => {
+  beforeEach(() => {
+    Object.defineProperty(Element.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: vi.fn(),
+    });
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
+
+  it('renders DocModel table blocks as real tables and creates a table pending selection on click', async () => {
+    resetStore([], [], tableDocModel);
+
+    render(<DocViewer docModel={tableDocModel} categories={categories} />);
+
+    const table = await waitFor(() => {
+      const el = document.querySelector<HTMLTableElement>('table[data-table-id="table_1"]');
+      expect(el).toBeTruthy();
+      return el!;
+    });
+
+    expect(table.getAttribute('data-table-index')).toBe('1');
+    expect(table.querySelectorAll('tr')).toHaveLength(2);
+    expect(table.querySelectorAll('td')).toHaveLength(3);
+    expect(table.textContent).toContain('A1');
+    expect(table.textContent).toContain('B1');
+    expect(table.querySelector('td[colspan="2"]')?.textContent).toContain('A2+B2');
+
+    fireEvent.click(screen.getByText('A1'));
+
+    await waitFor(() => {
+      expect(useDocumentStore.getState().pendingSelection).toEqual([
+        {
+          type: 'table',
+          text: 'Tabell 1',
+          paragraphIndex: 1,
+          startOffset: 0,
+          endOffset: 0,
+          tableId: 'table_1',
+        },
+      ]);
+    });
+  });
+
+  it('highlights the rendered table element when a table tag is selected', async () => {
+    const tableTag = makeTag({
+      uuid: 'table-tag-1',
+      targetType: 'table',
+      text: 'Tabell 1',
+      paragraphIndex: 1,
+      startOffset: 0,
+      endOffset: 0,
+      tableId: 'table_1',
+    });
+    resetStore([tableTag], [], tableDocModel);
+    useDocumentStore.getState().selectTag(tableTag.uuid);
+
+    render(<DocViewer docModel={tableDocModel} categories={categories} />);
+
+    await waitFor(() => {
+      const table = document.querySelector<HTMLTableElement>('table[data-table-id="table_1"]');
+      expect(table).toBeTruthy();
+      expect(table!.classList.contains('is-selected-table')).toBe(true);
+    });
+  });
+});
 
 describe('DocViewer inline geometry link action', () => {
   beforeEach(() => {

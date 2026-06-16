@@ -15,11 +15,12 @@ import StarterKit from '@tiptap/starter-kit';
 import Image from '@tiptap/extension-image';
 
 import { TagMark } from './extensions/TagMark';
+import { ReadOnlyTable, ReadOnlyTableCell, ReadOnlyTableRow } from './extensions/ReadOnlyTable';
 import { SearchBar } from './SearchBar';
 import { useDocumentStore } from '../store/useDocumentStore';
 import { parseNumberedHeading, type NumberedHeading } from './headingLayout';
 import { buildTocDecorations, type TocEntry } from './tocLayout';
-import type { Category, DocModel, DocRun, Tag, PendingSelection } from '../types';
+import type { Category, DocBlock, DocModel, DocParagraph, DocRun, Tag, PendingSelection } from '../types';
 import { getCategoryLabel } from '../data/categoryUtils';
 import { canEditGeometryLinks } from '../geometry/geometrySource';
 
@@ -44,9 +45,28 @@ interface TipTapParagraphNode {
   content?: TipTapContentNode[];
 }
 
+interface TipTapTableCellNode {
+  type: 'tableCell';
+  attrs?: Record<string, unknown>;
+  content: TipTapParagraphNode[];
+}
+
+interface TipTapTableRowNode {
+  type: 'tableRow';
+  content: TipTapTableCellNode[];
+}
+
+interface TipTapTableNode {
+  type: 'table';
+  attrs: { tableId: string; tableIndex: number };
+  content: TipTapTableRowNode[];
+}
+
+type TipTapBlockNode = TipTapParagraphNode | TipTapTableNode;
+
 interface TipTapDoc {
   type: 'doc';
-  content: TipTapParagraphNode[];
+  content: TipTapBlockNode[];
 }
 
 // A tag segment represents how a (possibly multi-paragraph) tag applies to a
@@ -137,7 +157,13 @@ function docModelToTipTap(
     }
   }
 
-  const content: TipTapParagraphNode[] = model.paragraphs.map((para) => {
+  const paragraphNodes = new Map<number, TipTapParagraphNode>();
+
+  const renderParagraph = (para: DocParagraph | undefined): TipTapParagraphNode => {
+    if (!para) {
+      return { type: 'paragraph' };
+    }
+
     const paraTags = (textTagsByPara.get(para.index) ?? []).sort(
       (a, b) => a.startOffset - b.startOffset
     );
@@ -233,6 +259,41 @@ function docModelToTipTap(
     return {
       type: 'paragraph',
       content: paraNodes.length ? paraNodes : undefined,
+    };
+
+  };
+
+  for (const para of model.paragraphs) {
+    paragraphNodes.set(para.index, renderParagraph(para));
+  }
+
+  const blocks: DocBlock[] = model.blocks && model.blocks.length > 0
+    ? model.blocks
+    : model.paragraphs.map((para) => ({ type: 'paragraph', paragraphIndex: para.index }));
+
+  const content: TipTapBlockNode[] = blocks.map((block) => {
+    if (block.type === 'paragraph') {
+      return paragraphNodes.get(block.paragraphIndex) ?? { type: 'paragraph' };
+    }
+
+    return {
+      type: 'table',
+      attrs: {
+        tableId: block.tableId,
+        tableIndex: block.tableIndex,
+      },
+      content: block.rows.map((row) => ({
+        type: 'tableRow',
+        content: row.cells.map((cell) => ({
+          type: 'tableCell',
+          attrs: cell.colSpan && cell.colSpan > 1 ? { colspan: cell.colSpan } : undefined,
+          content: cell.paragraphIndices.length > 0
+            ? cell.paragraphIndices.map((paragraphIndex) => (
+              paragraphNodes.get(paragraphIndex) ?? { type: 'paragraph' }
+            ))
+            : [{ type: 'paragraph' }],
+        })),
+      })),
     };
   });
 
@@ -342,6 +403,9 @@ export const DocViewer: React.FC<DocViewerProps> = ({ docModel, categories }) =>
           class: 'pb-object-node',
         },
       }),
+      ReadOnlyTable,
+      ReadOnlyTableRow,
+      ReadOnlyTableCell,
       TagMark,
     ],
     content: initialContent,
@@ -551,19 +615,12 @@ export const DocViewer: React.FC<DocViewerProps> = ({ docModel, categories }) =>
       const proseMirrorEl = container.querySelector('.ProseMirror');
       if (!proseMirrorEl) return;
 
-      const allParaEls = Array.from(
-        proseMirrorEl.querySelectorAll('p, h1, h2, h3, h4, h5, h6')
+      const tableEl = proseMirrorEl.querySelector(
+        `table[data-table-id="${selectedTag.tableId}"]`
       );
-
-      const tableParagraphs = docModel.paragraphs
-        .filter((p) => p.tableId === selectedTag.tableId)
-        .map((p) => p.index)
-        .filter((idx) => idx >= 0 && idx < allParaEls.length)
-        .map((idx) => allParaEls[idx]);
-
-      if (tableParagraphs.length > 0) {
-        tableParagraphs.forEach((el) => el.classList.add('is-selected-table'));
-        tableParagraphs[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+      if (tableEl) {
+        tableEl.classList.add('is-selected-table');
+        tableEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
     }
   }, [selectedTagUuid, tags, docModel]);
@@ -977,6 +1034,7 @@ export const DocViewer: React.FC<DocViewerProps> = ({ docModel, categories }) =>
           if (isCollapsed && !target.closest('.tag-badge-widget') && editorContainerRef.current) {
             const proseMirrorEl = editorContainerRef.current.querySelector('.ProseMirror');
             const paraEl = findParagraphElement(target);
+            const tableEl = target.closest('table[data-table-id]') as HTMLTableElement | null;
 
             if (proseMirrorEl && paraEl) {
               const allParaEls = Array.from(
@@ -990,6 +1048,18 @@ export const DocViewer: React.FC<DocViewerProps> = ({ docModel, categories }) =>
                   const tableParagraphs = docModel.paragraphs.filter((p) => p.tableId === docPara.tableId);
                   const anchor = tableParagraphs.find((p) => p.isTableStart) ?? tableParagraphs[0] ?? docPara;
                   const label = anchor.tableIndex ? `Tabell ${anchor.tableIndex}` : 'Tabell';
+                  const tableId = tableEl?.getAttribute('data-table-id') ?? docPara.tableId;
+                  const existingTableTag = tags.find((t) => {
+                    const targetType = t.targetType ?? 'text';
+                    return targetType === 'table' && t.tableId === tableId;
+                  });
+
+                  if (existingTableTag) {
+                    setPendingSelection(null);
+                    selectTag(existingTableTag.uuid);
+                    window.getSelection()?.removeAllRanges();
+                    return;
+                  }
 
                   setPendingSelection([
                     {
@@ -998,7 +1068,7 @@ export const DocViewer: React.FC<DocViewerProps> = ({ docModel, categories }) =>
                       paragraphIndex: anchor.index,
                       startOffset: 0,
                       endOffset: 0,
-                      tableId: docPara.tableId,
+                      tableId,
                     },
                   ]);
                   selectTag(null);
@@ -1455,4 +1525,6 @@ function createGraphPlaceholderDataUri(): string {
 </svg>`;
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 }
+
+
 
