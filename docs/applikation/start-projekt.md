@@ -17,6 +17,10 @@ Knappen öppnar en meny med två val:
 
 *Skapa projekt-menyn samlar nytt projekt och import av befintlig `.pbproject`.*
 
+![Dialog för att skapa nytt projekt](../assets/screenshots/skapa-projekt-dialog.png)
+
+*Dialogen visar vilka filer som behövs när ett nytt projekt skapas.*
+
 ## Projektgalleri
 
 Projektgalleriet visar sparade projekt från IndexedDB. Varje kort visar projektnamn, senaste uppdatering och antal taggar. Vid hovring visas även projektskapandedatum och antal geometrier.

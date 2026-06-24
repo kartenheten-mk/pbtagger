@@ -24,6 +24,10 @@ GML från importerad DOCX visas som skrivskyddad kontroll. Redigera geometri-lä
 
 Projektgalleriet bygger på webbläsarens IndexedDB. Projekt kan saknas om du använder en annan webbläsare, annan profil, inkognitoläge eller om webbläsardata har rensats. Exportera `.pbproject` för långsiktig lagring.
 
+![Startvy utan sparade projekt](../assets/screenshots/startvy-tom.png)
+
+*Om projektgalleriet är tomt kan du skapa ett nytt projekt eller importera en sparad `.pbproject`.*
+
 ## Kartbakgrund visas inte
 
 Kontrollera att eventuell WMS-konfiguration har rätt URL och lager. Exportera `config.json` innan du byter miljö om bakgrundskartor behöver följa med.

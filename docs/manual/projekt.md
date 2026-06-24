@@ -15,6 +15,10 @@ Startvyn samlar projektåtgärder och tidigare sparade projekt. Ett projekt best
 5. Välj en geometri-JSON om du vill läsa in geometrier direkt.
 6. Klicka på **Skapa projekt**.
 
+![Dialog för att skapa nytt projekt](../assets/screenshots/skapa-projekt-dialog.png)
+
+*Dialogen för nytt projekt samlar projektnamn, obligatorisk `.docx` och valfri geometri-JSON.*
+
 När projektet skapas läser appen dokumentet, bygger dokumentvyn och sparar projektet lokalt i webbläsarens IndexedDB.
 
 ![Menyn för att skapa eller importera projekt](../assets/screenshots/startvy-skapa-projekt-meny.png)

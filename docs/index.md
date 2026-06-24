@@ -5,6 +5,10 @@ Planbeskrivning Tagger är ett webbverktyg för att läsa in planbeskrivningar i
 - **Användarmanualen** beskriver praktiska arbetsflöden i gränssnittet.
 - **Teknisk dokumentation** beskriver implementation, dataflöden och exportformat.
 
+![Startvy utan sparade projekt](assets/screenshots/startvy-tom.png)
+
+*Startvyn är första ingången när du skapar ett nytt projekt eller importerar en sparad `.pbproject`.*
+
 !!! note "Media kommer att fyllas på löpande"
     Strukturen är förberedd för screenshots, GIF och MP4 under `docs/assets/`. Manualens text kan kompletteras med visuella steg utan att ändra sidstrukturen.
 
