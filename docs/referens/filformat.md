@@ -23,6 +23,39 @@ Projektfilen är en ZIP som innehåller:
 
 Konfigurationsfilen innehåller appinställningar som kan flyttas mellan projekt. I nuläget gäller det framför allt kartkonfiguration.
 
+Exempel med en sparad WMS-bakgrund:
+
+```json
+{
+  "version": 1,
+  "map": {
+    "activeBackgroundMapId": "kommun-wms",
+    "backgroundMaps": [
+      {
+        "id": "kommun-wms",
+        "type": "wms",
+        "name": "Kommunens baskarta",
+        "url": "https://example.se/wms",
+        "layers": ["baskarta", "fastighetsgranser"]
+      }
+    ]
+  }
+}
+```
+
+| Fält | Beskrivning |
+| --- | --- |
+| `version` | Konfigurationsversion. Nuvarande version är `1`. |
+| `map.activeBackgroundMapId` | `id` för vald WMS-bakgrund, eller `null` för OpenStreetMap. |
+| `map.backgroundMaps` | Lista med sparade WMS-bakgrunder. |
+| `id` | Stabilt internt id för bakgrundskartan. |
+| `type` | Ska vara `wms`. |
+| `name` | Namnet som visas i kartinställningarna. |
+| `url` | WMS-adress som börjar med `http://` eller `https://`. |
+| `layers` | Ett eller flera WMS-lagernamn. Det översta lagret i listan ritas överst i kartan. |
+
+Det rekommenderade sättet att ändra kartkonfigurationen är via **Kartinställningar** i appen. Om `config.json` redigeras manuellt måste varje WMS-karta ha namn, adress och minst ett lager.
+
 ## `omfattningar.xml`
 
 Planbeskrivning v2.0-exporten skriver en custom XML-del i DOCX-filen. Den används för omfattningar, lägen, referenser och metadata enligt appens exportmodell.

@@ -2,6 +2,10 @@
 
 Kartpanelen bygger på OpenLayers och visar detaljplanegeometrier tillsammans med en bakgrundskarta.
 
+![Editorläge med dokument, sidopanel och kartpanel](../assets/screenshots/editor-oversikt.png)
+
+*Kartpanelen ligger bredvid dokumentvyn och sidopanelen i editorläget.*
+
 ## Panelens innehåll
 
 Panelen består av:
@@ -12,6 +16,10 @@ Panelen består av:
 - länkningsläge med bekräftelse
 - maximerad kartvy
 - kartinställningar
+
+![Kartpanel med detaljplanegeometrier](../assets/screenshots/karta-geometri.png)
+
+*Kartpanelen visar bakgrundskarta, geometrier, filter, sökning och geometri-lista.*
 
 ## Geometrikällor
 

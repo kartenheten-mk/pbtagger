@@ -2,6 +2,10 @@
 
 Startvyn samlar projektåtgärder och tidigare sparade projekt. Ett projekt består av den inlästa Word-filen, taggar, geometrier, kartinställningar och exportmetadata.
 
+![Startvy med projektgalleri](../assets/screenshots/startvy-projektgalleri.png)
+
+*Startvyn samlar nya projekt, importerade projekt och lokalt sparade projekt.*
+
 ## Skapa nytt projekt
 
 1. Klicka på **Skapa projekt**.
@@ -12,6 +16,10 @@ Startvyn samlar projektåtgärder och tidigare sparade projekt. Ett projekt best
 6. Klicka på **Skapa projekt**.
 
 När projektet skapas läser appen dokumentet, bygger dokumentvyn och sparar projektet lokalt i webbläsarens IndexedDB.
+
+![Menyn för att skapa eller importera projekt](../assets/screenshots/startvy-skapa-projekt-meny.png)
+
+*Projektmenyn låter dig välja mellan nytt projekt och import av `.pbproject`.*
 
 ## Importera existerande projekt
 

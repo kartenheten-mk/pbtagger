@@ -14,6 +14,10 @@ Taggning görs från dokumentvyn och sidopanelen. Dokumentet är skrivskyddat i 
 
 Om markeringen sträcker sig över flera stycken skapas en sammanhängande tagg som behåller start- och slutposition i dokumentmodellen.
 
+![Dokumentvy med taggmarkeringar](../assets/screenshots/dokumentvy-taggmarkeringar.png)
+
+*Taggat innehåll markeras direkt i den skrivskyddade dokumentvyn.*
+
 ## Tagga bild, diagram eller tabell
 
 Klicka på en bild, ett diagram eller en tabell i dokumentet. Sidopanelen visar objektet som markerat innehåll och du tilldelar kategori på samma sätt som för text.
@@ -32,6 +36,10 @@ Fliken **Visa taggar** listar alla taggar i dokumentordning. Du kan filtrera på
 - se kopplade geometrier
 - starta geometri-länkning
 - ta bort taggen
+
+![Sidopanelen Visa taggar](../assets/screenshots/sidopanel-visa-taggar.png)
+
+*Sidopanelen visar taggar, temafilter och geometriåtgärder i dokumentordning.*
 
 ## Dölja och visa taggmarkeringar
 

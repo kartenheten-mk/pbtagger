@@ -2,6 +2,10 @@
 
 Manualen beskriver de vanligaste arbetsflödena i Planbeskrivning Tagger. Den är skriven för personer som arbetar med att märka upp planbeskrivningar, kontrollera kopplingar mot geometri och ta fram filer för fortsatt hantering.
 
+![Editorläge med dokument, taggar och karta](../assets/screenshots/editor-oversikt.png)
+
+*Editorläget visar tagglistan till vänster, dokumentet i mitten och kart-/geometripanelen till höger.*
+
 ## Rekommenderat arbetsflöde
 
 1. Skapa eller öppna ett projekt.

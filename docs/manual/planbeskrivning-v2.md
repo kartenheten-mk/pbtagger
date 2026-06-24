@@ -18,6 +18,10 @@ I **Data** > **Exportinställningar** finns:
 
 Metadata-panelen innehåller:
 
+![Metadata för Planbeskrivning v2.0](../assets/screenshots/planbeskrivning-metadata.png)
+
+*Metadata-panelen styr värdena som skrivs till Planbeskrivning v2.0-exporten.*
+
 | Fält | Beskrivning |
 | --- | --- |
 | Objektidentitet | UUID för planbeskrivningsobjektet. |

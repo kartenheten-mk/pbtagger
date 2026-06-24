@@ -2,6 +2,10 @@
 
 Alla import- och exportåtgärder i editorläget finns i toppbarens **Data**-meny.
 
+![Datamenyn med import och export](../assets/screenshots/datameny-export.png)
+
+*Datamenyn samlar import, export, projektfil, konfiguration och exportinställningar.*
+
 ## Importera
 
 | Åtgärd | Resultat |
@@ -41,4 +45,4 @@ Använd `.pbproject` när du vill arkivera arbetet eller flytta det till en anna
 
 ## Exportera och importera config
 
-`config.json` innehåller appens projektkonfiguration, framför allt kartinställningar. Den kan exporteras separat och importeras i ett annat projekt.
+`config.json` innehåller appens projektkonfiguration, framför allt kartinställningar och sparade WMS-bakgrunder. Den kan exporteras separat och importeras i ett annat projekt när samma bakgrundskartor ska återanvändas.
