@@ -13,6 +13,10 @@ Vyn hanterar:
 - innehållsförtecknings- och rubriklayout
 - taggmarkeringar och objektbadges
 
+![Dokumentvy med taggmarkeringar](../assets/screenshots/dokumentvy-taggmarkeringar.png)
+
+*Dokumentvyn visar taggmarkeringar direkt i det importerade DOCX-innehållet.*
+
 ## Markeringar
 
 När användaren markerar text beräknar appen positionen i dokumentmodellen. Vid klick på bild, diagram eller tabell skapas en objektmarkering som kan taggas.

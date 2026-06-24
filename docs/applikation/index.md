@@ -2,6 +2,10 @@
 
 Den här delen beskriver gränssnittets huvudytor och vad de ansvarar för.
 
+![Editorläge med dokument, sidopanel och kartpanel](../assets/screenshots/editor-oversikt.png)
+
+*Editorläget samlar dokumentvy, sidopanel, kartpanel och toppbar.*
+
 ## Huvudytor
 
 | Del | Ansvar |

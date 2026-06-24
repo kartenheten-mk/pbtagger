@@ -10,6 +10,10 @@ Läget visas automatiskt när användaren markerar nytt innehåll. Panelen visar
 
 Läget listar befintliga taggar i dokumentordning. Användaren kan filtrera på tema, välja tagg, ta bort tagg, länka geometri och avlänka redigerbara geometrier.
 
+![Sidopanelens läge Visa taggar](../assets/screenshots/sidopanel-visa-taggar.png)
+
+*Visa taggar-läget listar dokumentets taggar och åtgärder för varje tagg.*
+
 ## Teckenförklaring
 
 Sidopanelens nederkant innehåller en teckenförklaring för temafärger. Den hjälper användaren förstå färgkodningen i dokumentet och tagglistan.
