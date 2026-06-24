@@ -1,0 +1,72 @@
+site_name: Planbeskrivning Tagger
+site_description: Dokumentation och användarmanual för Planbeskrivning Tagger.
+site_url: ""
+repo_url: https://github.com/andeewn/planbeskrivning
+repo_name: andeewn/planbeskrivning
+
+docs_dir: docs
+site_dir: site
+
+theme:
+  name: material
+  language: sv
+  features:
+    - navigation.sections
+    - navigation.tabs
+    - navigation.top
+    - search.highlight
+    - search.suggest
+    - toc.follow
+  palette:
+    - scheme: default
+      primary: blue
+      accent: green
+  font:
+    text: Inter
+    code: JetBrains Mono
+
+plugins:
+  - search:
+      lang: sv
+  - glightbox
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.superfences
+
+extra_css:
+  - assets/stylesheets/extra.css
+
+nav:
+  - Start: index.md
+  - Användarmanual:
+      - Översikt: manual/index.md
+      - Skapa och öppna projekt: manual/projekt.md
+      - Tagga innehåll: manual/tagga-innehall.md
+      - Geometri och karta: manual/geometri-karta.md
+      - Import och export: manual/import-export.md
+      - Planbeskrivning v2.0: manual/planbeskrivning-v2.md
+      - Felsökning: manual/felsokning.md
+  - Applikationens delar:
+      - Översikt: applikation/index.md
+      - Start och projektgalleri: applikation/start-projekt.md
+      - Dokumentvy: applikation/dokumentvy.md
+      - Sidopanel och taggar: applikation/sidopanel.md
+      - Karta och geometri: applikation/karta-geometri.md
+      - Datameny: applikation/datameny.md
+  - Teknisk dokumentation:
+      - Arkitektur: teknisk/arkitektur.md
+      - Data och state: teknisk/data-state.md
+      - DOCX och exportformat: teknisk/docx-export.md
+      - Geometri och Planbeskrivning XML: teknisk/geometri-planbeskrivning.md
+      - Teststrategi: teknisk/teststrategi.md
+  - Referens:
+      - Media och screenshots: referens/media.md
+      - Kommandon: referens/kommandon.md
+      - Filformat: referens/filformat.md

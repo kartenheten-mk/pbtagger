@@ -1,0 +1,12 @@
+.docs-video {
+  display: block;
+  width: 100%;
+  max-width: 960px;
+  margin: 1rem 0;
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 0.35rem;
+}
+
+.md-typeset table:not([class]) {
+  font-size: 0.78rem;
+}
