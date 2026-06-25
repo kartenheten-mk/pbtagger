@@ -646,7 +646,7 @@ export const MapSettingsPanel: React.FC<MapSettingsPanelProps> = ({ onClose }) =
                 <p className="text-xs text-red-500">{errors.layers}</p>
               ) : (
                 <p className="text-xs text-gray-400">
-                  Översta lagret ritas överst i kartan.
+                  Översta lagret i listan hamnar överst i kartan.
                 </p>
               )}
             </div>

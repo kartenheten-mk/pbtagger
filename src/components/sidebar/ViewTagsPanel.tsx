@@ -2,7 +2,8 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import type { Tema, Tag, Category, Geometry } from '../../types';
 import { canEditGeometryLinks, splitGeometriesBySource } from '../../geometry/geometrySource';
 import { buildMirroredDisplayLinks } from '../../geometry/tagLinkMirror';
-import { TagListItem, type LinkedGeometryView } from './TagListItem';
+import { buildLinkedGeometryViewsForSidebar } from './buildLinkedGeometryViewsForSidebar';
+import { TagListItem } from './TagListItem';
 import { hexToRgba } from './utils';
 
 export interface ViewTagsPanelProps {
@@ -17,57 +18,6 @@ export interface ViewTagsPanelProps {
   onLinkGeometry: (tagUuid: string) => void;
   /** Unlink a specific geometry UUID from a tag */
   onUnlinkGeometry: (tagUuid: string, geometryUuid: string) => void;
-}
-
-interface BuildLinkedGeometryViewsArgs {
-  tag: Tag;
-  geometryByUuid: Map<string, Geometry>;
-  jsonGeometryIdSet: Set<string>;
-  docxGmlGeometryIdSet: Set<string>;
-  mirroredDocxGeometryIds: Set<string>;
-}
-
-export function buildLinkedGeometryViewsForSidebar({
-  tag,
-  geometryByUuid,
-  jsonGeometryIdSet,
-  docxGmlGeometryIdSet,
-  mirroredDocxGeometryIds,
-}: BuildLinkedGeometryViewsArgs): LinkedGeometryView[] {
-  const explicitGeometryIds = tag.geometryIds ?? [];
-
-  const buildViews = (ids: string[], canUnlink: boolean): LinkedGeometryView[] => {
-    const seen = new Set<string>();
-    const views: LinkedGeometryView[] = [];
-
-    for (const id of ids) {
-      if (seen.has(id)) continue;
-      const geometry = geometryByUuid.get(id);
-      if (!geometry) continue;
-
-      seen.add(id);
-      views.push({ geometry, canUnlink });
-    }
-
-    return views;
-  };
-
-  const explicitJsonGeometryIds = explicitGeometryIds.filter((id) =>
-    jsonGeometryIdSet.has(id)
-  );
-  if (explicitJsonGeometryIds.length > 0) {
-    return buildViews(explicitJsonGeometryIds, true);
-  }
-
-  const explicitLoadedGeometryViews = buildViews(explicitGeometryIds, true);
-  if (explicitLoadedGeometryViews.length > 0) {
-    return explicitLoadedGeometryViews;
-  }
-
-  const mirroredDocxIds = Array.from(mirroredDocxGeometryIds).filter((id) =>
-    docxGmlGeometryIdSet.has(id)
-  );
-  return buildViews(mirroredDocxIds, false);
 }
 
 export const ViewTagsPanel: React.FC<ViewTagsPanelProps> = ({
