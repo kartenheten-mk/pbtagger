@@ -190,18 +190,6 @@ export const MapSettingsPanel: React.FC<MapSettingsPanelProps> = ({ onClose }) =
     [draft.layersText, setDraftLayers]
   );
 
-  const toggleLayer = useCallback(
-    (layerName: string) => {
-      const currentLayers = normalizeLayerNames(draft.layersText);
-      const nextLayers = currentLayers.includes(layerName)
-        ? currentLayers.filter((name) => name !== layerName)
-        : [...currentLayers, layerName];
-
-      setDraftLayers(nextLayers);
-    },
-    [draft.layersText, setDraftLayers]
-  );
-
   const startNew = useCallback(() => {
     setDraft(createEmptyDraft());
     setErrors({});

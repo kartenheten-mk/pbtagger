@@ -1,0 +1,20 @@
+{
+  "allowedLicenses": {
+    "0BSD": "Permissive software license.",
+    "Apache-2.0": "Permissive software license with patent grant.",
+    "BSD-2-Clause": "Permissive software license.",
+    "BSD-3-Clause": "Permissive software license.",
+    "BlueOak-1.0.0": "Permissive software license.",
+    "CC-BY-4.0": "Attribution license; allowed when attribution is preserved in third-party notices.",
+    "CC0-1.0": "Public-domain style dedication.",
+    "ISC": "Permissive software license.",
+    "MIT": "Permissive software license.",
+    "MIT-0": "Permissive software license.",
+    "MPL-2.0": "Weak copyleft license; allowed for unmodified third-party dependencies with notices preserved.",
+    "Python-2.0": "Permissive Python Software Foundation license.",
+    "Unicode-DFS-2016": "Permissive Unicode data/software license.",
+    "Unlicense": "Public-domain style dedication.",
+    "Zlib": "Permissive software license."
+  },
+  "allowedPackages": {}
+}

@@ -181,16 +181,16 @@ vi.mock('ol/proj', () => ({
 
 vi.mock('ol/style', () => ({
   Style: class MockStyle {
-    constructor(_options: unknown) {}
+    constructor() {}
   },
   Fill: class MockFill {
-    constructor(_options: unknown) {}
+    constructor() {}
   },
   Stroke: class MockStroke {
-    constructor(_options: unknown) {}
+    constructor() {}
   },
   Circle: class MockCircle {
-    constructor(_options: unknown) {}
+    constructor() {}
   },
 }));
 

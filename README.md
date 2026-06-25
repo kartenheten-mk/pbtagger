@@ -8,8 +8,8 @@ Full användarmanual och teknisk dokumentation finns i MkDocs under [docs](docs/
 
 Förutsättningar:
 
-- Node.js 18 eller senare
-- npm 9 eller senare
+- Node.js 20.19 eller senare
+- npm 10 eller senare
 
 Installera beroenden:
 
@@ -49,7 +49,7 @@ python -m venv .venv
 Installera dokumentationsberoenden:
 
 ```bash
-python -m pip install -r requirements-docs.txt
+python -m pip install -r requirements-docs.lock.txt
 ```
 
 Starta dokumentationen lokalt:
@@ -73,6 +73,33 @@ mkdocs build --strict
 ```
 
 Den byggda sidan hamnar i `site/`, som inte versioneras.
+
+`requirements-docs.txt` beskriver toppnivåkraven för dokumentationen medan
+`requirements-docs.lock.txt` används för reproducerbara dokumentationsbyggen.
+
+## Release- och licenskontroller
+
+Kontrollera Node-beroenden mot licenspolicyn:
+
+```bash
+npm run licenses:node:check
+```
+
+Kontrollera Python-beroenden för dokumentationen efter installation av den låsta
+docs-miljön:
+
+```bash
+python scripts/check-python-licenses.py --check
+```
+
+Skapa releaseartefakten efter att appen och tredjepartsnotiserna är uppdaterade:
+
+```bash
+npm run release:dist
+```
+
+Release-zippen innehåller den byggda appen samt `LICENSE`, `CHANGELOG.md` och
+`THIRD_PARTY_NOTICES.md`.
 
 ## Projektstruktur
 

@@ -2,11 +2,22 @@
   "name": "planbeskrivning",
   "private": true,
   "version": "0.1.0",
+  "license": "MIT",
   "type": "module",
+  "engines": {
+    "node": ">=20.19.0",
+    "npm": ">=10"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "licenses:node:check": "node scripts/check-node-licenses.mjs --check",
+    "licenses:node:report": "node scripts/check-node-licenses.mjs --json reports/node-licenses.json --markdown reports/node-licenses.md",
+    "licenses:third-party": "node scripts/generate-third-party-notices.mjs --node-json reports/node-licenses.json --python-json reports/python-docs-licenses.json --output THIRD_PARTY_NOTICES.md",
+    "release:dist": "npm run build && node scripts/build-release-dist.mjs",
+    "test": "vitest run",
+    "test:ui": "vitest --ui",
     "preview": "vite preview"
   },
   "dependencies": {
