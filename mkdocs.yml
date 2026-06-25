@@ -1,8 +1,8 @@
 site_name: Planbeskrivning Tagger
 site_description: Dokumentation och användarmanual för Planbeskrivning Tagger.
-site_url: ""
-repo_url: https://github.com/andeewn/planbeskrivning
-repo_name: andeewn/planbeskrivning
+site_url: https://kartenheten-mk.github.io/pbtagger/
+repo_url: https://github.com/kartenheten-mk/pbtagger
+repo_name: kartenheten-mk/pbtagger
 
 docs_dir: docs
 site_dir: site
