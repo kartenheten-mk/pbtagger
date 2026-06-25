@@ -17,7 +17,7 @@
 
 import PizZip from 'pizzip';
 import { saveAs } from 'file-saver';
-import type { Tag, DocModel, Geometry, PlanbeskrivningConfig } from '../types';
+import type { Category, Tag, DocModel, Geometry, PlanbeskrivningConfig } from '../types';
 import { parseXml, serializeXml } from './XmlHelpers';
 import {
   buildCustomXmlItem,
@@ -55,6 +55,7 @@ const STORE_ITEM_ID = 'A1B2C3D4-E5F6-7890-ABCD-EF1234567890';
 export interface PlanbeskrivningExportOptions {
   config: PlanbeskrivningConfig;
   geometries: Geometry[];
+  categories?: Category[];
   /** When true (default), compliance errors block export */
   enforceCompliance?: boolean;
 }
@@ -91,7 +92,13 @@ export async function exportDocx(
   const textTags = tags.filter(isTextTag);
   const objectBookmarkTags = tags.filter(isObjectBookmarkTag);
   if (textTags.length > 0 || objectBookmarkTags.length > 0) {
-    injectTagAnchors(docDom, docModel, textTags, objectBookmarkTags);
+    injectTagAnchors(
+      docDom,
+      docModel,
+      textTags,
+      objectBookmarkTags,
+      planbeskrivning?.categories
+    );
   }
 
   // 4. Serialize modified document.xml back into ZIP
@@ -153,7 +160,7 @@ function injectPlanbeskrivningXml(
   tags: Tag[],
   opts: PlanbeskrivningExportOptions
 ): void {
-  const validation = validatePlanbeskrivning(tags, opts.geometries);
+  const validation = validatePlanbeskrivning(tags, opts.geometries, opts.categories);
   const enforceCompliance = opts.enforceCompliance ?? true;
   if (enforceCompliance && !validation.valid) {
     const details = formatPlanbeskrivningValidationErrors(validation.errors, tags);
@@ -171,7 +178,12 @@ function injectPlanbeskrivningXml(
   } = resolvePlanbeskrivningSlot(zip, tagMetadataItemNumber);
 
   // Build the XML content
-  const pbXml = buildPlanbeskrivningXml(opts.config, tags, opts.geometries);
+  const pbXml = buildPlanbeskrivningXml(
+    opts.config,
+    tags,
+    opts.geometries,
+    opts.categories
+  );
 
   // Write the XML part and its props
   zip.file(pbItemPath, pbXml);
@@ -192,20 +204,22 @@ function injectTagAnchors(
   docDom: Document,
   docModel: DocModel,
   textTags: Tag[],
-  objectBookmarkTags: Tag[]
+  objectBookmarkTags: Tag[],
+  categories?: Category[]
 ): void {
   const allParas = collectParagraphsInOrder(docDom);
   const bookmarkCounter = { value: findMaxBookmarkId(docDom) + 1 };
 
-  injectObjectBookmarks(docDom, allParas, objectBookmarkTags, bookmarkCounter);
-  injectTextContentControls(docDom, docModel, allParas, textTags, bookmarkCounter);
+  injectObjectBookmarks(docDom, allParas, objectBookmarkTags, bookmarkCounter, categories);
+  injectTextContentControls(docDom, docModel, allParas, textTags, bookmarkCounter, categories);
 }
 
 function injectObjectBookmarks(
   docDom: Document,
   allParas: Element[],
   tags: Tag[],
-  bookmarkCounter: { value: number }
+  bookmarkCounter: { value: number },
+  categories?: Category[]
 ): void {
   const sortedTags = [...tags].sort((a, b) => {
     if (a.paragraphIndex !== b.paragraphIndex) {
@@ -223,7 +237,7 @@ function injectObjectBookmarks(
     const paraEl = allParas[tag.paragraphIndex];
     if (!paraEl) continue;
 
-    injectBookmarkAroundRun(docDom, paraEl, runIndex, tag, bookmarkCounter);
+    injectBookmarkAroundRun(docDom, paraEl, runIndex, tag, bookmarkCounter, categories);
   }
 }
 
@@ -239,7 +253,8 @@ function injectTextContentControls(
   docModel: DocModel,
   allParas: Element[],
   tags: Tag[],
-  bookmarkCounter: { value: number }
+  bookmarkCounter: { value: number },
+  categories?: Category[]
 ): void {
   const singleParaTags = tags.filter(
     (t) => !t.endParagraphIndex || t.endParagraphIndex === t.paragraphIndex
@@ -262,7 +277,15 @@ function injectTextContentControls(
     if (!paraEl) continue;
     const docPara = docModel.paragraphs[tag.paragraphIndex];
     if (!docPara) continue;
-    injectSdtIntoParagraph(docDom, paraEl, docPara, tag, bookmarkCounter, STORE_ITEM_ID);
+    injectSdtIntoParagraph(
+      docDom,
+      paraEl,
+      docPara,
+      tag,
+      bookmarkCounter,
+      STORE_ITEM_ID,
+      categories
+    );
   }
 
   // ── Multi-paragraph tags: cross-paragraph bookmarks only ─────────────────
@@ -272,7 +295,7 @@ function injectTextContentControls(
   );
 
   for (const tag of sortedMulti) {
-    injectCrossParaBookmarks(docDom, allParas, tag, bookmarkCounter);
+    injectCrossParaBookmarks(docDom, allParas, tag, bookmarkCounter, categories);
   }
 }
 

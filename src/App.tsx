@@ -15,19 +15,18 @@
  *  └───────────┴──────────────────────────┴───────────────┘
  */
 
-import React, { Suspense, lazy, useState, useCallback, useEffect, useRef } from 'react';
+import React, { Suspense, lazy, useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { DocumentList } from './components/DocumentList';
 import { CreateProjectModal } from './components/CreateProjectModal';
 import { ResizablePanel } from './components/ResizablePanel';
 import { useDocumentStore } from './store/useDocumentStore';
-import type { Category, Tema } from './types';
-import { flattenCategories } from './data/categoryUtils';
+import type { Tema } from './types';
+import { flattenCategories, mergeCustomCategories } from './data/categoryUtils';
 
 // Import hierarchical category data
 import categoriesData from './data/categories.json';
 
-const teman: Tema[] = (categoriesData as { teman: Tema[] }).teman;
-const categories: Category[] = flattenCategories(teman);
+const builtInTeman: Tema[] = (categoriesData as { teman: Tema[] }).teman;
 
 const Header = lazy(() =>
   import('./components/Header').then((mod) => ({ default: mod.Header }))
@@ -51,7 +50,7 @@ function LoadingPanel({ label }: { label: string }) {
 }
 
 export default function App() {
-  const { docModel, setDocument, clearDocument, importGeometryJson, restoreProject, setPlanbeskrivningConfig, setDocxGmlGeometries } = useDocumentStore();
+  const { docModel, setDocument, clearDocument, importGeometryJson, restoreProject, setPlanbeskrivningConfig, setDocxGmlGeometries, appConfig } = useDocumentStore();
   const [isLoading, setIsLoading] = useState(false);
   const [parseError, setParseError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -60,6 +59,14 @@ export default function App() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const projectMenuButtonRef = useRef<HTMLButtonElement>(null);
   const projectMenuRef = useRef<HTMLDivElement>(null);
+
+  const { teman, categories } = useMemo(() => {
+    const mergedTeman = mergeCustomCategories(builtInTeman, appConfig.categories);
+    return {
+      teman: mergedTeman,
+      categories: flattenCategories(mergedTeman),
+    };
+  }, [appConfig.categories]);
 
   useEffect(() => {
     if (!projectMenuOpen) return;
@@ -330,7 +337,7 @@ export default function App() {
     <div className="h-screen flex flex-col overflow-hidden bg-gray-100">
       {/* Top header */}
       <Suspense fallback={<div className="h-14 shrink-0 bg-white border-b border-gray-200" />}>
-        <Header onClearDocument={handleClearDocument} />
+            <Header onClearDocument={handleClearDocument} categories={categories} />
       </Suspense>
 
       {/* Three-panel body */}

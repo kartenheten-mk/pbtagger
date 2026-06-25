@@ -2,9 +2,15 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { temporal } from 'zundo';
 import { v4 as uuidv4 } from 'uuid';
-import type { Tag, Geometry, DocModel, AppState, PendingSelection, PlanbeskrivningConfig, AppConfig, MapConfig } from '../types';
+import type { Tag, Geometry, DocModel, AppState, PendingSelection, PlanbeskrivningConfig, AppConfig, MapConfig, Tema } from '../types';
 import { buildDefaultConfig } from '../docx/PlanbeskrivningXmlBuilder';
 import { buildDefaultAppConfig, normalizeAppConfig } from '../config/appConfig';
+import {
+  createUniqueGroupId,
+  createUniqueUndergroupId,
+  mergeCustomCategories,
+} from '../data/categoryUtils';
+import rawCategories from '../data/categories.json';
 import {
   saveDocument as dbSave,
   getDocument as dbGet,
@@ -24,6 +30,8 @@ import {
 import { normalizeGeometrySource } from '../geometry/geometrySource';
 import { replaceDocxGmlGeometriesInState } from './geometryMerge';
 import { saveAs } from 'file-saver';
+
+const BUILT_IN_TEMAN: Tema[] = (rawCategories as { teman: Tema[] }).teman;
 
 interface DocumentActions {
   // ─── Document lifecycle ─────────────────────────────────────────────────
@@ -127,6 +135,10 @@ interface DocumentActions {
   setAppConfig: (config: AppConfig) => void;
   /** Replace only the map config section */
   setMapConfig: (mapConfig: MapConfig) => void;
+  /** Add a custom group below an existing tema and return the selectable category id */
+  addCustomGroup: (temaId: string, name: string) => string | null;
+  /** Add a custom undergroup below any visible group and return the selectable category id */
+  addCustomUndergroup: (temaId: string, gruppId: string, name: string) => string | null;
 }
 
 function createInitialState(): AppState {
@@ -654,9 +666,101 @@ export const useDocumentStore = create<AppState & DocumentActions>()(
             return next;
           }),
 
+        addCustomGroup: (temaId, name) => {
+          const trimmedName = name.trim();
+          if (!trimmedName) return null;
+
+          const state = get();
+          const currentConfig = normalizeAppConfig(state.appConfig);
+          const mergedTeman = mergeCustomCategories(
+            BUILT_IN_TEMAN,
+            currentConfig.categories
+          );
+          const id = createUniqueGroupId(mergedTeman, temaId, trimmedName);
+          if (!id) return null;
+
+          const nextConfig = normalizeAppConfig({
+            ...currentConfig,
+            categories: {
+              ...currentConfig.categories,
+              customGroups: [
+                ...currentConfig.categories.customGroups,
+                { temaId, id, name: trimmedName, undergrupper: [] },
+              ],
+            },
+          });
+
+          set({ appConfig: nextConfig });
+          debouncedSave({ ...state, appConfig: nextConfig });
+          return `${temaId}--${id}`;
+        },
+
+        addCustomUndergroup: (temaId, gruppId, name) => {
+          const trimmedName = name.trim();
+          if (!trimmedName) return null;
+
+          const state = get();
+          const currentConfig = normalizeAppConfig(state.appConfig);
+          const mergedTeman = mergeCustomCategories(
+            BUILT_IN_TEMAN,
+            currentConfig.categories
+          );
+          const id = createUniqueUndergroupId(
+            mergedTeman,
+            temaId,
+            gruppId,
+            trimmedName
+          );
+          if (!id) return null;
+
+          const customGroupIndex = currentConfig.categories.customGroups.findIndex(
+            (group) => group.temaId === temaId && group.id === gruppId
+          );
+          const nextCategories =
+            customGroupIndex >= 0
+              ? {
+                  ...currentConfig.categories,
+                  customGroups: currentConfig.categories.customGroups.map((group, index) =>
+                    index === customGroupIndex
+                      ? {
+                          ...group,
+                          undergrupper: [
+                            ...group.undergrupper,
+                            { id, name: trimmedName },
+                          ],
+                        }
+                      : group
+                  ),
+                }
+              : {
+                  ...currentConfig.categories,
+                  customUndergroups: [
+                    ...currentConfig.categories.customUndergroups,
+                    { temaId, gruppId, id, name: trimmedName },
+                  ],
+                };
+
+          const nextConfig = normalizeAppConfig({
+            ...currentConfig,
+            categories: nextCategories,
+          });
+
+          set({ appConfig: nextConfig });
+          debouncedSave({ ...state, appConfig: nextConfig });
+          return `${temaId}--${gruppId}--${id}`;
+        },
+
       }),
       {
         name: 'pb-tagger-storage',
+        merge: (persisted, current) => {
+          const persistedState = persisted as Partial<AppState>;
+          return {
+            ...current,
+            ...persistedState,
+            appConfig: normalizeAppConfig(persistedState.appConfig),
+          };
+        },
         // Only persist user-created data, not binary blobs or transient UI state
         partialize: (state) => ({
           tags: state.tags,

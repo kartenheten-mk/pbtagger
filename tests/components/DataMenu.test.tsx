@@ -1,6 +1,7 @@
 /** @vitest-environment jsdom */
 
 import React from 'react';
+import PizZip from 'pizzip';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { saveAs } from 'file-saver';
@@ -8,7 +9,7 @@ import { DataMenu } from '../../src/components/DataMenu';
 import { exportDocx } from '../../src/docx/DocxExporter';
 import { useDocumentStore } from '../../src/store/useDocumentStore';
 import { buildDefaultAppConfig } from '../../src/config/appConfig';
-import type { AppConfig, DocModel, Tag } from '../../src/types';
+import type { AppConfig, Category, DocModel, Tag } from '../../src/types';
 
 vi.mock('file-saver', () => ({
   saveAs: vi.fn(),
@@ -57,10 +58,16 @@ function resetStore(overrides: Partial<ReturnType<typeof useDocumentStore.getSta
   useDocumentStore.temporal.getState().clear();
 }
 
-function openMenu() {
-  const result = render(<DataMenu />);
+function openMenu(categories?: Category[]) {
+  const result = render(<DataMenu categories={categories} />);
   fireEvent.click(screen.getByRole('button', { name: 'Data' }));
   return result;
+}
+
+function makeZipBuffer(): ArrayBuffer {
+  const zip = new PizZip();
+  zip.file('word/document.xml', '<w:document />');
+  return zip.generate({ type: 'arraybuffer' });
 }
 
 describe('DataMenu export grouping', () => {
@@ -174,7 +181,7 @@ describe('DataMenu export grouping', () => {
 
   it('exports config.json separately', async () => {
     const config: AppConfig = {
-      version: 1,
+      ...buildDefaultAppConfig(),
       map: {
         activeBackgroundMapId: 'wms-1',
         backgroundMaps: [
@@ -203,9 +210,39 @@ describe('DataMenu export grouping', () => {
     expect(JSON.parse(await (blob as Blob).text())).toEqual(config);
   });
 
+  it('passes supplied categories into tagged DOCX export options', async () => {
+    const category: Category = {
+      id: 'genomforandefragor--kommunala-fragor',
+      name: 'Kommunala frågor',
+      level: 'grupp',
+      color: '#8b5cf6',
+      temaId: 'genomforandefragor',
+      temaName: 'Genomförandefrågor',
+      gruppId: 'kommunala-fragor',
+      gruppName: 'Kommunala frågor',
+      custom: true,
+    };
+    resetStore({
+      zipBuffer: makeZipBuffer(),
+      tags: [makeTag({ categoryId: category.id })],
+    });
+    vi.mocked(exportDocx).mockResolvedValue(undefined);
+
+    openMenu([category]);
+    fireEvent.click(screen.getByRole('button', { name: /Exportera taggat dokument/i }));
+
+    await waitFor(() => {
+      expect(exportDocx).toHaveBeenCalledTimes(1);
+    });
+
+    expect(vi.mocked(exportDocx).mock.calls[0][4]).toMatchObject({
+      categories: [category],
+    });
+  });
+
   it('imports config.json without changing document data', async () => {
     const config: AppConfig = {
-      version: 1,
+      ...buildDefaultAppConfig(),
       map: {
         activeBackgroundMapId: 'wms-1',
         backgroundMaps: [

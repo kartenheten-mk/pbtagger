@@ -4,7 +4,7 @@ import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { AssignTagPanel } from '../../../src/components/sidebar/AssignTagPanel';
-import { flattenCategories } from '../../../src/data/categoryUtils';
+import { flattenCategories, mergeCustomCategories } from '../../../src/data/categoryUtils';
 import type { Tema } from '../../../src/types';
 
 const teman: Tema[] = [
@@ -168,5 +168,49 @@ describe('AssignTagPanel', () => {
       'genomforandefragor--fastighetsrattsliga-fragor--rattigheter',
       ''
     );
+  });
+
+  it('shows merged custom categories in search results', () => {
+    const mergedTeman = mergeCustomCategories(teman, {
+      customGroups: [
+        {
+          temaId: 'genomforandefragor',
+          id: 'kommunala-fragor',
+          name: 'Kommunala frågor',
+          undergrupper: [],
+        },
+      ],
+      customUndergroups: [],
+    });
+
+    render(
+      <AssignTagPanel
+        teman={mergedTeman}
+        categories={flattenCategories(mergedTeman)}
+        pendingText="Markerad text"
+        onApply={vi.fn()}
+        onCancel={vi.fn()}
+      />
+    );
+
+    fireEvent.change(screen.getByPlaceholderText('Sök tagg...'), {
+      target: { value: 'kommunala' },
+    });
+
+    expect(screen.getByText('Kommunala frågor')).toBeTruthy();
+  });
+
+  it('does not render the custom category add button inside the assign panel', () => {
+    render(
+      <AssignTagPanel
+        teman={teman}
+        categories={categories}
+        pendingText="Markerad text"
+        onApply={vi.fn()}
+        onCancel={vi.fn()}
+      />
+    );
+
+    expect(screen.queryByRole('button', { name: 'Lägg till' })).toBeNull();
   });
 });

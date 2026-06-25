@@ -82,7 +82,14 @@ safeDefine('EPSG:3018', `+proj=tmerc +lat_0=0 +lon_0=23.25 ${TM_BASE}`);
 const _allCategories = flattenCategories(
   (rawCategories as unknown as { teman: Tema[] }).teman
 );
-const CATEGORY_MAP = new Map<string, Category>(_allCategories.map((c) => [c.id, c]));
+const DEFAULT_CATEGORIES = _allCategories;
+const CATEGORY_MAP = new Map<string, Category>(DEFAULT_CATEGORIES.map((c) => [c.id, c]));
+
+function getCategoryMap(categories?: Category[]): Map<string, Category> {
+  return categories
+    ? new Map(categories.map((category) => [category.id, category]))
+    : CATEGORY_MAP;
+}
 
 // ─── Validation types ─────────────────────────────────────────────────────────
 
@@ -170,7 +177,10 @@ function esc(s: string): string {
     .replace(/"/g, '&quot;');
 }
 
-export function getSpecExportEligibility(tag: Tag): SpecExportEligibility {
+export function getSpecExportEligibility(
+  tag: Tag,
+  categories?: Category[]
+): SpecExportEligibility {
   const targetType = tag.targetType ?? 'text';
   if (targetType !== 'text') {
     return {
@@ -179,7 +189,7 @@ export function getSpecExportEligibility(tag: Tag): SpecExportEligibility {
     };
   }
 
-  const category = CATEGORY_MAP.get(tag.categoryId);
+  const category = getCategoryMap(categories).get(tag.categoryId);
   if (!category) {
     return {
       eligible: false,
@@ -380,7 +390,11 @@ function matchesTagIdentitet(
   return !!lastToken && (tagUuidSuffix.startsWith(lastToken) || lastToken.startsWith(tagUuidSuffix));
 }
 
-function isMatchingImportedDocxGmlGeometryForTag(tag: Tag, geo: Geometry): boolean {
+function isMatchingImportedDocxGmlGeometryForTag(
+  tag: Tag,
+  geo: Geometry,
+  categories?: Category[]
+): boolean {
   if (!isSerializableDocxGmlGeometry(geo)) return false;
   const identitet =
     typeof geo.properties?.['identitet'] === 'string'
@@ -388,12 +402,18 @@ function isMatchingImportedDocxGmlGeometryForTag(tag: Tag, geo: Geometry): boole
       : '';
   if (!identitet) return false;
 
-  return matchesTagIdentitet(generateBookmarkName(tag), getTagUuidSuffix(tag), identitet);
+  return matchesTagIdentitet(generateBookmarkName(tag, categories), getTagUuidSuffix(tag), identitet);
 }
 
-function getDocxOnlyMatchedGmlGeometries(tag: Tag, allProjectGeometries: Geometry[]): Geometry[] {
+function getDocxOnlyMatchedGmlGeometries(
+  tag: Tag,
+  allProjectGeometries: Geometry[],
+  categories?: Category[]
+): Geometry[] {
   if (hasJsonGeometryLoaded(allProjectGeometries)) return [];
-  return allProjectGeometries.filter((geo) => isMatchingImportedDocxGmlGeometryForTag(tag, geo));
+  return allProjectGeometries.filter((geo) =>
+    isMatchingImportedDocxGmlGeometryForTag(tag, geo, categories)
+  );
 }
 
 function mergeUniqueGeometries(primary: Geometry[], secondary: Geometry[]): Geometry[] {
@@ -556,9 +576,11 @@ function deriveGeoIdentitet(baseIdentitet: string, geoIndex: number): string {
 function buildOmfattningBlocks(
   tag: Tag,
   geometryMap: Map<string, Geometry>,
-  allProjectGeometries: Geometry[]
+  allProjectGeometries: Geometry[],
+  categoryMap: Map<string, Category>,
+  categories?: Category[]
 ): OmfattningResult[] {
-  const category = CATEGORY_MAP.get(tag.categoryId);
+  const category = categoryMap.get(tag.categoryId);
 
   // Fallback category if not found
   const resolvedCategory: Category = category ?? {
@@ -573,7 +595,7 @@ function buildOmfattningBlocks(
   };
 
   // ── identitet (PLANB-005) ────────────────────────────────────────────────
-  const rawIdentitet = generateBookmarkName(tag);
+  const rawIdentitet = generateBookmarkName(tag, categories);
   let baseIdentitet = rawIdentitet;
   const identitetViolations: PlanbeskrivningValidationError[] = [];
 
@@ -600,7 +622,7 @@ function buildOmfattningBlocks(
     .filter((g): g is Geometry => g !== undefined);
   const linkedGeometries = mergeUniqueGeometries(
     explicitLinkedGeometries,
-    getDocxOnlyMatchedGmlGeometries(tag, allProjectGeometries)
+    getDocxOnlyMatchedGmlGeometries(tag, allProjectGeometries, categories)
   );
 
   const indelningXml = buildIndelning(resolvedCategory);
@@ -679,18 +701,20 @@ function hasPersistentIdentifier(value: string): boolean {
  */
 export function validatePlanbeskrivning(
   tags: Tag[],
-  geometries: Geometry[]
+  geometries: Geometry[],
+  categories?: Category[]
 ): ValidationResult {
   const errors: PlanbeskrivningValidationError[] = [];
   const warnings: PlanbeskrivningValidationWarning[] = [];
   const infos: PlanbeskrivningValidationInfo[] = [];
+  const categoryMap = getCategoryMap(categories);
 
   const geometryMap = new Map(geometries.map((g) => [g.uuid, g]));
   const seenIdentiteter = new Set<string>();
   const motivTagUuidsByBestammelseUuid = new Map<string, string[]>();
 
   for (const tag of tags) {
-    const eligibility = getSpecExportEligibility(tag);
+    const eligibility = getSpecExportEligibility(tag, categories);
     if (!eligibility.eligible) {
       warnings.push({
         message: `Tag ${tag.uuid}: exkluderad från Planbeskrivning-export. ${eligibility.reason ?? 'Okänd anledning.'}`,
@@ -699,9 +723,9 @@ export function validatePlanbeskrivning(
       continue;
     }
 
-    const identitet = generateBookmarkName(tag);
+    const identitet = generateBookmarkName(tag, categories);
     const identitetKey = identitet.toLowerCase();
-    const category = CATEGORY_MAP.get(tag.categoryId);
+    const category = categoryMap.get(tag.categoryId);
 
     // PLANB-005
     if (!IDENTITET_RE.test(identitet)) {
@@ -739,7 +763,7 @@ export function validatePlanbeskrivning(
       .filter((g): g is Geometry => g !== undefined);
     const linkedGeos = mergeUniqueGeometries(
       explicitLinkedGeos,
-      getDocxOnlyMatchedGmlGeometries(tag, geometries)
+      getDocxOnlyMatchedGmlGeometries(tag, geometries, categories)
     );
 
     // PLANB-001
@@ -839,12 +863,16 @@ export function validatePlanbeskrivning(
 export function buildPlanbeskrivningXml(
   config: PlanbeskrivningConfig,
   tags: Tag[],
-  geometries: Geometry[]
+  geometries: Geometry[],
+  categories?: Category[]
 ): string {
   const geometryMap = new Map(geometries.map((g) => [g.uuid, g]));
+  const categoryMap = getCategoryMap(categories);
 
   // Export only tags that are eligible for the spec-facing Planbeskrivning XML.
-  const exportableTags = tags.filter((t) => getSpecExportEligibility(t).eligible);
+  const exportableTags = tags.filter((t) =>
+    getSpecExportEligibility(t, categories).eligible
+  );
 
   // PLANB-003: track identiteter case-insensitively; suffix duplicates
   const usedIdentiteterLower = new Set<string>();
@@ -853,7 +881,13 @@ export function buildPlanbeskrivningXml(
 
   for (const tag of exportableTags) {
     // Each tag may produce multiple blocks (one per linked geometry).
-    const blocks = buildOmfattningBlocks(tag, geometryMap, geometries);
+    const blocks = buildOmfattningBlocks(
+      tag,
+      geometryMap,
+      geometries,
+      categoryMap,
+      categories
+    );
 
     for (const { xml, identitet } of blocks) {
       // PLANB-003: ensure uniqueness by appending _2, _3, … for duplicates

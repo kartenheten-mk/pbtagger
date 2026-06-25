@@ -1,4 +1,4 @@
-import type { Tag } from '../types';
+import type { Category, Tag } from '../types';
 import { NS } from './XmlHelpers';
 import { buildSdt, CUSTOM_XML_NS } from './ContentControlBuilder';
 import { generateBookmarkName, getBookmarkSuffix } from './bookmarkUtils';
@@ -122,7 +122,8 @@ export function injectBookmarkAroundRun(
   paraEl: Element,
   runIndex: number,
   tag: Tag,
-  bookmarkCounter: { value: number }
+  bookmarkCounter: { value: number },
+  categories?: Category[]
 ): boolean {
   const runs = collectTaggableRunElements(paraEl);
   const targetRun = runs[runIndex];
@@ -132,7 +133,7 @@ export function injectBookmarkAroundRun(
   if (!parent) return false;
 
   const bmId = bookmarkCounter.value++;
-  const bmName = generateBookmarkName(tag);
+  const bmName = generateBookmarkName(tag, categories);
 
   const bookmarkStart = docDom.createElementNS(NS.w, 'w:bookmarkStart');
   bookmarkStart.setAttributeNS(NS.w, 'w:id', String(bmId));
@@ -323,7 +324,8 @@ export function injectSdtIntoParagraph(
   docPara: import('../types').DocParagraph,
   tag: Tag,
   bookmarkCounter: { value: number },
-  storeId: string
+  storeId: string,
+  categories?: Category[]
 ): void {
   // Collect the <w:r> run elements that are direct or near-direct children
   const runElements = collectRunElements(paraEl);
@@ -392,7 +394,7 @@ export function injectSdtIntoParagraph(
 
   // Bookmark
   const bmId = bookmarkCounter.value++;
-  const bmName = generateBookmarkName(tag);
+  const bmName = generateBookmarkName(tag, categories);
 
   // <w:bookmarkStart w:id="N" w:name="..."/>
   const bookmarkStart = docDom.createElementNS(NS.w, 'w:bookmarkStart');
@@ -433,7 +435,8 @@ export function injectCrossParaBookmarks(
   docDom: Document,
   allParas: Element[],
   tag: import('../types').Tag,
-  bookmarkCounter: { value: number }
+  bookmarkCounter: { value: number },
+  categories?: Category[]
 ): void {
   const endParaIdx = tag.endParagraphIndex!;
   const startParaEl = allParas[tag.paragraphIndex];
@@ -441,7 +444,7 @@ export function injectCrossParaBookmarks(
   if (!startParaEl || !endParaEl) return;
 
   const bmId = bookmarkCounter.value++;
-  const bmName = generateBookmarkName(tag);
+  const bmName = generateBookmarkName(tag, categories);
 
   const bookmarkStart = docDom.createElementNS(NS.w, 'w:bookmarkStart');
   bookmarkStart.setAttributeNS(NS.w, 'w:id', String(bmId));

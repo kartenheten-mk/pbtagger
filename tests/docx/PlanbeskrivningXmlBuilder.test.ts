@@ -17,7 +17,7 @@ import {
   PLANBESKRIVNING_NS,
 } from '../../src/docx/PlanbeskrivningXmlBuilder';
 import { generateBookmarkName } from '../../src/docx/bookmarkUtils';
-import type { PlanbeskrivningConfig } from '../../src/types';
+import type { Category, PlanbeskrivningConfig } from '../../src/types';
 import type { Tag, Geometry } from '../../src/types';
 
 // ─── Test helpers ─────────────────────────────────────────────────────────────
@@ -87,6 +87,18 @@ function makeLineGeometry(overrides: Partial<Geometry> = {}): Geometry {
   };
 }
 
+const customCategory: Category = {
+  id: 'genomforandefragor--kommunala-fragor',
+  name: 'Kommunala frågor',
+  level: 'grupp',
+  color: '#8b5cf6',
+  temaId: 'genomforandefragor',
+  temaName: 'Genomförandefrågor',
+  gruppId: 'kommunala-fragor',
+  gruppName: 'Kommunala frågor',
+  custom: true,
+};
+
 /** Parse XML string and return the document for assertions */
 function parseXml(xml: string): Document {
   const parser = new DOMParser();
@@ -152,6 +164,30 @@ describe('getSpecExportEligibility', () => {
     const result = getSpecExportEligibility(makeTag({ categoryId: 'missing-category' }));
     expect(result.eligible).toBe(false);
     expect(result.reason).toContain('saknar BFS 2020:8-mappning');
+  });
+
+  it('allows custom text categories when the current category list is supplied', () => {
+    const tag = makeTag({ categoryId: customCategory.id });
+
+    expect(getSpecExportEligibility(tag).eligible).toBe(false);
+    expect(getSpecExportEligibility(tag, [customCategory])).toEqual({ eligible: true });
+  });
+});
+
+describe('custom category export mapping', () => {
+  it('validates and exports a supplied custom category', () => {
+    const tag = makeTag({ categoryId: customCategory.id });
+
+    const validationWithoutCategories = validatePlanbeskrivning([tag], []);
+    expect(validationWithoutCategories.warnings[0].message).toContain('exkluderad');
+
+    const validation = validatePlanbeskrivning([tag], [], [customCategory]);
+    expect(validation.errors).toHaveLength(0);
+    expect(validation.warnings).toHaveLength(0);
+
+    const xml = buildPlanbeskrivningXml(makeConfig(), [tag], [], [customCategory]);
+    expect(xml).toContain('<tema>genomförandefrågor</tema>');
+    expect(xml).toContain('<grupp>kommunala frågor</grupp>');
   });
 });
 

@@ -4,6 +4,7 @@ import {
   normalizeAppConfig,
   normalizeLayerNames,
   parseAppConfig,
+  serializeAppConfig,
 } from '../../src/config/appConfig';
 
 describe('app config helpers', () => {
@@ -13,6 +14,10 @@ describe('app config helpers', () => {
       map: {
         activeBackgroundMapId: null,
         backgroundMaps: [],
+      },
+      categories: {
+        customGroups: [],
+        customUndergroups: [],
       },
     });
   });
@@ -48,6 +53,10 @@ describe('app config helpers', () => {
     expect(normalized.map.activeBackgroundMapId).toBeNull();
     expect(normalized.map.backgroundMaps).toHaveLength(1);
     expect(normalized.map.backgroundMaps[0].id).toBe('valid');
+    expect(normalized.categories).toEqual({
+      customGroups: [],
+      customUndergroups: [],
+    });
   });
 
   it('validates imported config.json and normalizes unknown active ids to OSM', () => {
@@ -69,6 +78,49 @@ describe('app config helpers', () => {
 
     expect(parsed.map.activeBackgroundMapId).toBeNull();
     expect(parsed.map.backgroundMaps[0].layers).toEqual(['layer_a', 'layer_b']);
+    expect(parsed.categories).toEqual({
+      customGroups: [],
+      customUndergroups: [],
+    });
+  });
+
+  it('parses and serializes custom category config', () => {
+    const parsed = parseAppConfig({
+      version: 1,
+      map: {
+        activeBackgroundMapId: null,
+        backgroundMaps: [],
+      },
+      categories: {
+        customGroups: [
+          {
+            temaId: 'beskrivning-av-detaljplanen',
+            id: 'min-grupp',
+            name: 'Min grupp',
+            undergrupper: [
+              { id: 'min-undergrupp', name: 'Min undergrupp' },
+            ],
+          },
+        ],
+        customUndergroups: [
+          {
+            temaId: 'genomforandefragor',
+            gruppId: 'tekniska-fragor',
+            id: 'drift',
+            name: 'Drift',
+          },
+        ],
+      },
+    });
+
+    expect(parsed.categories.customGroups[0].undergrupper[0].id).toBe('min-undergrupp');
+    expect(parsed.categories.customUndergroups[0]).toMatchObject({
+      temaId: 'genomforandefragor',
+      gruppId: 'tekniska-fragor',
+      id: 'drift',
+    });
+
+    expect(JSON.parse(serializeAppConfig(parsed)).categories).toEqual(parsed.categories);
   });
 
   it('rejects unsupported config versions and empty layer lists', () => {
@@ -92,5 +144,55 @@ describe('app config helpers', () => {
         },
       })
     ).toThrow(/minst ett lagernamn/);
+  });
+
+  it('rejects duplicate custom category ids within the same parent', () => {
+    expect(() =>
+      parseAppConfig({
+        version: 1,
+        map: { activeBackgroundMapId: null, backgroundMaps: [] },
+        categories: {
+          customGroups: [
+            {
+              temaId: 'tema',
+              id: 'egen',
+              name: 'Egen',
+              undergrupper: [],
+            },
+            {
+              temaId: 'tema',
+              id: 'egen',
+              name: 'Egen igen',
+              undergrupper: [],
+            },
+          ],
+          customUndergroups: [],
+        },
+      })
+    ).toThrow(/duplicerad/);
+
+    expect(() =>
+      parseAppConfig({
+        version: 1,
+        map: { activeBackgroundMapId: null, backgroundMaps: [] },
+        categories: {
+          customGroups: [],
+          customUndergroups: [
+            {
+              temaId: 'tema',
+              gruppId: 'grupp',
+              id: 'egen',
+              name: 'Egen',
+            },
+            {
+              temaId: 'tema',
+              gruppId: 'grupp',
+              id: 'egen',
+              name: 'Egen igen',
+            },
+          ],
+        },
+      })
+    ).toThrow(/duplicerad/);
   });
 });

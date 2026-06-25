@@ -3,12 +3,14 @@
 export interface Undergrupp {
   id: string;
   name: string;
+  custom?: boolean;
 }
 
 export interface Grupp {
   id: string;
   name: string;
   undergrupper: Undergrupp[];
+  custom?: boolean;
 }
 
 export interface Tema {
@@ -16,6 +18,7 @@ export interface Tema {
   name: string;
   color: string;
   grupper: Grupp[];
+  custom?: boolean;
 }
 
 // ─── Category (flattened selectable level, derived from the hierarchy) ───────
@@ -45,6 +48,8 @@ export interface Category {
   undergruppId?: string;
   /** Set when this category is an undergrupp */
   undergruppName?: string;
+  /** True when this selectable category comes from config.json */
+  custom?: boolean;
 }
 
 // ─── Tag ─────────────────────────────────────────────────────────────────────
@@ -277,9 +282,34 @@ export interface MapConfig {
   backgroundMaps: WmsBackgroundMap[];
 }
 
+export interface CustomGroupUndergroup {
+  id: string;
+  name: string;
+}
+
+export interface CustomGroup {
+  temaId: string;
+  id: string;
+  name: string;
+  undergrupper: CustomGroupUndergroup[];
+}
+
+export interface CustomUndergroup {
+  temaId: string;
+  gruppId: string;
+  id: string;
+  name: string;
+}
+
+export interface CategoryConfig {
+  customGroups: CustomGroup[];
+  customUndergroups: CustomUndergroup[];
+}
+
 export interface AppConfig {
   version: 1;
   map: MapConfig;
+  categories: CategoryConfig;
 }
 
 // ─── App State ───────────────────────────────────────────────────────────────

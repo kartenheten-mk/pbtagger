@@ -16,6 +16,7 @@ import React, { Suspense, lazy, useRef, useState, useEffect, useCallback } from 
 import { saveAs } from 'file-saver';
 import { useDocumentStore } from '../store/useDocumentStore';
 import { CONFIG_FILE_NAME, parseAppConfig, serializeAppConfig } from '../config/appConfig';
+import type { Category } from '../types';
 
 const PlanbeskrivningConfigPanel = lazy(() =>
   import('./PlanbeskrivningConfigPanel').then((mod) => ({
@@ -109,7 +110,11 @@ function ActionCard({
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export const DataMenu: React.FC = () => {
+interface DataMenuProps {
+  categories?: Category[];
+}
+
+export const DataMenu: React.FC<DataMenuProps> = ({ categories }) => {
   const {
     zipBuffer,
     docModel,
@@ -222,6 +227,7 @@ export const DataMenu: React.FC = () => {
       const pbOpts = {
         config: planbeskrivningConfig ?? buildDefaultConfig(activeGeometryDocId ?? undefined),
         geometries,
+        categories,
         enforceCompliance: enforcePlanbeskrivningCompliance,
       };
       await exportDocx(zip, docModel, tags, fileName, pbOpts);
@@ -238,7 +244,7 @@ export const DataMenu: React.FC = () => {
     } finally {
       setExportingDocx(false);
     }
-  }, [zipBuffer, docModel, tags, fileName, planbeskrivningConfig, activeGeometryDocId, geometries, enforcePlanbeskrivningCompliance]);
+  }, [zipBuffer, docModel, tags, fileName, planbeskrivningConfig, activeGeometryDocId, geometries, categories, enforcePlanbeskrivningCompliance]);
 
   // ── Export original geometry JSON ──────────────────────────────────────────
   const handleExportOriginalGeo = useCallback(async () => {

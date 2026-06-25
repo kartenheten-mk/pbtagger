@@ -6,7 +6,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { PlanbeskrivningValidityIndicator } from '../../src/components/PlanbeskrivningValidityIndicator';
 import { useDocumentStore } from '../../src/store/useDocumentStore';
 import { buildDefaultAppConfig } from '../../src/config/appConfig';
-import type { Tag } from '../../src/types';
+import type { Category, Tag } from '../../src/types';
 
 function makeTag(overrides: Partial<Tag> = {}): Tag {
   return {
@@ -21,6 +21,18 @@ function makeTag(overrides: Partial<Tag> = {}): Tag {
     ...overrides,
   };
 }
+
+const customCategory: Category = {
+  id: 'genomforandefragor--kommunala-fragor',
+  name: 'Kommunala frågor',
+  level: 'grupp',
+  color: '#8b5cf6',
+  temaId: 'genomforandefragor',
+  temaName: 'Genomförandefrågor',
+  gruppId: 'kommunala-fragor',
+  gruppName: 'Kommunala frågor',
+  custom: true,
+};
 
 function resetStore() {
   useDocumentStore.setState({
@@ -105,5 +117,26 @@ describe('PlanbeskrivningValidityIndicator', () => {
     expect(screen.getByText('Varningar (1)')).toBeTruthy();
     expect(screen.getByText(/imported DOCX Planbeskrivning XML/)).toBeTruthy();
     expect(screen.queryByText(/Information/)).toBeNull();
+  });
+
+  it('validates custom categories supplied by the app', () => {
+    useDocumentStore.setState({
+      tags: [makeTag({ categoryId: customCategory.id })],
+      geometries: [],
+    });
+
+    render(<PlanbeskrivningValidityIndicator categories={[customCategory]} />);
+
+    act(() => {
+      vi.advanceTimersByTime(600);
+    });
+
+    const button = screen.getByRole('button', {
+      name: 'Inga fel eller varningar. 1 informationspost.',
+    });
+    fireEvent.click(button);
+
+    expect(screen.getByText(/will use <planomrade>Ja<\/planomrade> as fallback/)).toBeTruthy();
+    expect(screen.queryByText(/exkluderad/)).toBeNull();
   });
 });

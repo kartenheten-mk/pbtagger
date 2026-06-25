@@ -11,12 +11,14 @@ import { useStoreWithEqualityFn } from 'zustand/traditional';
 import { DataMenu } from './DataMenu';
 import { getAllDocuments } from '../db/documentDb';
 import { PlanbeskrivningValidityIndicator } from './PlanbeskrivningValidityIndicator';
+import type { Category } from '../types';
 
 interface HeaderProps {
   onClearDocument: () => void;
+  categories: Category[];
 }
 
-export const Header: React.FC<HeaderProps> = ({ onClearDocument }) => {
+export const Header: React.FC<HeaderProps> = ({ onClearDocument, categories }) => {
   const { fileName, tags, showTags, toggleShowTags, documentId, setFileName } = useDocumentStore();
 
   // ─── Inline rename state ───────────────────────────────────────────────
@@ -236,10 +238,10 @@ export const Header: React.FC<HeaderProps> = ({ onClearDocument }) => {
       </div>
 
       {/* Planbeskrivning export validity indicator */}
-      <PlanbeskrivningValidityIndicator />
+      <PlanbeskrivningValidityIndicator categories={categories} />
 
       {/* ── Data menu (import + export) ── */}
-      <DataMenu />
+      <DataMenu categories={categories} />
 
       {/* Close / new file button */}
       <button

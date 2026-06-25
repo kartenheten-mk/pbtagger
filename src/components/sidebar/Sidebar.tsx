@@ -2,6 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import type { Category, Tag, Tema } from '../../types';
 import { useDocumentStore } from '../../store/useDocumentStore';
+import {
+  createUniqueGroupId,
+  createUniqueUndergroupId,
+} from '../../data/categoryUtils';
 import { AssignTagPanel } from './AssignTagPanel';
 import { ViewTagsPanel } from './ViewTagsPanel';
 
@@ -24,10 +28,23 @@ export const Sidebar: React.FC<SidebarProps> = ({ teman, categories }) => {
     unlinkGeometry,
     addTags,
     setPendingSelection,
+    addCustomGroup,
+    addCustomUndergroup,
   } = useDocumentStore();
 
   const [mode, setMode] = useState<SidebarMode>('view');
   const [showLegend, setShowLegend] = useState(false);
+  const [addModalOpen, setAddModalOpen] = useState(false);
+  const [customType, setCustomType] = useState<'grupp' | 'undergrupp'>('grupp');
+  const [customTemaId, setCustomTemaId] = useState('');
+  const [customGruppId, setCustomGruppId] = useState('');
+  const [customName, setCustomName] = useState('');
+  const [customError, setCustomError] = useState<string | null>(null);
+  const [createdCategoryId, setCreatedCategoryId] = useState<string | null>(null);
+  const [assignPickerSelection, setAssignPickerSelection] = useState({
+    temaId: '',
+    gruppId: '',
+  });
 
   // ── Auto-switch to Assign mode when a new selection is created ────────────
   useEffect(() => {
@@ -42,6 +59,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ teman, categories }) => {
       setMode('view');
     }
   }, [selectedTagUuid]);
+
+  useEffect(() => {
+    if (mode !== 'assign') {
+      setAddModalOpen(false);
+    }
+  }, [mode]);
 
   const handleCancelAssign = () => {
     setPendingSelection(null);
@@ -125,6 +148,82 @@ export const Sidebar: React.FC<SidebarProps> = ({ teman, categories }) => {
   const getCategoryById = (id: string): Category | undefined =>
     categories.find((c) => c.id === id);
 
+  const canAddCustomCategory = mode === 'assign' && !!addCustomGroup && !!addCustomUndergroup;
+  const customTema = teman.find((t) => t.id === customTemaId);
+  const customGrupp = customTema?.grupper.find((g) => g.id === customGruppId);
+  const trimmedCustomName = customName.trim();
+  const generatedCustomId =
+    trimmedCustomName && customType === 'grupp'
+      ? customTemaId
+        ? createUniqueGroupId(teman, customTemaId, trimmedCustomName)
+        : null
+      : trimmedCustomName && customTemaId && customGruppId
+        ? createUniqueUndergroupId(teman, customTemaId, customGruppId, trimmedCustomName)
+        : null;
+  const previewCategoryId =
+    generatedCustomId && customTemaId
+      ? customType === 'grupp'
+        ? `${customTemaId}--${generatedCustomId}`
+        : customGruppId
+          ? `${customTemaId}--${customGruppId}--${generatedCustomId}`
+          : ''
+      : '';
+  const canSaveCustomCategory =
+    !!trimmedCustomName &&
+    !!customTema &&
+    (customType === 'grupp' || !!customGrupp) &&
+    !!previewCategoryId;
+
+  const openAddModal = () => {
+    const defaultTemaId = assignPickerSelection.temaId || teman[0]?.id || '';
+    const defaultTema = teman.find((tema) => tema.id === defaultTemaId);
+    const defaultGruppId =
+      assignPickerSelection.gruppId || defaultTema?.grupper[0]?.id || '';
+    setCustomType(assignPickerSelection.gruppId ? 'undergrupp' : 'grupp');
+    setCustomTemaId(defaultTemaId);
+    setCustomGruppId(defaultGruppId);
+    setCustomName('');
+    setCustomError(null);
+    setAddModalOpen(true);
+  };
+
+  const handleCustomTemaChange = (temaId: string) => {
+    const tema = teman.find((item) => item.id === temaId);
+    setCustomTemaId(temaId);
+    setCustomGruppId(tema?.grupper[0]?.id ?? '');
+    setCustomError(null);
+  };
+
+  const handleSaveCustomCategory = () => {
+    if (!canAddCustomCategory) return;
+    if (!trimmedCustomName) {
+      setCustomError('Ange ett namn.');
+      return;
+    }
+    if (!customTema) {
+      setCustomError('Välj tema.');
+      return;
+    }
+    if (customType === 'undergrupp' && !customGrupp) {
+      setCustomError('Välj grupp.');
+      return;
+    }
+
+    const categoryId =
+      customType === 'grupp'
+        ? addCustomGroup(customTemaId, trimmedCustomName)
+        : addCustomUndergroup(customTemaId, customGruppId, trimmedCustomName);
+
+    if (!categoryId) {
+      setCustomError('Kunde inte skapa kategorin.');
+      return;
+    }
+
+    setCreatedCategoryId(categoryId);
+    setAddModalOpen(false);
+    setCustomError(null);
+  };
+
   return (
     <aside className="w-full bg-white flex flex-col h-full overflow-hidden">
       {/* ── Mode toggle ─────────────────────────────────────────────────── */}
@@ -173,6 +272,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ teman, categories }) => {
           pendingText={pendingSelection ? pendingSelection.map((s) => s.text).join('\n\n') : null}
           onApply={handleApplyTag}
           onCancel={handleCancelAssign}
+          createdCategoryId={createdCategoryId}
+          onPickerSelectionChange={setAssignPickerSelection}
         />
       ) : (
         <ViewTagsPanel
@@ -197,22 +298,38 @@ export const Sidebar: React.FC<SidebarProps> = ({ teman, categories }) => {
           </span>
         </div>
 
-        <button
-          onClick={() => setShowLegend(!showLegend)}
-          className={`w-7 h-7 rounded-full flex items-center justify-center transition-all ${showLegend
-              ? 'bg-blue-600 text-white shadow-md rotate-180'
-              : 'bg-white text-gray-400 hover:text-gray-600 border border-gray-200'
-            }`}
-          title="Visa teckenförklaring"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            {showLegend ? (
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
-            ) : (
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            )}
-          </svg>
-        </button>
+        <div className="flex items-center gap-2">
+          {canAddCustomCategory && (
+            <button
+              type="button"
+              onClick={openAddModal}
+              className="w-7 h-7 rounded-full flex items-center justify-center transition-all bg-white text-blue-500 hover:text-blue-700 hover:bg-blue-50 border border-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-400"
+              title="Lägg till kategori"
+              aria-label="Lägg till kategori"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" />
+              </svg>
+            </button>
+          )}
+
+          <button
+            onClick={() => setShowLegend(!showLegend)}
+            className={`w-7 h-7 rounded-full flex items-center justify-center transition-all ${showLegend
+                ? 'bg-blue-600 text-white shadow-md rotate-180'
+                : 'bg-white text-gray-400 hover:text-gray-600 border border-gray-200'
+              }`}
+            title="Visa teckenförklaring"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              {showLegend ? (
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+              ) : (
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              )}
+            </svg>
+          </button>
+        </div>
 
         {/* Legend Popover */}
         {showLegend && (
@@ -242,6 +359,170 @@ export const Sidebar: React.FC<SidebarProps> = ({ teman, categories }) => {
           </div>
         )}
       </footer>
+
+      {addModalOpen && (
+        <div className="fixed inset-0 z-[130] flex items-center justify-center bg-black/30 px-4">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="custom-category-title"
+            className="w-full max-w-sm rounded-2xl border border-gray-200 bg-white shadow-2xl"
+          >
+            <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
+              <h2 id="custom-category-title" className="text-sm font-semibold text-gray-800">
+                Lägg till kategori
+              </h2>
+              <button
+                type="button"
+                onClick={() => setAddModalOpen(false)}
+                className="rounded-md p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
+                aria-label="Stäng"
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="space-y-4 px-4 py-4">
+              <div>
+                <label className="mb-1.5 block text-xs font-semibold text-gray-500">
+                  Typ
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCustomType('grupp');
+                      setCustomError(null);
+                    }}
+                    className={`rounded-lg border px-3 py-2 text-xs font-semibold transition-colors ${
+                      customType === 'grupp'
+                        ? 'border-blue-500 bg-blue-50 text-blue-700'
+                        : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    Grupp
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCustomType('undergrupp');
+                      if (!customGruppId) {
+                        setCustomGruppId(customTema?.grupper[0]?.id ?? '');
+                      }
+                      setCustomError(null);
+                    }}
+                    className={`rounded-lg border px-3 py-2 text-xs font-semibold transition-colors ${
+                      customType === 'undergrupp'
+                        ? 'border-blue-500 bg-blue-50 text-blue-700'
+                        : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    Undergrupp
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label htmlFor="custom-category-tema" className="mb-1.5 block text-xs font-semibold text-gray-500">
+                  Tema
+                </label>
+                <select
+                  id="custom-category-tema"
+                  value={customTemaId}
+                  onChange={(event) => handleCustomTemaChange(event.target.value)}
+                  className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                >
+                  {teman.map((tema) => (
+                    <option key={tema.id} value={tema.id}>
+                      {tema.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {customType === 'undergrupp' && (
+                <div>
+                  <label htmlFor="custom-category-grupp" className="mb-1.5 block text-xs font-semibold text-gray-500">
+                    Grupp
+                  </label>
+                  <select
+                    id="custom-category-grupp"
+                    value={customGruppId}
+                    onChange={(event) => {
+                      setCustomGruppId(event.target.value);
+                      setCustomError(null);
+                    }}
+                    className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  >
+                    {customTema?.grupper.map((grupp) => (
+                      <option key={grupp.id} value={grupp.id}>
+                        {grupp.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <div>
+                <label htmlFor="custom-category-name" className="mb-1.5 block text-xs font-semibold text-gray-500">
+                  Namn
+                </label>
+                <input
+                  id="custom-category-name"
+                  type="text"
+                  value={customName}
+                  onChange={(event) => {
+                    setCustomName(event.target.value);
+                    setCustomError(null);
+                  }}
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-xs text-gray-700 placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  placeholder="Namn"
+                  autoFocus
+                />
+              </div>
+
+              <div className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+                  ID
+                </p>
+                <p className="mt-0.5 break-all font-mono text-xs text-gray-700">
+                  {previewCategoryId || '-'}
+                </p>
+              </div>
+
+              {customError && (
+                <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700">
+                  {customError}
+                </p>
+              )}
+            </div>
+
+            <div className="flex gap-2 border-t border-gray-100 px-4 py-3">
+              <button
+                type="button"
+                onClick={() => setAddModalOpen(false)}
+                className="w-full rounded-lg bg-gray-100 px-3 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-200"
+              >
+                Avbryt
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveCustomCategory}
+                disabled={!canSaveCustomCategory}
+                className={`w-full rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
+                  canSaveCustomCategory
+                    ? 'bg-gray-900 text-white hover:bg-gray-800'
+                    : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                }`}
+              >
+                Spara
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </aside>
   );
 };
