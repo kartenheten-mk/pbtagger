@@ -6,6 +6,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import App from '../src/App';
 import { useDocumentStore } from '../src/store/useDocumentStore';
 import { buildDefaultAppConfig } from '../src/config/appConfig';
+import { DOCUMENTATION_URL } from '../src/config/documentation';
 
 vi.mock('../src/components/DocumentList', () => ({
   DocumentList: () => <div data-testid="document-list" />,
@@ -67,6 +68,10 @@ describe('App start page project menu', () => {
 
     expect(screen.getByRole('button', { name: /Skapa projekt/i })).toBeTruthy();
     expect(screen.getByText('Tagga och länka planbeskrivningar till geometrier.')).toBeTruthy();
+    const documentationLink = screen.getByRole('link', { name: /Öppna dokumentation/i });
+    expect(documentationLink.getAttribute('href')).toBe(DOCUMENTATION_URL);
+    expect(documentationLink.getAttribute('target')).toBe('_blank');
+    expect(documentationLink.getAttribute('rel')).toBe('noreferrer');
     expect(screen.queryByText('Import Project')).toBeNull();
   });
 

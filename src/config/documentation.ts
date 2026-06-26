@@ -1,0 +1,1 @@
+export const DOCUMENTATION_URL = 'https://kartenheten-mk.github.io/pbtagger/';
