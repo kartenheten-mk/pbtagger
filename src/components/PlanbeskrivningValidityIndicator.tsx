@@ -7,7 +7,7 @@ import {
   type PlanbeskrivningValidationWarning,
   type ValidationResult,
 } from '../docx/PlanbeskrivningXmlBuilder';
-import type { Tag } from '../types';
+import type { Category, Tag } from '../types';
 
 const VALIDATION_DEBOUNCE_MS = 500;
 const VALIDATION_INTERVAL_MS = 30000;
@@ -104,15 +104,21 @@ function ValidationIssueRow({
   );
 }
 
-export const PlanbeskrivningValidityIndicator: React.FC = () => {
+interface PlanbeskrivningValidityIndicatorProps {
+  categories?: Category[];
+}
+
+export const PlanbeskrivningValidityIndicator: React.FC<PlanbeskrivningValidityIndicatorProps> = ({
+  categories,
+}) => {
   const { tags, geometries, selectTag } = useDocumentStore();
   const [validation, setValidation] = useState<ValidationResult | null>(null);
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
   const runValidation = useCallback(() => {
-    setValidation(validatePlanbeskrivning(tags, geometries));
-  }, [tags, geometries]);
+    setValidation(validatePlanbeskrivning(tags, geometries, categories));
+  }, [tags, geometries, categories]);
 
   useEffect(() => {
     const timer = window.setTimeout(runValidation, VALIDATION_DEBOUNCE_MS);

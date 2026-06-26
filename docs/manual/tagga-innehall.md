@@ -28,6 +28,18 @@ Objekttaggar visas med en badge i dokumentvyn. Badgen kan användas för att vä
 
 I **Tilldela tagg** kan du söka efter kategori. Sökningen matchar tema, grupp, undergrupp och den sammansatta kategoritexten.
 
+## Lägga till egen grupp eller undergrupp
+
+I **Tilldela tagg** kan du klicka på plusknappen längst ner i sidopanelen för att skapa en egen kategori i projektet.
+
+1. Välj om du vill skapa **Grupp** eller **Undergrupp**.
+2. Välj befintligt **Tema**.
+3. Välj **Grupp** om du skapar en undergrupp.
+4. Skriv namn och kontrollera det föreslagna ID:t.
+5. Klicka på **Spara**.
+
+Den nya gruppen eller undergruppen väljs direkt och går att använda i taggning och sökning. Egna kategorier sparas i projektets `config.json` och följer med vid export/import av projekt eller konfiguration.
+
 ## Visa och filtrera taggar
 
 Fliken **Visa taggar** listar alla taggar i dokumentordning. Du kan filtrera på tema och klicka på en tagg för att:

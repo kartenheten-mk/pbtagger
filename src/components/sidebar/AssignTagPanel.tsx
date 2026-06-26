@@ -9,6 +9,8 @@ export interface AssignTagPanelProps {
   pendingText: string | null;
   onApply: (categoryId: string, note: string) => void;
   onCancel: () => void;
+  createdCategoryId?: string | null;
+  onPickerSelectionChange?: (selection: { temaId: string; gruppId: string }) => void;
 }
 
 export const AssignTagPanel: React.FC<AssignTagPanelProps> = ({
@@ -17,6 +19,8 @@ export const AssignTagPanel: React.FC<AssignTagPanelProps> = ({
   pendingText,
   onApply,
   onCancel,
+  createdCategoryId,
+  onPickerSelectionChange,
 }) => {
   const [selectedTemaId, setSelectedTemaId] = useState('');
   const [selectedGruppId, setSelectedGruppId] = useState('');
@@ -40,6 +44,24 @@ export const AssignTagPanel: React.FC<AssignTagPanelProps> = ({
   const selectedCategory = categories.find((c) => c.id === selectedCategoryId);
   const hasUndergrupper = (selectedGrupp?.undergrupper.length ?? 0) > 0;
   const canApply = !!pendingText && !!selectedCategoryId;
+
+  useEffect(() => {
+    onPickerSelectionChange?.({
+      temaId: selectedTemaId,
+      gruppId: selectedGruppId,
+    });
+  }, [onPickerSelectionChange, selectedTemaId, selectedGruppId]);
+
+  useEffect(() => {
+    if (!createdCategoryId) return;
+    const category = categories.find((c) => c.id === createdCategoryId);
+    if (!category) return;
+
+    setSelectedTemaId(category.temaId);
+    setSelectedGruppId(category.gruppId);
+    setSelectedCategoryId(category.id);
+    setSearchQuery('');
+  }, [categories, createdCategoryId]);
 
   // Auto-scroll to Grupp section when a Tema is selected
   useEffect(() => {

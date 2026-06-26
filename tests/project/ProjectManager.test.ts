@@ -28,7 +28,7 @@ import { exportProject, importProject } from '../../src/project/ProjectManager';
 const docModel = { paragraphs: [] };
 
 const appConfig: AppConfig = {
-  version: 1,
+  ...buildDefaultAppConfig(),
   map: {
     activeBackgroundMapId: 'wms-1',
     backgroundMaps: [

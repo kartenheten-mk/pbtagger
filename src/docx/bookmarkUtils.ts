@@ -1,4 +1,4 @@
-import type { Tag, Tema } from '../types';
+import type { Category, Tag, Tema } from '../types';
 import { NS } from './XmlHelpers';
 import rawCategories from '../data/categories.json';
 import { flattenCategories, getCategoryLabel } from '../data/categoryUtils';
@@ -18,6 +18,12 @@ function hashString(str: string): string {
 }
 
 const HASH_TO_CATEGORY = new Map(_allCategories.map((c) => [hashString(c.id), c.id]));
+
+function getCategoryMap(categories?: Category[]): Map<string, Category> {
+  return categories
+    ? new Map(categories.map((category) => [category.id, category]))
+    : CATEGORY_MAP;
+}
 
 /**
  * Scan the document for the highest existing <w:bookmarkStart w:id="..."/>
@@ -47,8 +53,8 @@ export function findMaxBookmarkId(docDom: Document): number {
  * We derive a human-readable base from the category label and append
  * the first 8 hex chars of the UUID to guarantee uniqueness.
  */
-export function generateBookmarkName(tag: Tag): string {
-  const cat = CATEGORY_MAP.get(tag.categoryId);
+export function generateBookmarkName(tag: Tag, categories?: Category[]): string {
+  const cat = getCategoryMap(categories).get(tag.categoryId);
   let base = cat ? getCategoryLabel(cat) : tag.categoryId;
 
   // Transliterate common Swedish / accented characters

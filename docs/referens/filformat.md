@@ -21,7 +21,7 @@ Projektfilen är en ZIP som innehåller:
 
 ## `config.json`
 
-Konfigurationsfilen innehåller appinställningar som kan flyttas mellan projekt. I nuläget gäller det framför allt kartkonfiguration.
+Konfigurationsfilen innehåller appinställningar som kan flyttas mellan projekt. Den innehåller kartkonfiguration och egna taggningskategorier.
 
 Exempel med en sparad WMS-bakgrund:
 
@@ -39,6 +39,29 @@ Exempel med en sparad WMS-bakgrund:
         "layers": ["baskarta", "fastighetsgranser"]
       }
     ]
+  },
+  "categories": {
+    "customGroups": [
+      {
+        "temaId": "beskrivning-av-detaljplanen",
+        "id": "min-grupp",
+        "name": "Min grupp",
+        "undergrupper": [
+          {
+            "id": "min-undergrupp",
+            "name": "Min undergrupp"
+          }
+        ]
+      }
+    ],
+    "customUndergroups": [
+      {
+        "temaId": "genomforandefragor",
+        "gruppId": "tekniska-fragor",
+        "id": "drift",
+        "name": "Drift"
+      }
+    ]
   }
 }
 ```
@@ -53,8 +76,18 @@ Exempel med en sparad WMS-bakgrund:
 | `name` | Namnet som visas i kartinställningarna. |
 | `url` | WMS-adress som börjar med `http://` eller `https://`. |
 | `layers` | Ett eller flera WMS-lagernamn. Det översta lagret i listan ritas överst i kartan. |
+| `categories.customGroups` | Egna grupper under befintliga teman. |
+| `categories.customGroups[].temaId` | ID för temat som gruppen hör till. |
+| `categories.customGroups[].id` | Stabilt grupp-ID. |
+| `categories.customGroups[].name` | Gruppnamn som visas i appen. |
+| `categories.customGroups[].undergrupper` | Egna undergrupper under den egna gruppen. |
+| `categories.customUndergroups` | Egna undergrupper under befintliga eller importerade grupper. |
+| `categories.customUndergroups[].temaId` | ID för temat som undergruppen hör till. |
+| `categories.customUndergroups[].gruppId` | ID för gruppen som undergruppen hör till. |
+| `categories.customUndergroups[].id` | Stabilt undergrupps-ID. |
+| `categories.customUndergroups[].name` | Undergruppsnamn som visas i appen. |
 
-Det rekommenderade sättet att ändra kartkonfigurationen är via **Kartinställningar** i appen. Om `config.json` redigeras manuellt måste varje WMS-karta ha namn, adress och minst ett lager.
+Det rekommenderade sättet att ändra kartkonfiguration och egna kategorier är via appens gränssnitt. Om `config.json` redigeras manuellt måste varje WMS-karta ha namn, adress och minst ett lager. Egna kategorier måste ha `temaId`, `id` och `name`; undergrupper utanför `customGroups` måste även ha `gruppId`.
 
 ## `omfattningar.xml`
 
