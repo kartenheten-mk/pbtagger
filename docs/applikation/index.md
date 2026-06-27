@@ -15,4 +15,4 @@ Den här delen beskriver gränssnittets huvudytor och vad de ansvarar för.
 | Dokumentvy | Renderar DOCX-innehåll, hanterar markeringar och visar taggar. |
 | Sidopanel | Tilldelar taggar och visar befintliga taggar. |
 | Kartpanel | Visar geometrier, filter och länkningsläge. |
-| Datameny | Samlar import, export, config och Planbeskrivning-inställningar. |
+| Datameny | Samlar import, export inklusive tagg-JSON, config och Planbeskrivning-inställningar. |

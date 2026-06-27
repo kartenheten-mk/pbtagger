@@ -8,6 +8,74 @@ Word-dokumentet är källan för text, bilder, tabeller och export. Appen bevara
 
 Detaljplan-JSON används för geometrier. Original-JSON sparas så att den kan exporteras oförändrad eller med motiv.
 
+Appen kan också exportera taggar som en platt JSON-fil för vidare bearbetning i script eller databaser. Den exporten har `schemaVersion` `1` och innehåller taggdata, kategorier och länkad geometri som ren GeoJSON Geometry.
+
+Exempel på en förkortad tagg-JSON-export:
+
+```json
+{
+  "schemaVersion": 1,
+  "exportedAt": "2026-06-27T12:00:00.000Z",
+  "sourceDocument": {
+    "fileName": "Planbeskrivning.docx",
+    "activeGeometryDocId": "plan-1"
+  },
+  "summary": {
+    "tagCount": 1,
+    "linkedGeometryCount": 1,
+    "categories": [
+      {
+        "categoryId": "detaljplanens-syfte--syfte",
+        "level": "grupp",
+        "temaId": "detaljplanens-syfte",
+        "temaName": "Detaljplanens syfte",
+        "gruppId": "syfte",
+        "gruppName": "Syfte",
+        "undergruppId": null,
+        "undergruppName": null,
+        "custom": false,
+        "tagCount": 1
+      }
+    ],
+    "unknownCategoryIds": []
+  },
+  "tags": [
+    {
+      "uuid": "tag-1",
+      "targetType": "text",
+      "text": "Markerad text",
+      "note": null,
+      "createdAt": "2026-06-27T12:00:00.000Z",
+      "paragraphIndex": 0,
+      "startOffset": 10,
+      "endParagraphIndex": 0,
+      "endOffset": 24,
+      "runId": null,
+      "tableId": null,
+      "categoryId": "detaljplanens-syfte--syfte",
+      "categoryLevel": "grupp",
+      "temaId": "detaljplanens-syfte",
+      "temaName": "Detaljplanens syfte",
+      "gruppId": "syfte",
+      "gruppName": "Syfte",
+      "undergruppId": null,
+      "undergruppName": null,
+      "customCategory": false,
+      "geometryIds": ["geo-1"],
+      "missingGeometryIds": [],
+      "geometries": [
+        {
+          "type": "Point",
+          "coordinates": [18.1, 59.3]
+        }
+      ]
+    }
+  ]
+}
+```
+
+`geometries` innehåller bara GeoJSON Geometry-objekt. Råa properties från importerad detaljplan-JSON exporteras inte i tagg-JSON-filen.
+
 ## `.pbproject`
 
 Projektfilen är en ZIP som innehåller:

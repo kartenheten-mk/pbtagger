@@ -106,6 +106,7 @@ Röda statusmeddelanden från Data-menyn betyder att import eller export misslyc
 | Ersätt dokument | Filen är inte en giltig `.docx`. |
 | Importera geometri | Filen är inte giltig JSON eller har oväntad struktur. |
 | Exportera taggat dokument | Planbeskrivning-kontrollen hittar fel eller dokumentmodellen saknas. |
+| Exportera taggar | En länkad geometri kan inte konverteras till GeoJSON. |
 | Importera config | `config.json` följer inte appens förväntade format. |
 
 Stäng inte felrutan direkt om du behöver rapportera problemet. Texten kan innehålla den viktigaste ledtråden.

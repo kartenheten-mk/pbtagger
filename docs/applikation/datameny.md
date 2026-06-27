@@ -4,7 +4,7 @@ Datamenyn i toppbaren samlar filoperationer och exportinställningar.
 
 ![Datamenyn med import och export](../assets/screenshots/datameny-export.png)
 
-*Datamenyn samlar import, export, projektfil, konfiguration och exportinställningar.*
+*Datamenyn samlar import, export, projektfil, konfiguration och exportinställningar. Bilden visar exportgruppen med tagg-JSON.*
 
 ## Import
 
@@ -15,7 +15,7 @@ Importsektionen hanterar ersättning av dokument, import av geometri-JSON och im
 Exportsektionen är uppdelad i:
 
 - originalfiler
-- filer med taggar och motiv
+- filer med taggar och motiv, inklusive tagg-JSON för vidare databearbetning
 - hela projektet
 
 ## Konfiguration

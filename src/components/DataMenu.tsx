@@ -141,6 +141,7 @@ export const DataMenu: React.FC<DataMenuProps> = ({ categories }) => {
   // Loading states
   const [exportingOriginalDocx, setExportingOriginalDocx] = useState(false);
   const [exportingDocx,    setExportingDocx]    = useState(false);
+  const [exportingTagJson, setExportingTagJson] = useState(false);
   const [exportingGeoOriginal, setExportingGeoOriginal] = useState(false);
   const [exportingGeoWithMotiv, setExportingGeoWithMotiv] = useState(false);
   const [exportingProject, setExportingProject]  = useState(false);
@@ -245,6 +246,40 @@ export const DataMenu: React.FC<DataMenuProps> = ({ categories }) => {
       setExportingDocx(false);
     }
   }, [zipBuffer, docModel, tags, fileName, planbeskrivningConfig, activeGeometryDocId, geometries, categories, enforcePlanbeskrivningCompliance]);
+
+  // ── Export tag JSON ───────────────────────────────────────────────────────
+  const handleExportTagJson = useCallback(async () => {
+    if (tags.length === 0) return;
+    setExportingTagJson(true);
+    setError(null);
+    try {
+      const { buildTagJsonExport, buildTagJsonExportFileName } = await import('../export/tagJsonExport');
+      const content = JSON.stringify(
+        buildTagJsonExport({
+          tags,
+          geometries,
+          categories,
+          fileName,
+          activeGeometryDocId,
+        }),
+        null,
+        2
+      );
+      const blob = new Blob([content], { type: 'application/json' });
+      saveAs(blob, buildTagJsonExportFileName(fileName));
+      setSuccess('Tagg-JSON nedladdad!');
+      setOpen(false);
+    } catch (e) {
+      const msg =
+        e instanceof Error
+          ? e.message
+          : 'Export av tagg-JSON misslyckades.';
+      setError(msg);
+      console.error(e);
+    } finally {
+      setExportingTagJson(false);
+    }
+  }, [tags, geometries, categories, fileName, activeGeometryDocId]);
 
   // ── Export original geometry JSON ──────────────────────────────────────────
   const handleExportOriginalGeo = useCallback(async () => {
@@ -423,6 +458,7 @@ export const DataMenu: React.FC<DataMenuProps> = ({ categories }) => {
   const anyLoading =
     exportingOriginalDocx ||
     exportingDocx ||
+    exportingTagJson ||
     exportingGeoOriginal ||
     exportingGeoWithMotiv ||
     exportingProject ||
@@ -601,6 +637,23 @@ export const DataMenu: React.FC<DataMenuProps> = ({ categories }) => {
                   disabledReason="Lägg till minst en tagg först."
                   loading={exportingDocx}
                   onClick={handleExportDocx}
+                />
+
+                {/* Export tags JSON */}
+                <ActionCard
+                  color="purple"
+                  icon={
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                        d="M8 7h8M8 11h8M8 15h5M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2z" />
+                    </svg>
+                  }
+                  title="Exportera taggar (.json)"
+                  description="Ladda ner alla taggar med kategoriinformation och länkad geometri."
+                  disabled={tags.length === 0}
+                  disabledReason="Lägg till minst en tagg först."
+                  loading={exportingTagJson}
+                  onClick={handleExportTagJson}
                 />
 
                 {/* Export geometry JSON with motiv */}

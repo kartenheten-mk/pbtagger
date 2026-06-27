@@ -4,7 +4,7 @@ Alla import- och exportåtgärder i editorläget finns i toppbarens **Data**-men
 
 ![Datamenyn med import och export](../assets/screenshots/datameny-export.png)
 
-*Datamenyn samlar import, export, projektfil, konfiguration och exportinställningar.*
+*Datamenyn samlar import, export, projektfil, konfiguration och exportinställningar. Bilden visar exportgruppen med tagg-JSON.*
 
 ## Öppna och stäng Data-menyn
 
@@ -67,9 +67,29 @@ Om du bara vill importera en del av filen kan du göra det nära arbetsflödet:
 | Åtgärd | Resultat |
 | --- | --- |
 | **Exportera taggat dokument (.docx)** | Skapar en DOCX med innehållskontroller, bokmärken, taggmetadata och Planbeskrivning v2.0-data. |
+| **Exportera taggar (.json)** | Skapar en platt JSON-fil med alla taggar, kategoriinformation, dokumentpositioner och länkad geometri för databasinläsning. |
 | **Exportera geometri med motiv (.json)** | Skapar en kopia av geometri-JSON där länkade motiv skrivs in i planbestämmelser. |
 
 Export av taggad DOCX kan blockeras om Planbeskrivning v2.0-kontrollen hittar fel och inställningen **Blockera vid fel** är aktiv.
+
+### Exportera taggar som JSON
+
+**Exportera taggar (.json)** laddar ner en fristående JSON-fil som är tänkt för vidare bearbetning i script, till exempel för att läsa in taggar och geometrier i en databas med Python.
+
+![Datamenyn med tagg-JSON-export](../assets/screenshots/datameny-export-tagg-json.png)
+
+*Tagg-JSON-exporten ligger i gruppen Med taggar och motiv.*
+
+Exporten innehåller:
+
+- alla taggar i dokumentet
+- tema, grupp och eventuell undergrupp för varje tagg
+- dokumentposition, till exempel styckeindex och teckenoffset
+- `geometryIds` för geometrier som taggen är kopplad till
+- `missingGeometryIds` om en tagg pekar på en geometri som inte finns i aktuellt projekt
+- länkad geometri som ren GeoJSON Geometry
+
+Geometridelen innehåller inte rå metadata från importerad detaljplan-JSON. Den tar bara med själva GeoJSON-geometrin, till exempel `Point`, `LineString` eller `Polygon` med koordinater.
 
 ### När exportknappar är inaktiva
 
@@ -80,6 +100,7 @@ Vissa åtgärder är inaktiva tills projektet har rätt underlag:
 | Exportera originaldokument | Ett inläst DOCX-dokument. |
 | Exportera originalgeometri | Importerad geometri-JSON. |
 | Exportera taggat dokument | Minst en tagg. |
+| Exportera taggar | Minst en tagg. |
 | Exportera geometri med motiv | Importerad geometri-JSON. |
 
 Håll muspekaren över en inaktiv knapp för att se varför den inte kan användas.

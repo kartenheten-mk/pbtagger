@@ -17,7 +17,7 @@ Planbeskrivning Tagger består av sex ytor som används tillsammans under arbete
 | Dokumentvy | Läsa dokumentet, söka i texten, markera innehåll och kontrollera taggmarkeringar. | [Tagga innehåll](tagga-innehall.md) |
 | Sidopanel | Tilldela nya taggar, filtrera befintliga taggar och starta geometri-länkning. | [Tagga innehåll](tagga-innehall.md) |
 | Kartpanel | Kontrollera geometrier, filtrera objekt, välja bakgrundskarta och länka taggar. | [Geometri och karta](geometri-karta.md) |
-| Data-menyn | Importera, exportera, hantera `config.json` och redigera Planbeskrivning v2.0-inställningar. | [Import och export](import-export.md) |
+| Data-menyn | Importera, exportera tagg-JSON, hantera `config.json` och redigera Planbeskrivning v2.0-inställningar. | [Import och export](import-export.md) |
 
 ## Rekommenderat arbetsflöde
 
@@ -28,7 +28,7 @@ Planbeskrivning Tagger består av sex ytor som används tillsammans under arbete
 5. Granska tagglistan och rensa bort felaktiga taggar.
 6. Länka taggar till geometrier i kartpanelen.
 7. Kontrollera Planbeskrivning v2.0-status och metadata.
-8. Exportera taggad DOCX, geometri med motiv eller hela projektet.
+8. Exportera taggad DOCX, tagg-JSON, geometri med motiv eller hela projektet.
 
 !!! tip "Arbeta i korta kontrollsteg"
     Exportera gärna hela projektet som `.pbproject` när du har kommit igenom en större del av taggningen. Då kan arbetet flyttas eller återställas även om webbläsarens lokala lagring rensas.
@@ -43,7 +43,7 @@ Manualen använder screenshots för varje huvuddel av appen. Bilderna visar inte
 | ![Sidopanel med tagglista](../assets/screenshots/sidopanel-visa-taggar.png){ width="220" } | Filtrering, taggkort, rensa alla taggar och geometriåtgärder. |
 | ![Dokumentvy med taggmarkeringar](../assets/screenshots/dokumentvy-taggmarkeringar.png){ width="220" } | Taggmarkeringar och objektbadges i dokumentet. |
 | ![Kartpanel med geometrier](../assets/screenshots/karta-geometri.png){ width="220" } | Karta, filter, sökning och geometri-lista. |
-| ![Datamenyn](../assets/screenshots/datameny-export.png){ width="220" } | Import, export, config och exportinställningar. |
+| ![Datamenyn](../assets/screenshots/datameny-export.png){ width="220" } | Import, tagg-JSON-export, config och exportinställningar. |
 
 ## Manualens delar
 

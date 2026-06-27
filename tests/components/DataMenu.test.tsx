@@ -9,7 +9,7 @@ import { DataMenu } from '../../src/components/DataMenu';
 import { exportDocx } from '../../src/docx/DocxExporter';
 import { useDocumentStore } from '../../src/store/useDocumentStore';
 import { buildDefaultAppConfig } from '../../src/config/appConfig';
-import type { AppConfig, Category, DocModel, Tag } from '../../src/types';
+import type { AppConfig, Category, DocModel, Geometry, Tag } from '../../src/types';
 
 vi.mock('file-saver', () => ({
   saveAs: vi.fn(),
@@ -33,6 +33,21 @@ function makeTag(overrides: Partial<Tag> = {}): Tag {
     startOffset: 0,
     endOffset: 13,
     createdAt: '2026-05-30T10:00:00.000Z',
+    ...overrides,
+  };
+}
+
+function makeGeometry(overrides: Partial<Geometry> = {}): Geometry {
+  return {
+    uuid: 'geo-1',
+    name: 'Planbestämmelse',
+    type: 'point',
+    coordinates: [18.1, 59.3],
+    crs: 'EPSG:4326',
+    featureType: 'användningsbestämmelse',
+    sourceDocId: 'plan-1',
+    source: 'json',
+    properties: { bestammelseformulering: 'Bostäder' },
     ...overrides,
   };
 }
@@ -94,6 +109,7 @@ describe('DataMenu export grouping', () => {
     expect(screen.getByRole('button', { name: /Exportera originaldokument/i })).toBeTruthy();
     expect(screen.getByRole('button', { name: /Exportera originalgeometri/i })).toBeTruthy();
     expect(screen.getByRole('button', { name: /Exportera taggat dokument/i })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Exportera taggar/i })).toBeTruthy();
     expect(screen.getByRole('button', { name: /Exportera geometri med motiv/i })).toBeTruthy();
     expect(screen.getByRole('button', { name: /Exportera hela projektet/i })).toBeTruthy();
     expect(screen.getByRole('button', { name: /Importera config\.json/i })).toBeTruthy();
@@ -147,11 +163,13 @@ describe('DataMenu export grouping', () => {
     const originalDocument = screen.getByRole('button', { name: /Exportera originaldokument/i }) as HTMLButtonElement;
     const originalGeometry = screen.getByRole('button', { name: /Exportera originalgeometri/i }) as HTMLButtonElement;
     const taggedDocument = screen.getByRole('button', { name: /Exportera taggat dokument/i }) as HTMLButtonElement;
+    const tagJson = screen.getByRole('button', { name: /Exportera taggar/i }) as HTMLButtonElement;
     const geometryWithMotiv = screen.getByRole('button', { name: /Exportera geometri med motiv/i }) as HTMLButtonElement;
 
     expect(originalDocument.disabled).toBe(true);
     expect(originalGeometry.disabled).toBe(true);
     expect(taggedDocument.disabled).toBe(true);
+    expect(tagJson.disabled).toBe(true);
     expect(geometryWithMotiv.disabled).toBe(true);
   });
 
@@ -208,6 +226,70 @@ describe('DataMenu export grouping', () => {
     const [blob, fileName] = vi.mocked(saveAs).mock.calls[0];
     expect(fileName).toBe('config.json');
     expect(JSON.parse(await (blob as Blob).text())).toEqual(config);
+  });
+
+  it('exports tag JSON with categories and linked geometry', async () => {
+    const category: Category = {
+      id: 'detaljplanens-syfte--syfte',
+      name: 'Syfte',
+      level: 'grupp',
+      color: '#2563eb',
+      temaId: 'detaljplanens-syfte',
+      temaName: 'Detaljplanens syfte',
+      gruppId: 'syfte',
+      gruppName: 'Syfte',
+    };
+    resetStore({
+      fileName: 'Planbeskrivning.docx',
+      activeGeometryDocId: 'plan-1',
+      tags: [makeTag({ categoryId: category.id, geometryIds: ['geo-1'] })],
+      geometries: [makeGeometry()],
+    });
+
+    openMenu([category]);
+
+    fireEvent.click(screen.getByRole('button', { name: /Exportera taggar/i }));
+
+    await waitFor(() => {
+      expect(saveAs).toHaveBeenCalledTimes(1);
+    });
+
+    const [blob, fileName] = vi.mocked(saveAs).mock.calls[0];
+    const json = JSON.parse(await (blob as Blob).text());
+
+    expect(fileName).toBe('Planbeskrivning_taggar.json');
+    expect((blob as Blob).type).toBe('application/json');
+    expect(json).toMatchObject({
+      schemaVersion: 1,
+      sourceDocument: {
+        fileName: 'Planbeskrivning.docx',
+        activeGeometryDocId: 'plan-1',
+      },
+      summary: {
+        tagCount: 1,
+        linkedGeometryCount: 1,
+      },
+    });
+    expect(json.summary.categories[0]).toMatchObject({
+      categoryId: category.id,
+      temaName: 'Detaljplanens syfte',
+      tagCount: 1,
+    });
+    expect(json.tags[0]).toMatchObject({
+      uuid: 'tag-1',
+      targetType: 'text',
+      categoryId: category.id,
+      categoryLevel: 'grupp',
+      temaName: 'Detaljplanens syfte',
+      gruppName: 'Syfte',
+      geometryIds: ['geo-1'],
+      missingGeometryIds: [],
+    });
+    expect(json.tags[0].geometries[0]).toEqual({
+      type: 'Point',
+      coordinates: [18.1, 59.3],
+    });
+    expect(json.tags[0].geometries[0].properties).toBeUndefined();
   });
 
   it('passes supplied categories into tagged DOCX export options', async () => {
