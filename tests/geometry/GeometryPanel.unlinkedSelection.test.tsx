@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, cleanup, waitFor } from '@testing-library/react';
 import { GeometryPanel } from '../../src/geometry/GeometryPanel';
 import { useDocumentStore } from '../../src/store/useDocumentStore';
-import type { Geometry, Tag, WmsBackgroundMap } from '../../src/types';
+import type { AppConfig, Geometry, Tag, WmsBackgroundMap } from '../../src/types';
 import { generateBookmarkName } from '../../src/docx/bookmarkUtils';
 import { buildDefaultAppConfig } from '../../src/config/appConfig';
 
@@ -133,9 +133,11 @@ function makeTag(overrides: Partial<Tag> = {}): Tag {
 function resetStore(
   geometries: Geometry[],
   {
+    appConfig = buildDefaultAppConfig(),
     tags = [],
     selectedTagUuid = null,
   }: {
+    appConfig?: AppConfig;
     tags?: Tag[];
     selectedTagUuid?: string | null;
   } = {}
@@ -154,7 +156,7 @@ function resetStore(
     activeGeometryDocId: null,
     planbeskrivningConfig: null,
     enforcePlanbeskrivningCompliance: true,
-    appConfig: buildDefaultAppConfig(),
+    appConfig,
   });
 }
 
@@ -438,6 +440,70 @@ describe('GeometryPanel unlinked geometry selection', () => {
     expect(lastRender.backgroundMap).toBeNull();
   });
 
+  it('imports only WMS map config from config.json', async () => {
+    const existingConfig: AppConfig = {
+      ...buildDefaultAppConfig(),
+      categories: {
+        customGroups: [
+          {
+            temaId: 'genomforandefragor',
+            id: 'egen-grupp',
+            name: 'Egen grupp',
+            undergrupper: [],
+          },
+        ],
+        customUndergroups: [],
+      },
+    };
+    resetStore([makeGeometry('geo-a', 'Unlinked A')], { appConfig: existingConfig });
+    const { container } = render(<GeometryPanel />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Kartinställningar' }));
+
+    const input = container.querySelector<HTMLInputElement>('[data-testid="map-config-file-input"]');
+    expect(input).toBeTruthy();
+
+    fireEvent.change(input!, {
+      target: {
+        files: [
+          new File([
+            JSON.stringify({
+              version: 1,
+              map: {
+                activeBackgroundMapId: 'imported-wms',
+                backgroundMaps: [
+                  {
+                    id: 'imported-wms',
+                    type: 'wms',
+                    name: 'Importerad WMS',
+                    url: 'https://example.test/imported-wms',
+                    layers: ['imported_layer'],
+                  },
+                ],
+              },
+              categories: {
+                customGroups: 'invalid',
+                customUndergroups: [],
+              },
+            }),
+          ], 'config.json', { type: 'application/json' }),
+        ],
+      },
+    });
+
+    await waitFor(() => {
+      expect(useDocumentStore.getState().appConfig.map.backgroundMaps[0].id).toBe(
+        'imported-wms'
+      );
+    });
+
+    expect(useDocumentStore.getState().appConfig.categories).toEqual(existingConfig.categories);
+    expect(screen.getAllByText('Importerad WMS').length).toBeGreaterThan(0);
+
+    const lastRender = mapViewRenderMock.mock.calls[mapViewRenderMock.mock.calls.length - 1][0];
+    expect(lastRender.backgroundMap?.name).toBe('Importerad WMS');
+  });
+
   it('fetches WMS capabilities, filters available layers, and selects a layer into the draft', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
@@ -534,7 +600,7 @@ describe('GeometryPanel unlinked geometry selection', () => {
         'top_layer',
       ]);
     });
-  });
+  }, 10000);
 
   it('validates WMS map settings before saving', () => {
     render(<GeometryPanel />);

@@ -1,7 +1,7 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { useDocumentStore } from '../store/useDocumentStore';
 import type { WmsBackgroundMap } from '../types';
-import { normalizeLayerNames } from '../config/appConfig';
+import { normalizeLayerNames, parseMapConfigFromAppConfig } from '../config/appConfig';
 import { fetchWmsCapabilities, type WmsCapabilityLayer } from './wmsCapabilities';
 
 interface MapSettingsPanelProps {
@@ -53,9 +53,11 @@ export const MapSettingsPanel: React.FC<MapSettingsPanelProps> = ({ onClose }) =
   const { appConfig, setMapConfig } = useDocumentStore();
   const mapConfig = appConfig.map;
 
+  const mapConfigInputRef = useRef<HTMLInputElement>(null);
   const [draft, setDraft] = useState<DraftState>(() => createEmptyDraft());
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saved, setSaved] = useState(false);
+  const [configImportError, setConfigImportError] = useState<string | null>(null);
   const [availableLayers, setAvailableLayers] = useState<WmsCapabilityLayer[]>([]);
   const [layerSearch, setLayerSearch] = useState('');
   const [isLoadingLayers, setIsLoadingLayers] = useState(false);
@@ -197,6 +199,7 @@ export const MapSettingsPanel: React.FC<MapSettingsPanelProps> = ({ onClose }) =
     setAvailableLayers([]);
     setLayerSearch('');
     setLayersLoadError(null);
+    setConfigImportError(null);
     setIsAddingLayer(false);
     setManualLayerText('');
   }, []);
@@ -268,8 +271,37 @@ export const MapSettingsPanel: React.FC<MapSettingsPanelProps> = ({ onClose }) =
       backgroundMaps,
     });
     setDraft(draftFromMap(savedMap));
+    setConfigImportError(null);
     setSaved(true);
   }, [draft, mapConfig, setMapConfig]);
+
+  const handleMapConfigFileChange = useCallback(
+    async (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+
+      setConfigImportError(null);
+      setSaved(false);
+
+      try {
+        const text = await file.text();
+        const parsed = JSON.parse(text) as unknown;
+        const importedMapConfig = parseMapConfigFromAppConfig(parsed);
+        setMapConfig(importedMapConfig);
+        startNew();
+        setSaved(true);
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : 'Kunde inte läsa config.json.';
+        setConfigImportError(`Kunde inte importera WMS-inställningar. ${message}`);
+      } finally {
+        if (mapConfigInputRef.current) mapConfigInputRef.current.value = '';
+      }
+    },
+    [setMapConfig, startNew]
+  );
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/30">
@@ -353,14 +385,34 @@ export const MapSettingsPanel: React.FC<MapSettingsPanelProps> = ({ onClose }) =
               <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
                 Sparade WMS-kartor
               </h3>
-              <button
-                type="button"
-                onClick={startNew}
-                className="text-xs font-medium text-blue-600 hover:text-blue-700"
-              >
-                Ny karta
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => mapConfigInputRef.current?.click()}
+                  aria-label="Importera WMS-inställningar"
+                  title="Importera WMS-inställningar från config.json"
+                  className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+                >
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5}
+                      d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1M12 4v12m0-12l-4 4m4-4l4 4" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  onClick={startNew}
+                  className="text-xs font-medium text-blue-600 hover:text-blue-700"
+                >
+                  Ny karta
+                </button>
+              </div>
             </div>
+
+            {configImportError && (
+              <p role="alert" className="rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-xs font-medium text-red-700">
+                {configImportError}
+              </p>
+            )}
 
             {mapConfig.backgroundMaps.length === 0 ? (
               <div className="rounded-xl border border-dashed border-gray-200 px-3 py-4 text-center">
@@ -672,6 +724,15 @@ export const MapSettingsPanel: React.FC<MapSettingsPanelProps> = ({ onClose }) =
             </button>
           </div>
         </div>
+
+        <input
+          ref={mapConfigInputRef}
+          type="file"
+          accept=".json,application/json"
+          className="hidden"
+          data-testid="map-config-file-input"
+          onChange={handleMapConfigFileChange}
+        />
       </div>
     </div>
   );

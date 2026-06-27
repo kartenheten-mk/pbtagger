@@ -79,6 +79,12 @@ Den nya gruppen eller undergruppen väljs direkt och går att använda i taggnin
 !!! note "Egna teman stöds inte"
     Appen låter dig lägga till grupper och undergrupper under befintliga teman. Nya teman skapas inte i gränssnittet.
 
+## Importera egna taggkategorier
+
+I **Tilldela tagg** kan du importera kategoridelen från en befintlig `config.json`. Importen ersätter bara projektets egna taggkategorier och lämnar WMS-inställningar, dokument, taggar och geometrier oförändrade.
+
+Använd Data-menyns **Importera config.json** om du i stället vill ersätta hela projektkonfigurationen.
+
 ## Visa och filtrera taggar
 
 Fliken **Visa taggar** listar alla taggar i dokumentordning. Du kan filtrera på tema och klicka på en tagg för att:

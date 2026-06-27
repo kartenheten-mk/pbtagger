@@ -21,7 +21,7 @@ Efter en lyckad åtgärd visas en grön statusruta uppe till höger. Vid fel vis
 | --- | --- |
 | **Ersätt dokument (.docx)** | Byter dokument i projektet och försöker behålla befintliga taggar och geometri-länkar. |
 | **Importera geometri (.json)** | Läser in detaljplan-JSON och visar geometrier i kartpanelen. |
-| **Importera config.json** | Läser in kartinställningar och andra projektinställningar. |
+| **Importera config.json** | Ersätter hela projektets appkonfiguration. |
 
 När ett dokument ersätts läser appen även eventuell Planbeskrivning XML/GML från den nya DOCX-filen.
 
@@ -48,7 +48,12 @@ Appen försöker behålla befintliga taggar. Om den nya DOCX-filen innehåller e
 
 ### Importera config
 
-**Importera config.json** ersätter projektets appkonfiguration, framför allt kartinställningar och egna kategorier. Använd det när du vill återanvända WMS-bakgrunder eller kategoritillägg från ett annat projekt.
+**Importera config.json** ersätter hela projektets appkonfiguration, framför allt kartinställningar och egna kategorier. Använd det när du vill flytta över allt som ligger i `config.json` från ett annat projekt.
+
+Om du bara vill importera en del av filen kan du göra det nära arbetsflödet:
+
+- I **Tilldela tagg** kan du importera bara egna taggkategorier.
+- I **Kartinställningar** kan du importera bara WMS-inställningar.
 
 ## Exportera original
 
@@ -109,7 +114,7 @@ Använd `.pbproject` när du vill arkivera arbetet eller flytta det till en anna
 
 ## Exportera och importera config
 
-`config.json` innehåller appens projektkonfiguration, framför allt kartinställningar och sparade WMS-bakgrunder. Den kan exporteras separat och importeras i ett annat projekt när samma bakgrundskartor ska återanvändas.
+`config.json` innehåller appens projektkonfiguration, framför allt kartinställningar, sparade WMS-bakgrunder och egna taggkategorier. Den kan exporteras separat och importeras i ett annat projekt. Import via Data-menyn ersätter hela konfigurationen; delimport i sidopanelen eller kartinställningarna ersätter bara vald del.
 
 ## Exportinställningar
 

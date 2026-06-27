@@ -119,6 +119,12 @@ Valet sparas i projektets `config.json` och följer med när projektet exportera
 
 När en WMS-karta sparas hamnar den i projektets `config.json`. Exportera `config.json` om samma bakgrundskartor ska användas i fler projekt.
 
+### Importera WMS-inställningar
+
+I **Kartinställningar** kan du importera WMS-delen från en befintlig `config.json`. Importen ersätter bara sparade WMS-kartor och aktiv bakgrundskarta. Egna taggkategorier, dokument, taggar och geometrier lämnas oförändrade.
+
+Använd Data-menyns **Importera config.json** om du vill ersätta hela projektkonfigurationen.
+
 ### Redigera eller ta bort WMS-kartor
 
 Sparade WMS-kartor visas under **Sparade WMS-kartor**. Där kan du klicka på **Redigera** för att ändra namn, adress eller lager, eller **Ta bort** för att radera kartan från projektets konfiguration.

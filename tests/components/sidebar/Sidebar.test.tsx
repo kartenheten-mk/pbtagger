@@ -7,7 +7,7 @@ import { Sidebar } from '../../../src/components/sidebar/Sidebar';
 import { buildDefaultAppConfig } from '../../../src/config/appConfig';
 import { flattenCategories, mergeCustomCategories } from '../../../src/data/categoryUtils';
 import { useDocumentStore } from '../../../src/store/useDocumentStore';
-import type { PendingSelection, Tema } from '../../../src/types';
+import type { AppConfig, PendingSelection, Tema } from '../../../src/types';
 
 const builtInTeman: Tema[] = [
   {
@@ -122,5 +122,93 @@ describe('Sidebar custom category footer action', () => {
     expect(useDocumentStore.getState().tags[0].categoryId).toBe(
       'genomforandefragor--egen-grupp'
     );
+  });
+
+  it('imports only custom category config from config.json', async () => {
+    const existingConfig: AppConfig = {
+      ...buildDefaultAppConfig(),
+      map: {
+        activeBackgroundMapId: 'existing-wms',
+        backgroundMaps: [
+          {
+            id: 'existing-wms',
+            type: 'wms',
+            name: 'Befintlig WMS',
+            url: 'https://example.test/existing-wms',
+            layers: ['existing_layer'],
+          },
+        ],
+      },
+      categories: {
+        customGroups: [
+          {
+            temaId: 'genomforandefragor',
+            id: 'gammal-grupp',
+            name: 'Gammal grupp',
+            undergrupper: [],
+          },
+        ],
+        customUndergroups: [],
+      },
+    };
+    resetStore({
+      fileName: 'Keep.docx',
+      pendingSelection: makePendingSelection(),
+      appConfig: existingConfig,
+    });
+    const { container } = render(<SidebarHarness />);
+
+    const input = container.querySelector<HTMLInputElement>('[data-testid="category-config-file-input"]');
+    expect(input).toBeTruthy();
+
+    fireEvent.change(input!, {
+      target: {
+        files: [
+          new File([
+            JSON.stringify({
+              version: 1,
+              map: {
+                activeBackgroundMapId: null,
+                backgroundMaps: [
+                  {
+                    id: 'invalid-map',
+                    type: 'wms',
+                    name: 'Invalid map',
+                    url: 'ftp://example.test/wms',
+                    layers: [],
+                  },
+                ],
+              },
+              categories: {
+                customGroups: [
+                  {
+                    temaId: 'genomforandefragor',
+                    id: 'importerad-grupp',
+                    name: 'Importerad grupp',
+                    undergrupper: [],
+                  },
+                ],
+                customUndergroups: [],
+              },
+            }),
+          ], 'config.json', { type: 'application/json' }),
+        ],
+      },
+    });
+
+    await waitFor(() => {
+      expect(useDocumentStore.getState().appConfig.categories.customGroups[0].id).toBe(
+        'importerad-grupp'
+      );
+    });
+
+    expect(useDocumentStore.getState().appConfig.map).toEqual(existingConfig.map);
+    expect(useDocumentStore.getState().fileName).toBe('Keep.docx');
+    expect(screen.getByText('Taggkonfiguration importerad.')).toBeTruthy();
+
+    fireEvent.change(screen.getByPlaceholderText('Sök tagg...'), {
+      target: { value: 'importerad' },
+    });
+    expect(screen.getByText('Importerad grupp')).toBeTruthy();
   });
 });

@@ -355,19 +355,40 @@ function parseCategoryConfig(value: unknown): CategoryConfig {
   return { customGroups, customUndergroups };
 }
 
-export function parseAppConfig(value: unknown): AppConfig {
+function parseConfigRoot(value: unknown): Record<string, unknown> {
   if (!isRecord(value)) {
     throw new Error(`${CONFIG_FILE_NAME} måste innehålla ett objekt.`);
   }
   if (value.version !== APP_CONFIG_VERSION) {
     throw new Error(`config-version ${String(value.version)} stöds inte.`);
   }
+  return value;
+}
+
+export function parseAppConfig(value: unknown): AppConfig {
+  const root = parseConfigRoot(value);
 
   return {
     version: APP_CONFIG_VERSION,
-    map: parseMapConfig(value.map),
-    categories: parseCategoryConfig(value.categories),
+    map: parseMapConfig(root.map),
+    categories: parseCategoryConfig(root.categories),
   };
+}
+
+export function parseMapConfigFromAppConfig(value: unknown): MapConfig {
+  const root = parseConfigRoot(value);
+  if (!Object.prototype.hasOwnProperty.call(root, 'map')) {
+    throw new Error(`${CONFIG_FILE_NAME} saknar map.`);
+  }
+  return parseMapConfig(root.map);
+}
+
+export function parseCategoryConfigFromAppConfig(value: unknown): CategoryConfig {
+  const root = parseConfigRoot(value);
+  if (!Object.prototype.hasOwnProperty.call(root, 'categories')) {
+    throw new Error(`${CONFIG_FILE_NAME} saknar categories.`);
+  }
+  return parseCategoryConfig(root.categories);
 }
 
 export function serializeAppConfig(config: unknown): string {

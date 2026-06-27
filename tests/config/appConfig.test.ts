@@ -4,6 +4,8 @@ import {
   normalizeAppConfig,
   normalizeLayerNames,
   parseAppConfig,
+  parseCategoryConfigFromAppConfig,
+  parseMapConfigFromAppConfig,
   serializeAppConfig,
 } from '../../src/config/appConfig';
 
@@ -194,5 +196,105 @@ describe('app config helpers', () => {
         },
       })
     ).toThrow(/duplicerad/);
+  });
+
+  it('parses only the map section for WMS config imports', () => {
+    const parsed = parseMapConfigFromAppConfig({
+      version: 1,
+      map: {
+        activeBackgroundMapId: 'map-1',
+        backgroundMaps: [
+          {
+            id: 'map-1',
+            type: 'wms',
+            name: 'Kommun WMS',
+            url: 'https://example.test/wms',
+            layers: ['layer_a'],
+          },
+        ],
+      },
+      categories: {
+        customGroups: 'not-a-list',
+        customUndergroups: [],
+      },
+    });
+
+    expect(parsed.activeBackgroundMapId).toBe('map-1');
+    expect(parsed.backgroundMaps[0].name).toBe('Kommun WMS');
+  });
+
+  it('parses only the categories section for tag config imports', () => {
+    const parsed = parseCategoryConfigFromAppConfig({
+      version: 1,
+      map: {
+        activeBackgroundMapId: null,
+        backgroundMaps: [
+          {
+            id: 'bad-map',
+            type: 'wms',
+            name: 'Bad WMS',
+            url: 'ftp://example.test/wms',
+            layers: [],
+          },
+        ],
+      },
+      categories: {
+        customGroups: [
+          {
+            temaId: 'genomforandefragor',
+            id: 'kommunala-fragor',
+            name: 'Kommunala frågor',
+            undergrupper: [],
+          },
+        ],
+        customUndergroups: [],
+      },
+    });
+
+    expect(parsed.customGroups[0]).toMatchObject({
+      temaId: 'genomforandefragor',
+      id: 'kommunala-fragor',
+    });
+  });
+
+  it('rejects partial imports when the selected section is missing or invalid', () => {
+    expect(() =>
+      parseMapConfigFromAppConfig({
+        version: 1,
+        categories: { customGroups: [], customUndergroups: [] },
+      })
+    ).toThrow(/saknar map/);
+
+    expect(() =>
+      parseMapConfigFromAppConfig({
+        version: 1,
+        map: {
+          activeBackgroundMapId: null,
+          backgroundMaps: [
+            {
+              id: 'map-1',
+              type: 'wms',
+              name: 'Kommun WMS',
+              url: 'https://example.test/wms',
+              layers: [],
+            },
+          ],
+        },
+      })
+    ).toThrow(/minst ett lagernamn/);
+
+    expect(() =>
+      parseCategoryConfigFromAppConfig({
+        version: 1,
+        map: { activeBackgroundMapId: null, backgroundMaps: [] },
+      })
+    ).toThrow(/saknar categories/);
+
+    expect(() =>
+      parseCategoryConfigFromAppConfig({
+        version: 1,
+        categories: { customGroups: 'bad', customUndergroups: [] },
+      })
+    ).toThrow(/customGroups måste vara en lista/);
   });
 });

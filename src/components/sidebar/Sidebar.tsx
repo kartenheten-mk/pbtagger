@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import type { Category, Tag, Tema } from '../../types';
 import { useDocumentStore } from '../../store/useDocumentStore';
+import { parseCategoryConfigFromAppConfig } from '../../config/appConfig';
 import {
   createUniqueGroupId,
   createUniqueUndergroupId,
@@ -30,8 +31,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ teman, categories }) => {
     setPendingSelection,
     addCustomGroup,
     addCustomUndergroup,
+    setCategoryConfig,
   } = useDocumentStore();
 
+  const categoryConfigInputRef = useRef<HTMLInputElement>(null);
   const [mode, setMode] = useState<SidebarMode>('view');
   const [showLegend, setShowLegend] = useState(false);
   const [addModalOpen, setAddModalOpen] = useState(false);
@@ -40,6 +43,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ teman, categories }) => {
   const [customGruppId, setCustomGruppId] = useState('');
   const [customName, setCustomName] = useState('');
   const [customError, setCustomError] = useState<string | null>(null);
+  const [configImportStatus, setConfigImportStatus] = useState<string | null>(null);
+  const [configImportError, setConfigImportError] = useState<string | null>(null);
   const [createdCategoryId, setCreatedCategoryId] = useState<string | null>(null);
   const [assignPickerSelection, setAssignPickerSelection] = useState({
     temaId: '',
@@ -149,6 +154,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ teman, categories }) => {
     categories.find((c) => c.id === id);
 
   const canAddCustomCategory = mode === 'assign' && !!addCustomGroup && !!addCustomUndergroup;
+  const canImportCategoryConfig = mode === 'assign' && !!setCategoryConfig;
   const customTema = teman.find((t) => t.id === customTemaId);
   const customGrupp = customTema?.grupper.find((g) => g.id === customGruppId);
   const trimmedCustomName = customName.trim();
@@ -224,6 +230,31 @@ export const Sidebar: React.FC<SidebarProps> = ({ teman, categories }) => {
     setCustomError(null);
   };
 
+  const handleCategoryConfigFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setConfigImportStatus(null);
+    setConfigImportError(null);
+
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text) as unknown;
+      const categoryConfig = parseCategoryConfigFromAppConfig(parsed);
+      setCategoryConfig(categoryConfig);
+      setCreatedCategoryId(null);
+      setConfigImportStatus('Taggkonfiguration importerad.');
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Kunde inte läsa config.json.';
+      setConfigImportError(`Kunde inte importera taggkonfiguration. ${message}`);
+    } finally {
+      if (categoryConfigInputRef.current) categoryConfigInputRef.current.value = '';
+    }
+  };
+
   return (
     <aside className="w-full bg-white flex flex-col h-full overflow-hidden">
       {/* ── Mode toggle ─────────────────────────────────────────────────── */}
@@ -290,6 +321,19 @@ export const Sidebar: React.FC<SidebarProps> = ({ teman, categories }) => {
         />
       )}
 
+      {(configImportStatus || configImportError) && (
+        <div
+          role={configImportError ? 'alert' : 'status'}
+          className={`border-t px-3 py-2 text-xs font-medium ${
+            configImportError
+              ? 'border-red-100 bg-red-50 text-red-700'
+              : 'border-green-100 bg-green-50 text-green-700'
+          }`}
+        >
+          {configImportError ?? configImportStatus}
+        </div>
+      )}
+
       {/* ── Footer / Legend Toggle ────────────────────────────────────────── */}
       <footer className="p-3 border-t border-gray-100 bg-gray-50 flex items-center justify-between relative">
         <div className="flex items-center gap-2">
@@ -299,6 +343,20 @@ export const Sidebar: React.FC<SidebarProps> = ({ teman, categories }) => {
         </div>
 
         <div className="flex items-center gap-2">
+          {canImportCategoryConfig && (
+            <button
+              type="button"
+              onClick={() => categoryConfigInputRef.current?.click()}
+              className="w-7 h-7 rounded-full flex items-center justify-center transition-all bg-white text-blue-500 hover:text-blue-700 hover:bg-blue-50 border border-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-400"
+              title="Importera taggkonfiguration från config.json"
+              aria-label="Importera taggkonfiguration"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5}
+                  d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1M12 4v12m0-12l-4 4m4-4l4 4" />
+              </svg>
+            </button>
+          )}
           {canAddCustomCategory && (
             <button
               type="button"
@@ -330,6 +388,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ teman, categories }) => {
             </svg>
           </button>
         </div>
+
+        <input
+          ref={categoryConfigInputRef}
+          type="file"
+          accept=".json,application/json"
+          className="hidden"
+          data-testid="category-config-file-input"
+          onChange={handleCategoryConfigFileChange}
+        />
 
         {/* Legend Popover */}
         {showLegend && (

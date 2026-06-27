@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { temporal } from 'zundo';
 import { v4 as uuidv4 } from 'uuid';
-import type { Tag, Geometry, DocModel, AppState, PendingSelection, PlanbeskrivningConfig, AppConfig, MapConfig, Tema } from '../types';
+import type { Tag, Geometry, DocModel, AppState, PendingSelection, PlanbeskrivningConfig, AppConfig, MapConfig, CategoryConfig, Tema } from '../types';
 import { buildDefaultConfig } from '../docx/PlanbeskrivningXmlBuilder';
 import { buildDefaultAppConfig, normalizeAppConfig } from '../config/appConfig';
 import {
@@ -135,6 +135,8 @@ interface DocumentActions {
   setAppConfig: (config: AppConfig) => void;
   /** Replace only the map config section */
   setMapConfig: (mapConfig: MapConfig) => void;
+  /** Replace only the custom category config section */
+  setCategoryConfig: (categories: CategoryConfig) => void;
   /** Add a custom group below an existing tema and return the selectable category id */
   addCustomGroup: (temaId: string, name: string) => string | null;
   /** Add a custom undergroup below any visible group and return the selectable category id */
@@ -660,6 +662,18 @@ export const useDocumentStore = create<AppState & DocumentActions>()(
               appConfig: normalizeAppConfig({
                 ...(state.appConfig ?? buildDefaultAppConfig()),
                 map: mapConfig,
+              }),
+            };
+            debouncedSave({ ...state, ...next });
+            return next;
+          }),
+
+        setCategoryConfig: (categories) =>
+          set((state) => {
+            const next = {
+              appConfig: normalizeAppConfig({
+                ...(state.appConfig ?? buildDefaultAppConfig()),
+                categories,
               }),
             };
             debouncedSave({ ...state, ...next });
