@@ -72,11 +72,13 @@ function makeDocxGmlGeometry(uuid: string, name: string, tag: Tag): Geometry {
 function renderPanel({
   tags,
   geometries,
+  onClearAllTags = vi.fn(),
   onLinkGeometry = vi.fn(),
   onUnlinkGeometry = vi.fn(),
 }: {
   tags: Tag[];
   geometries: Geometry[];
+  onClearAllTags?: () => void;
   onLinkGeometry?: (tagUuid: string) => void;
   onUnlinkGeometry?: (tagUuid: string, geometryUuid: string) => void;
 }) {
@@ -90,11 +92,74 @@ function renderPanel({
       getCategoryById={(id) => categories.find((category) => category.id === id)}
       onSelectTag={vi.fn()}
       onRemoveTag={vi.fn()}
+      onClearAllTags={onClearAllTags}
       onLinkGeometry={onLinkGeometry}
       onUnlinkGeometry={onUnlinkGeometry}
     />
   );
 }
+
+describe('ViewTagsPanel clear all tags action', () => {
+  beforeEach(() => {
+    Object.defineProperty(Element.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: vi.fn(),
+    });
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
+
+  it('confirms before clearing all tags', () => {
+    const onClearAllTags = vi.fn();
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+    renderPanel({
+      tags: [makeTag()],
+      geometries: [],
+      onClearAllTags,
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Rensa alla taggar' }));
+
+    expect(confirm).toHaveBeenCalledWith(
+      expect.stringContaining('Rensa alla taggar?')
+    );
+    expect(onClearAllTags).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps tags when the clear-all confirmation is cancelled', () => {
+    const onClearAllTags = vi.fn();
+    vi.spyOn(window, 'confirm').mockReturnValue(false);
+
+    renderPanel({
+      tags: [makeTag()],
+      geometries: [],
+      onClearAllTags,
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Rensa alla taggar' }));
+
+    expect(onClearAllTags).not.toHaveBeenCalled();
+  });
+
+  it('disables the clear-all action when there are no tags', () => {
+    const onClearAllTags = vi.fn();
+
+    renderPanel({
+      tags: [],
+      geometries: [],
+      onClearAllTags,
+    });
+
+    const button = screen.getByRole('button', { name: 'Rensa alla taggar' });
+    expect(button.hasAttribute('disabled')).toBe(true);
+    fireEvent.click(button);
+    expect(onClearAllTags).not.toHaveBeenCalled();
+  });
+});
 
 describe('ViewTagsPanel DOCX-GML geometry links', () => {
   beforeEach(() => {

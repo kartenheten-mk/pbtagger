@@ -40,7 +40,7 @@ Manualen använder screenshots för varje huvuddel av appen. Bilderna visar inte
 | Bild | Visar |
 | --- | --- |
 | ![Startvy med projektgalleri](../assets/screenshots/startvy-projektgalleri.png){ width="220" } | Startvy, dokumentationslänk och projektgalleri. |
-| ![Sidopanel med tagglista](../assets/screenshots/sidopanel-visa-taggar.png){ width="220" } | Filtrering, taggkort och geometriåtgärder. |
+| ![Sidopanel med tagglista](../assets/screenshots/sidopanel-visa-taggar.png){ width="220" } | Filtrering, taggkort, rensa alla taggar och geometriåtgärder. |
 | ![Dokumentvy med taggmarkeringar](../assets/screenshots/dokumentvy-taggmarkeringar.png){ width="220" } | Taggmarkeringar och objektbadges i dokumentet. |
 | ![Kartpanel med geometrier](../assets/screenshots/karta-geometri.png){ width="220" } | Karta, filter, sökning och geometri-lista. |
 | ![Datamenyn](../assets/screenshots/datameny-export.png){ width="220" } | Import, export, config och exportinställningar. |

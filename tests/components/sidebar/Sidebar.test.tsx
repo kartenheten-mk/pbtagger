@@ -7,7 +7,7 @@ import { Sidebar } from '../../../src/components/sidebar/Sidebar';
 import { buildDefaultAppConfig } from '../../../src/config/appConfig';
 import { flattenCategories, mergeCustomCategories } from '../../../src/data/categoryUtils';
 import { useDocumentStore } from '../../../src/store/useDocumentStore';
-import type { AppConfig, PendingSelection, Tema } from '../../../src/types';
+import type { AppConfig, PendingSelection, Tag, Tema } from '../../../src/types';
 
 const builtInTeman: Tema[] = [
   {
@@ -36,6 +36,19 @@ function makePendingSelection(): PendingSelection[] {
       endOffset: 13,
     },
   ];
+}
+
+function makeTag(uuid: string): Tag {
+  return {
+    uuid,
+    categoryId: 'genomforandefragor--fastighetsrattsliga-fragor',
+    targetType: 'text',
+    text: 'Markerad text',
+    paragraphIndex: 0,
+    startOffset: 0,
+    endOffset: 13,
+    createdAt: '2026-01-01T00:00:00.000Z',
+  };
 }
 
 function resetStore(overrides: Partial<ReturnType<typeof useDocumentStore.getState>> = {}) {
@@ -99,6 +112,22 @@ describe('Sidebar custom category footer action', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Lägg till kategori' }));
 
     expect(screen.getByRole('dialog', { name: 'Lägg till kategori' })).toBeTruthy();
+  });
+
+  it('clears all tags from the view tab after confirmation', () => {
+    resetStore({
+      tags: [makeTag('tag-1'), makeTag('tag-2')],
+      selectedTagUuid: 'tag-1',
+      linkingTagUuid: 'tag-2',
+    });
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    render(<SidebarHarness />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Rensa alla taggar' }));
+
+    expect(useDocumentStore.getState().tags).toEqual([]);
+    expect(useDocumentStore.getState().selectedTagUuid).toBeNull();
+    expect(useDocumentStore.getState().linkingTagUuid).toBeNull();
   });
 
   it('selects a newly created custom group for the pending tag', async () => {

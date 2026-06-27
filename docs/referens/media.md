@@ -27,7 +27,7 @@ Använd `.png` eller `.webp` för screenshots.
 | `startvy-skapa-projekt-meny.png` | Meny för nytt projekt eller import av `.pbproject`. |
 | `skapa-projekt-dialog.png` | Dialogen för nytt projekt. |
 | `editor-oversikt.png` | Hela editorläget. |
-| `sidopanel-visa-taggar.png` | Tagglista, filter och geometriåtgärder. |
+| `sidopanel-visa-taggar.png` | Tagglista, filter, rensa alla taggar och geometriåtgärder. |
 | `dokumentvy-taggmarkeringar.png` | Dokumentvy med taggmarkeringar. |
 | `dokumentvy-sokning.png` | Sökning i dokumentet. |
 | `egen-kategori-dialog-grupp.png` | Dialogen för egen grupp. |

@@ -25,6 +25,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ teman, categories }) => {
     pendingSelection,
     selectTag,
     removeTag,
+    clearAllTags,
     startLinking,
     unlinkGeometry,
     addTags,
@@ -316,6 +317,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ teman, categories }) => {
           getCategoryById={getCategoryById}
           onSelectTag={(uuid) => selectTag(uuid === selectedTagUuid ? null : uuid)}
           onRemoveTag={removeTag}
+          onClearAllTags={clearAllTags}
           onLinkGeometry={startLinking}
           onUnlinkGeometry={unlinkGeometry}
         />

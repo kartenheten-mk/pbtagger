@@ -74,6 +74,7 @@ interface DocumentActions {
   addTags: (tags: Tag[]) => void;
   updateTag: (uuid: string, changes: Partial<Tag>) => void;
   removeTag: (uuid: string) => void;
+  clearAllTags: () => void;
   selectTag: (uuid: string | null) => void;
 
   // ─── Geometry management ────────────────────────────────────────────────
@@ -392,6 +393,24 @@ export const useDocumentStore = create<AppState & DocumentActions>()(
                 state.selectedTagUuid === uuid ? null : state.selectedTagUuid,
               linkingTagUuid:
                 state.linkingTagUuid === uuid ? null : state.linkingTagUuid,
+            };
+            debouncedSave({ ...state, ...next });
+            return next;
+          }),
+
+        clearAllTags: () =>
+          set((state) => {
+            if (state.tags.length === 0) {
+              return {
+                selectedTagUuid: null,
+                linkingTagUuid: null,
+              };
+            }
+
+            const next = {
+              tags: [],
+              selectedTagUuid: null,
+              linkingTagUuid: null,
             };
             debouncedSave({ ...state, ...next });
             return next;

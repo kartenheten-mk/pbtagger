@@ -93,6 +93,7 @@ Fliken **Visa taggar** listar alla taggar i dokumentordning. Du kan filtrera på
 - se kopplade geometrier
 - starta geometri-länkning
 - ta bort taggen
+- rensa alla taggar via papperskorgen i panelens överkant
 
 ![Sidopanelen Visa taggar](../assets/screenshots/sidopanel-visa-taggar.png)
 
@@ -100,13 +101,15 @@ Fliken **Visa taggar** listar alla taggar i dokumentordning. Du kan filtrera på
 
 Taggkortet visar kategori, typ av markerat innehåll, textutdrag, eventuell notering och kopplade geometrier. Om en tagg är vald visas dess UUID längst ner på kortet som felsökningshjälp.
 
-## Ta bort en tagg
+## Ta bort en eller alla taggar
 
 1. Gå till **Visa taggar**.
 2. Leta upp taggen i listan eller klicka på markeringen i dokumentet.
 3. Klicka på papperskorgen på taggkortet.
 
 Taggen tas bort från dokumentvyn, tagglistan och exportunderlaget. Om taggen hade geometri-länkar tas även dessa länkar bort från taggen.
+
+För att rensa hela dokumentets taggning klickar du på papperskorgen i **Visa taggar**-panelens överkant och bekräftar. Då tas alla taggar, markeringar och deras geometri-länkar bort, medan dokumentet och importerade geometrier finns kvar. Åtgärden kan ångras med appens vanliga ångra-funktion.
 
 ## Söka i dokumentet
 

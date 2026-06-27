@@ -15,6 +15,7 @@ export interface ViewTagsPanelProps {
   getCategoryById: (id: string) => Category | undefined;
   onSelectTag: (uuid: string) => void;
   onRemoveTag: (uuid: string) => void;
+  onClearAllTags: () => void;
   onLinkGeometry: (tagUuid: string) => void;
   /** Unlink a specific geometry UUID from a tag */
   onUnlinkGeometry: (tagUuid: string, geometryUuid: string) => void;
@@ -29,6 +30,7 @@ export const ViewTagsPanel: React.FC<ViewTagsPanelProps> = ({
   getCategoryById,
   onSelectTag,
   onRemoveTag,
+  onClearAllTags,
   onLinkGeometry,
   onUnlinkGeometry,
 }) => {
@@ -105,6 +107,15 @@ export const ViewTagsPanel: React.FC<ViewTagsPanelProps> = ({
       return cat?.temaId === temaId;
     }).length;
 
+  const handleClearAllTags = () => {
+    if (tags.length === 0) return;
+
+    const confirmed = window.confirm(
+      'Rensa alla taggar? Detta tar bort taggarna, markeringarna och deras geometri-länkar från dokumentet.'
+    );
+    if (confirmed) onClearAllTags();
+  };
+
   return (
     <>
       {/* Header */}
@@ -112,20 +123,43 @@ export const ViewTagsPanel: React.FC<ViewTagsPanelProps> = ({
         <p className="text-xs text-gray-400">
           {tags.length} totalt · {filteredTags.length} visas
         </p>
-        <button
-          onClick={() => setIsFilterExpanded(!isFilterExpanded)}
-          className="p-1 hover:bg-gray-100 rounded-md transition-colors text-gray-400 hover:text-gray-600"
-          title={isFilterExpanded ? "Dölj filter" : "Visa filter"}
-        >
-          <svg
-            className={`w-3.5 h-3.5 transition-transform duration-200 ${isFilterExpanded ? 'rotate-180' : ''}`}
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={handleClearAllTags}
+            disabled={tags.length === 0}
+            className={`p-1 rounded-md transition-colors ${
+              tags.length === 0
+                ? 'cursor-not-allowed text-gray-200'
+                : 'text-gray-400 hover:bg-red-50 hover:text-red-500'
+            }`}
+            title="Rensa alla taggar"
+            aria-label="Rensa alla taggar"
           >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
-          </svg>
-        </button>
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+              />
+            </svg>
+          </button>
+          <button
+            onClick={() => setIsFilterExpanded(!isFilterExpanded)}
+            className="p-1 hover:bg-gray-100 rounded-md transition-colors text-gray-400 hover:text-gray-600"
+            title={isFilterExpanded ? "Dölj filter" : "Visa filter"}
+          >
+            <svg
+              className={`w-3.5 h-3.5 transition-transform duration-200 ${isFilterExpanded ? 'rotate-180' : ''}`}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       {/* Tema filter */}

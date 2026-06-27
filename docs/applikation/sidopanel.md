@@ -12,11 +12,11 @@ När en egen kategori sparas uppdateras kategoriträdet direkt i sidopanelen. De
 
 ## Visa taggar
 
-Läget listar befintliga taggar i dokumentordning. Användaren kan filtrera på tema, välja tagg, ta bort tagg, länka geometri och avlänka redigerbara geometrier.
+Läget listar befintliga taggar i dokumentordning. Användaren kan filtrera på tema, välja tagg, ta bort en enskild tagg, rensa alla taggar efter bekräftelse, länka geometri och avlänka redigerbara geometrier.
 
 ![Sidopanelens läge Visa taggar](../assets/screenshots/sidopanel-visa-taggar.png)
 
-*Visa taggar-läget listar dokumentets taggar och åtgärder för varje tagg.*
+*Visa taggar-läget listar dokumentets taggar, panelåtgärder och åtgärder för varje tagg.*
 
 ## Teckenförklaring
 
