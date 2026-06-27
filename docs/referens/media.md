@@ -19,6 +19,27 @@ Använd `.png` eller `.webp` för screenshots.
 ![Startvy med projektgalleri](../assets/screenshots/startvy-projektgalleri.png)
 ```
 
+### Aktuella manualbilder
+
+| Fil | Används för |
+| --- | --- |
+| `startvy-projektgalleri.png` | Startvy med dokumentationslänk och lokala projekt. |
+| `startvy-skapa-projekt-meny.png` | Meny för nytt projekt eller import av `.pbproject`. |
+| `skapa-projekt-dialog.png` | Dialogen för nytt projekt. |
+| `editor-oversikt.png` | Hela editorläget. |
+| `sidopanel-visa-taggar.png` | Tagglista, filter och geometriåtgärder. |
+| `dokumentvy-taggmarkeringar.png` | Dokumentvy med taggmarkeringar. |
+| `dokumentvy-sokning.png` | Sökning i dokumentet. |
+| `egen-kategori-dialog-grupp.png` | Dialogen för egen grupp. |
+| `egen-kategori-dialog-undergrupp.png` | Dialogen för egen undergrupp. |
+| `karta-geometri.png` | Kartpanel med geometrier och filter. |
+| `geometri-lankning.png` | Länkningsläge mellan tagg och geometri. |
+| `kartinstallningar-wms.png` | Kartinställningar och WMS-formulär. |
+| `datameny-export.png` | Data-menyn med import, export och inställningar. |
+| `planbeskrivning-exportkontroll.png` | Statuspopover för Planbeskrivning-export. |
+| `planbeskrivning-metadata.png` | Metadata-panel för `omfattningar.xml`. |
+| `startvy-tom.png` | Startvy när inga lokala projekt finns. |
+
 ## GIF
 
 GIF fungerar med vanlig Markdown-bildsyntax.

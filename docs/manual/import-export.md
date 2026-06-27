@@ -6,6 +6,15 @@ Alla import- och exportåtgärder i editorläget finns i toppbarens **Data**-men
 
 *Datamenyn samlar import, export, projektfil, konfiguration och exportinställningar.*
 
+## Öppna och stäng Data-menyn
+
+1. Öppna ett projekt.
+2. Klicka på **Data** i toppbaren.
+3. Välj en åtgärd i menyn.
+4. Stäng menyn med krysset, `Escape` eller genom att klicka utanför den.
+
+Efter en lyckad åtgärd visas en grön statusruta uppe till höger. Vid fel visas en röd statusruta med feltext. Felrutan ligger kvar längre så att du hinner läsa eller kopiera meddelandet.
+
 ## Importera
 
 | Åtgärd | Resultat |
@@ -15,6 +24,31 @@ Alla import- och exportåtgärder i editorläget finns i toppbarens **Data**-men
 | **Importera config.json** | Läser in kartinställningar och andra projektinställningar. |
 
 När ett dokument ersätts läser appen även eventuell Planbeskrivning XML/GML från den nya DOCX-filen.
+
+### Ersätt dokument
+
+Använd **Ersätt dokument (.docx)** när Word-filen har justerats men du vill fortsätta i samma projekt.
+
+1. Välj åtgärden i Data-menyn.
+2. Välj en ny `.docx`.
+3. Bekräfta att du vill ersätta dokumentet.
+4. Kontrollera taggmarkeringarna i dokumentvyn.
+5. Kontrollera geometri-länkarna i sidopanelen och kartpanelen.
+
+Appen försöker behålla befintliga taggar. Om den nya DOCX-filen innehåller egna inbäddade taggar används dessa i stället. Om den nya DOCX-filen innehåller Planbeskrivning XML återställs metadata och GML-geometrier från den filen.
+
+### Importera geometri
+
+**Importera geometri (.json)** läser in detaljplan-JSON i projektet. Efter import ska du kontrollera att:
+
+- kartpanelen visar rätt detaljplan
+- geometriantalet verkar rimligt
+- filterchips för geometrityper visas
+- Planbeskrivning-metadata har rätt detaljplansreferens om den kan hämtas från geometrin
+
+### Importera config
+
+**Importera config.json** ersätter projektets appkonfiguration, framför allt kartinställningar och egna kategorier. Använd det när du vill återanvända WMS-bakgrunder eller kategoritillägg från ett annat projekt.
 
 ## Exportera original
 
@@ -32,6 +66,34 @@ När ett dokument ersätts läser appen även eventuell Planbeskrivning XML/GML 
 
 Export av taggad DOCX kan blockeras om Planbeskrivning v2.0-kontrollen hittar fel och inställningen **Blockera vid fel** är aktiv.
 
+### När exportknappar är inaktiva
+
+Vissa åtgärder är inaktiva tills projektet har rätt underlag:
+
+| Knapp | Kräver |
+| --- | --- |
+| Exportera originaldokument | Ett inläst DOCX-dokument. |
+| Exportera originalgeometri | Importerad geometri-JSON. |
+| Exportera taggat dokument | Minst en tagg. |
+| Exportera geometri med motiv | Importerad geometri-JSON. |
+
+Håll muspekaren över en inaktiv knapp för att se varför den inte kan användas.
+
+### Exportera taggad DOCX
+
+Den taggade DOCX-exporten skriver tillbaka taggar som innehållskontroller och bokmärken. Den inkluderar även Planbeskrivning v2.0-data i `omfattningar.xml`.
+
+Kontrollera före export:
+
+1. Taggarna ligger på rätt innehåll.
+2. Geometri-länkarna är klara för de taggar som behöver motiv.
+3. Planbeskrivning exportkontroll saknar blockerande fel.
+4. Metadata är ifylld under **Exportinställningar** > **Redigera metadata**.
+
+### Exportera geometri med motiv
+
+Denna export skapar en kopia av geometri-JSON där motiv från länkade taggar skrivs in på planbestämmelser. Originalgeometrin i projektet ändras inte.
+
 ## Exportera projekt
 
 **Exportera hela projektet (.pbproject)** laddar ner en ZIP-baserad projektfil som innehåller:
@@ -43,6 +105,18 @@ Export av taggad DOCX kan blockeras om Planbeskrivning v2.0-kontrollen hittar fe
 
 Använd `.pbproject` när du vill arkivera arbetet eller flytta det till en annan webbläsare eller dator.
 
+`.pbproject` är det säkraste formatet för pågående arbete eftersom det innehåller både dokument, taggar, geometri och konfiguration.
+
 ## Exportera och importera config
 
 `config.json` innehåller appens projektkonfiguration, framför allt kartinställningar och sparade WMS-bakgrunder. Den kan exporteras separat och importeras i ett annat projekt när samma bakgrundskartor ska återanvändas.
+
+## Exportinställningar
+
+Längst ner i Data-menyn finns **Exportinställningar**. Där kan du:
+
+- se att Planbeskrivning v2.0 inkluderas i taggad DOCX-export
+- växla mellan **Blockera vid fel** och **Tillåt med fel**
+- öppna metadata-panelen för `omfattningar.xml`
+
+Se [Planbeskrivning v2.0](planbeskrivning-v2.md) för detaljer om statusindikatorn, metadata och compliance.
