@@ -133,6 +133,8 @@ Använd `.pbproject` när du vill arkivera arbetet eller flytta det till en anna
 
 `.pbproject` är det säkraste formatet för pågående arbete eftersom det innehåller både dokument, taggar, geometri och konfiguration.
 
+I projektfilen sparar `project.json` själva arbetsinnehållet, till exempel taggar, geometrier och aktiv geometri. `config.json` sparar projektets inställningar, till exempel WMS-bakgrunder och egna taggkategorier. Äldre `.pbproject`-filer kan sakna `config.json`; då används standardinställningar när projektet öppnas.
+
 ## Exportera och importera config
 
 `config.json` innehåller appens projektkonfiguration, framför allt kartinställningar, sparade WMS-bakgrunder och egna taggkategorier. Den kan exporteras separat och importeras i ett annat projekt. Import via Data-menyn ersätter hela konfigurationen; delimport i sidopanelen eller kartinställningarna ersätter bara vald del.

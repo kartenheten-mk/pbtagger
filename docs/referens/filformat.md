@@ -87,6 +87,10 @@ Projektfilen är en ZIP som innehåller:
 | `config.json` | Appkonfiguration. |
 | `geometry_doc.json` | Originalgeometri, om en geometri-JSON har importerats. |
 
+`project.json` och `config.json` har olika ansvar i projektfilen. `project.json` beskriver det aktuella arbetet: filnamn, taggar, geometrier och vilken geometri som är aktiv. `config.json` beskriver inställningarna runt arbetet: kartbakgrunder, vald WMS-karta och egna taggningskategorier.
+
+Nyare `.pbproject`-filer innehåller `config.json`. Äldre projektfiler kan sakna den; då öppnas projektet med appens standardkonfiguration.
+
 ## `config.json`
 
 Konfigurationsfilen innehåller appinställningar som kan flyttas mellan projekt. Den innehåller kartkonfiguration och egna taggningskategorier.
