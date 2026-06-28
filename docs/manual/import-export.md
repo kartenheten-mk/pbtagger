@@ -68,7 +68,7 @@ Om du bara vill importera en del av filen kan du göra det nära arbetsflödet:
 | --- | --- |
 | **Exportera taggat dokument (.docx)** | Skapar en DOCX med innehållskontroller, bokmärken, taggmetadata och Planbeskrivning v2.0-data. |
 | **Exportera taggar (.json)** | Skapar en platt JSON-fil med alla taggar, kategoriinformation, dokumentpositioner och länkad geometri för databasinläsning. |
-| **Exportera geometri med motiv (.json)** | Skapar en kopia av geometri-JSON där länkade motiv skrivs in i planbestämmelser. |
+| **Exportera geometri med motiv (.json)** | Skapar en kopia av geometri-JSON för NGP där länkade motiv skrivs in i planbestämmelser. |
 
 Export av taggad DOCX kan blockeras om Planbeskrivning v2.0-kontrollen hittar fel och inställningen **Blockera vid fel** är aktiv.
 
@@ -118,7 +118,7 @@ Kontrollera före export:
 
 ### Exportera geometri med motiv
 
-Denna export skapar en kopia av geometri-JSON där motiv från länkade taggar skrivs in på planbestämmelser. Originalgeometrin i projektet ändras inte.
+Denna export skapar en kopia av geometri-JSON där motiv från länkade taggar skrivs in på planbestämmelser. JSON-filen kan användas som underlag vid uppladdning till NGP, med motiv uppdaterade enligt de länkade taggarna i planbeskrivningen. Originalgeometrin i projektet ändras inte.
 
 ## Exportera projekt
 
