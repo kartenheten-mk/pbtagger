@@ -1,13 +1,18 @@
 # Planbeskrivning Tagger
 
+## Intro
+
+<div class="intro-video-crop">
+  <video autoplay muted playsinline controls class="docs-video">
+    <source src="assets/videos/intro_pbtagger_v1.mp4" type="video/mp4">
+    Din webbläsare kan inte spela upp videon.
+  </video>
+</div>
+
 Planbeskrivning Tagger är ett webbverktyg för att läsa in planbeskrivningar i `.docx`, märka upp innehåll med taggar och koppla taggarna till geometrier från detaljplanedata. Dokumentationen här är uppdelad i två huvudspår:
 
 - **Användarmanualen** beskriver praktiska arbetsflöden i gränssnittet.
 - **Teknisk dokumentation** beskriver implementation, dataflöden och exportformat.
-
-![Startvy utan sparade projekt](assets/screenshots/startvy-tom.png)
-
-*Startvyn är första ingången när du skapar ett nytt projekt eller importerar en sparad `.pbproject`.*
 
 !!! note "Manual med screenshots"
     Användarmanualen innehåller aktuella screenshots för startvy, dokumentvy, sidopanel, kartpanel, Data-meny, Planbeskrivning-kontroll och vanliga felsökningslägen.
