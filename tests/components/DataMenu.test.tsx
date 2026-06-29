@@ -228,7 +228,7 @@ describe('DataMenu export grouping', () => {
     expect(JSON.parse(await (blob as Blob).text())).toEqual(config);
   });
 
-  it('exports tag JSON with categories and linked geometry', async () => {
+  it('exports tag ZIP with categories in tags.json and linked geometry in geometries.geojson', async () => {
     const category: Category = {
       id: 'detaljplanens-syfte--syfte',
       name: 'Syfte',
@@ -255,12 +255,32 @@ describe('DataMenu export grouping', () => {
     });
 
     const [blob, fileName] = vi.mocked(saveAs).mock.calls[0];
-    const json = JSON.parse(await (blob as Blob).text());
+    const zip = new PizZip(await (blob as Blob).arrayBuffer());
+    const tagsJson = zip.file('tags.json');
+    expect(tagsJson).toBeTruthy();
+    const json = JSON.parse(tagsJson!.asText());
+    const geometriesGeoJson = zip.file('geometries.geojson');
+    expect(geometriesGeoJson).toBeTruthy();
+    const geojson = JSON.parse(geometriesGeoJson!.asText());
 
-    expect(fileName).toBe('Planbeskrivning_taggar.json');
-    expect((blob as Blob).type).toBe('application/json');
+    expect(fileName).toBe('Planbeskrivning_taggar.zip');
+    expect((blob as Blob).type).toBe('application/zip');
     expect(json).toMatchObject({
-      schemaVersion: 1,
+      schemaVersion: 2,
+      assets: {
+        geometries: {
+          path: 'geometries.geojson',
+          linkedGeometryCount: 1,
+          featureCount: 1,
+          missingGeometryReferenceCount: 0,
+        },
+        images: {
+          directory: 'images',
+          imageTagCount: 0,
+          exportedImageCount: 0,
+          missingImageCount: 0,
+        },
+      },
       sourceDocument: {
         fileName: 'Planbeskrivning.docx',
         activeGeometryDocId: 'plan-1',
@@ -285,11 +305,21 @@ describe('DataMenu export grouping', () => {
       geometryIds: ['geo-1'],
       missingGeometryIds: [],
     });
-    expect(json.tags[0].geometries[0]).toEqual({
-      type: 'Point',
-      coordinates: [18.1, 59.3],
+    expect(json.tags[0]).not.toHaveProperty('geometries');
+    expect(geojson).toEqual({
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          id: 'geo-1',
+          properties: {},
+          geometry: {
+            type: 'Point',
+            coordinates: [18.1, 59.3],
+          },
+        },
+      ],
     });
-    expect(json.tags[0].geometries[0].properties).toBeUndefined();
   });
 
   it('passes supplied categories into tagged DOCX export options', async () => {

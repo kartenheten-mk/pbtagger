@@ -1,9 +1,15 @@
 import { describe, expect, it } from 'vitest';
+import PizZip from 'pizzip';
 import {
   buildTagJsonExport,
   buildTagJsonExportFileName,
 } from '../../src/export/tagJsonExport';
-import type { Category, Geometry, Tag, TagTargetType } from '../../src/types';
+import {
+  buildTagJsonWithImagesPackage,
+  buildTagJsonWithImagesZip,
+  buildTagJsonWithImagesZipFileName,
+} from '../../src/export/tagJsonWithImagesExport';
+import type { Category, DocModel, Geometry, Tag, TagTargetType } from '../../src/types';
 
 const CREATED_AT = '2026-06-01T10:00:00.000Z';
 const EXPORTED_AT = '2026-06-02T12:00:00.000Z';
@@ -72,6 +78,26 @@ function makeGeometry(overrides: Partial<Geometry> = {}): Geometry {
       extra: 'värde',
     },
     ...overrides,
+  };
+}
+
+function makeDocModelWithImage(imageData = new Uint8Array([137, 80, 78, 71])): DocModel {
+  return {
+    paragraphs: [
+      {
+        index: 0,
+        headingLevel: 0,
+        runs: [
+          {
+            id: 'p0_r0',
+            text: '',
+            isImage: true,
+            imageData,
+            imageMime: 'image/png',
+          },
+        ],
+      },
+    ],
   };
 }
 
@@ -247,5 +273,184 @@ describe('buildTagJsonExportFileName', () => {
       'Planbeskrivning_taggar.json'
     );
     expect(buildTagJsonExportFileName('')).toBe('taggar.json');
+  });
+});
+
+describe('tag JSON with images ZIP export', () => {
+  it('writes tagged image files to images/ and references them from tags.json', async () => {
+    const imageData = new Uint8Array([137, 80, 78, 71, 1, 2, 3]);
+    const blob = buildTagJsonWithImagesZip({
+      tags: [
+        makeTag({
+          uuid: 'tag-image-1',
+          targetType: 'image',
+          text: 'Bild',
+          paragraphIndex: 0,
+          startOffset: 0,
+          endOffset: 0,
+          runId: 'p0_r0',
+        }),
+      ],
+      geometries: [],
+      categories: [groupCategory],
+      docModel: makeDocModelWithImage(imageData),
+      exportedAt: EXPORTED_AT,
+    });
+
+    const zip = new PizZip(await blob.arrayBuffer());
+    const tagsJsonFile = zip.file('tags.json');
+    expect(tagsJsonFile).not.toBeNull();
+
+    const exported = JSON.parse(tagsJsonFile!.asText());
+    expect(exported.schemaVersion).toBe(2);
+    expect(exported.assets).toMatchObject({
+      geometries: {
+        path: 'geometries.geojson',
+        linkedGeometryCount: 0,
+        featureCount: 0,
+        missingGeometryReferenceCount: 0,
+      },
+      images: {
+        directory: 'images',
+        imageTagCount: 1,
+        exportedImageCount: 1,
+        missingImageCount: 0,
+      },
+    });
+    expect(exported.tags[0].image).toEqual({
+      path: 'images/tag-image-1.png',
+      fileName: 'tag-image-1.png',
+      mimeType: 'image/png',
+      byteLength: imageData.byteLength,
+    });
+    expect(exported.tags[0].missingImage).toBe(false);
+    expect(exported.tags[0]).not.toHaveProperty('geometries');
+
+    const geometryFile = zip.file('geometries.geojson');
+    expect(geometryFile).not.toBeNull();
+    expect(JSON.parse(geometryFile!.asText())).toEqual({
+      type: 'FeatureCollection',
+      features: [],
+    });
+
+    const imageFile = zip.file('images/tag-image-1.png');
+    expect(imageFile).not.toBeNull();
+    expect(Array.from(imageFile!.asUint8Array())).toEqual(Array.from(imageData));
+  });
+
+  it('writes linked geometries once to geometries.geojson and keeps tag geometry references', async () => {
+    const blob = buildTagJsonWithImagesZip({
+      tags: [
+        makeTag({ uuid: 'tag-1', geometryIds: ['geo-1'] }),
+        makeTag({ uuid: 'tag-2', geometryIds: ['geo-1', 'missing-geo'] }),
+      ],
+      geometries: [makeGeometry()],
+      categories: [groupCategory],
+      docModel: { paragraphs: [] },
+      exportedAt: EXPORTED_AT,
+    });
+
+    const zip = new PizZip(await blob.arrayBuffer());
+    const exported = JSON.parse(zip.file('tags.json')!.asText());
+    const geojson = JSON.parse(zip.file('geometries.geojson')!.asText());
+
+    expect(exported.assets.geometries).toEqual({
+      path: 'geometries.geojson',
+      linkedGeometryCount: 1,
+      featureCount: 1,
+      missingGeometryReferenceCount: 1,
+    });
+    expect(exported.tags[0]).toMatchObject({
+      uuid: 'tag-1',
+      geometryIds: ['geo-1'],
+      missingGeometryIds: [],
+    });
+    expect(exported.tags[0]).not.toHaveProperty('geometries');
+    expect(exported.tags[1]).toMatchObject({
+      uuid: 'tag-2',
+      geometryIds: ['geo-1', 'missing-geo'],
+      missingGeometryIds: ['missing-geo'],
+    });
+    expect(exported.tags[1]).not.toHaveProperty('geometries');
+
+    expect(geojson).toEqual({
+      type: 'FeatureCollection',
+      features: [
+        {
+          type: 'Feature',
+          id: 'geo-1',
+          properties: {},
+          geometry: {
+            type: 'Point',
+            coordinates: [18.1, 59.3],
+          },
+        },
+      ],
+    });
+    expect(Object.keys(geojson.features[0]).sort()).toEqual([
+      'geometry',
+      'id',
+      'properties',
+      'type',
+    ]);
+    expect(geojson.features[0].properties).not.toHaveProperty('uuid');
+    expect(geojson.features[0].properties).not.toHaveProperty('geometryId');
+    expect(geojson.features[0].properties).not.toHaveProperty('color');
+    expect(geojson.features[0].properties).not.toHaveProperty('name');
+    expect(geojson.features[0].properties).not.toHaveProperty('type');
+    expect(geojson.features[0].properties).not.toHaveProperty('featureType');
+    expect(geojson.features[0].properties).not.toHaveProperty('sourceDocId');
+    expect(geojson.features[0].properties).not.toHaveProperty('bestammelseformulering');
+    expect(geojson.features[0].properties).not.toHaveProperty('linkedTagUuids');
+  });
+
+  it('keeps image tags in tags.json when the referenced image cannot be found', () => {
+    const result = buildTagJsonWithImagesPackage({
+      tags: [
+        makeTag({
+          uuid: 'tag-missing-image',
+          targetType: 'image',
+          text: 'Bild',
+          paragraphIndex: 0,
+          startOffset: 0,
+          endOffset: 0,
+          runId: 'missing-run',
+        }),
+      ],
+      geometries: [],
+      categories: [groupCategory],
+      docModel: makeDocModelWithImage(),
+      exportedAt: EXPORTED_AT,
+    });
+
+    expect(result.imageFiles).toEqual([]);
+    expect(result.geometryGeoJson).toEqual({
+      type: 'FeatureCollection',
+      features: [],
+    });
+    expect(result.exportJson.assets).toMatchObject({
+      geometries: {
+        path: 'geometries.geojson',
+        linkedGeometryCount: 0,
+        featureCount: 0,
+        missingGeometryReferenceCount: 0,
+      },
+      images: {
+        directory: 'images',
+        imageTagCount: 1,
+        exportedImageCount: 0,
+        missingImageCount: 1,
+      },
+    });
+    expect(result.exportJson.tags[0].image).toBeNull();
+    expect(result.exportJson.tags[0].missingImage).toBe(true);
+    expect(result.exportJson.tags[0]).not.toHaveProperty('geometries');
+  });
+
+  it('builds a document-based ZIP file name with a fallback', () => {
+    expect(buildTagJsonWithImagesZipFileName('Planbeskrivning.docx')).toBe(
+      'Planbeskrivning_taggar.zip'
+    );
+    expect(buildTagJsonWithImagesZipFileName('')).toBe('taggar.zip');
   });
 });

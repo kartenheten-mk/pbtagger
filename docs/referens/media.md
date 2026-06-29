@@ -35,8 +35,8 @@ Använd `.png` eller `.webp` för screenshots.
 | `karta-geometri.png` | Kartpanel med geometrier och filter. |
 | `geometri-lankning.png` | Länkningsläge mellan tagg och geometri. |
 | `kartinstallningar-wms.png` | Kartinställningar och WMS-formulär. |
-| `datameny-export.png` | Data-menyn med import, export och tagg-JSON. |
-| `datameny-export-tagg-json.png` | Data-menyn med knappen för tagg-JSON-export. |
+| `datameny-export.png` | Data-menyn med import, export och tagg-ZIP. |
+| `datameny-export-tagg-json.png` | Data-menyn med knappen för tagg-ZIP-export. |
 | `planbeskrivning-exportkontroll.png` | Statuspopover för Planbeskrivning-export. |
 | `planbeskrivning-metadata.png` | Metadata-panel för `omfattningar.xml`. |
 | `startvy-tom.png` | Startvy när inga lokala projekt finns. |
