@@ -4,7 +4,7 @@ Alla import- och exportåtgärder i editorläget finns i toppbarens **Data**-men
 
 ![Datamenyn med import och export](../assets/screenshots/datameny-export.png)
 
-*Datamenyn samlar import, export, projektfil, konfiguration och exportinställningar. Bilden visar exportgruppen med tagg-JSON.*
+*Datamenyn samlar import, export, projektfil, konfiguration och exportinställningar. Bilden visar exportgruppen med tagg-ZIP.*
 
 ## Öppna och stäng Data-menyn
 
@@ -67,29 +67,45 @@ Om du bara vill importera en del av filen kan du göra det nära arbetsflödet:
 | Åtgärd | Resultat |
 | --- | --- |
 | **Exportera taggat dokument (.docx)** | Skapar en DOCX med innehållskontroller, bokmärken, taggmetadata och Planbeskrivning v2.0-data. |
-| **Exportera taggar (.json)** | Skapar en platt JSON-fil med alla taggar, kategoriinformation, dokumentpositioner och länkad geometri för databasinläsning. |
+| **Exportera taggar (.zip)** | Skapar en ZIP-fil med `tags.json`, `geometries.geojson` och taggade bilder i `images/` när sådana finns. |
 | **Exportera geometri med motiv (.json)** | Skapar en kopia av geometri-JSON för NGP där länkade motiv skrivs in i planbestämmelser. |
 
 Export av taggad DOCX kan blockeras om Planbeskrivning v2.0-kontrollen hittar fel och inställningen **Blockera vid fel** är aktiv.
 
-### Exportera taggar som JSON
+### Exportera taggar som ZIP
 
-**Exportera taggar (.json)** laddar ner en fristående JSON-fil som är tänkt för vidare bearbetning i script, till exempel för att läsa in taggar och geometrier i en databas med Python.
+**Exportera taggar (.zip)** laddar ner en ZIP-fil som är tänkt för vidare bearbetning i script, till exempel för att läsa in taggar, geometrier och bildreferenser i en databas med Python.
 
-![Datamenyn med tagg-JSON-export](../assets/screenshots/datameny-export-tagg-json.png)
+![Datamenyn med tagg-ZIP-export](../assets/screenshots/datameny-export-tagg-json.png)
 
-*Tagg-JSON-exporten ligger i gruppen Med taggar och motiv.*
+*Tagg-ZIP-exporten ligger i gruppen Med taggar och motiv.*
 
-Exporten innehåller:
+ZIP-filen får normalt namnet `Planbeskrivning_taggar.zip`. Den innehåller:
+
+```text
+Planbeskrivning_taggar.zip
+├─ tags.json
+├─ geometries.geojson
+└─ images/
+   └─ <tagg-uuid>.<filändelse>
+```
+
+`images/` skapas med filer för taggade bilder när bilddata finns i dokumentmodellen. Texttaggar, tabeller och diagram har ingen bildfil. `geometries.geojson` finns alltid med och innehåller de geometrier som någon tagg länkar till.
+
+`tags.json` innehåller:
 
 - alla taggar i dokumentet
 - tema, grupp och eventuell undergrupp för varje tagg
 - dokumentposition, till exempel styckeindex och teckenoffset
 - `geometryIds` för geometrier som taggen är kopplad till
 - `missingGeometryIds` om en tagg pekar på en geometri som inte finns i aktuellt projekt
-- länkad geometri som ren GeoJSON Geometry
+- `assets.geometries.path`, som pekar på `geometries.geojson`
+- `image.path`, `image.mimeType` och `image.byteLength` för bildtaggar som har exporterats till `images/`
+- `missingImage: true` för bildtaggar där bildfilen inte kunde hittas
 
-Geometridelen innehåller inte rå metadata från importerad detaljplan-JSON. Den tar bara med själva GeoJSON-geometrin, till exempel `Point`, `LineString` eller `Polygon` med koordinater.
+`geometries.geojson` är en GeoJSON FeatureCollection. Varje feature har `id` som matchar taggarnas `geometryIds`, själva GeoJSON-geometrin och ett tomt `properties`-objekt. Om flera taggar pekar på samma geometri skrivs geometrin bara en gång.
+
+Geometrifilen innehåller inte rå metadata från importerad detaljplan-JSON och inte appens presentationsfält, till exempel färg, namn eller käll-dokument. Den tar bara med feature-id och själva GeoJSON-geometrin, till exempel `Point`, `LineString` eller `Polygon` med koordinater. Kopplingen tillbaka till taggarna finns i `tags.json` via `geometryIds`.
 
 ### När exportknappar är inaktiva
 

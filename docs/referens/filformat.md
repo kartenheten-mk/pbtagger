@@ -8,20 +8,38 @@ Word-dokumentet är källan för text, bilder, tabeller och export. Appen bevara
 
 Detaljplan-JSON används för geometrier. Original-JSON sparas så att den kan exporteras oförändrad eller med motiv.
 
-Appen kan också exportera taggar som en platt JSON-fil för vidare bearbetning i script eller databaser. Den exporten har `schemaVersion` `1` och innehåller taggdata, kategorier och länkad geometri som ren GeoJSON Geometry.
+## Taggexport `.zip`
 
-Exempel på en förkortad tagg-JSON-export:
+Taggexporten skapas som en ZIP-fil för vidare bearbetning i script, GIS-verktyg eller databaser. ZIP-filen separerar taggmetadata, geometrier och bildfiler.
+
+```text
+Planbeskrivning_taggar.zip
+├─ tags.json
+├─ geometries.geojson
+└─ images/
+   └─ <tagg-uuid>.png
+```
+
+| Fil/katalog | Innehåll |
+| --- | --- |
+| `tags.json` | Taggdata, kategorier, dokumentpositioner samt referenser till geometri- och bildfiler. |
+| `geometries.geojson` | GeoJSON FeatureCollection med unika länkade geometrier, utan appens presentationsmetadata. |
+| `images/` | Bildfiler för taggade bilder när bilddata finns. |
+
+`tags.json` har `schemaVersion` `2`. Taggar refererar till geometrier med `geometryIds`; dessa matchar `features[].id` i `geometries.geojson`. Bildtaggar refererar till filer i `images/` med `image.path`.
+
+Exempel på ett förkortat `tags.json`:
 
 ```json
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "exportedAt": "2026-06-27T12:00:00.000Z",
   "sourceDocument": {
     "fileName": "Planbeskrivning.docx",
     "activeGeometryDocId": "plan-1"
   },
   "summary": {
-    "tagCount": 1,
+    "tagCount": 2,
     "linkedGeometryCount": 1,
     "categories": [
       {
@@ -34,10 +52,24 @@ Exempel på en förkortad tagg-JSON-export:
         "undergruppId": null,
         "undergruppName": null,
         "custom": false,
-        "tagCount": 1
+        "tagCount": 2
       }
     ],
     "unknownCategoryIds": []
+  },
+  "assets": {
+    "geometries": {
+      "path": "geometries.geojson",
+      "linkedGeometryCount": 1,
+      "featureCount": 1,
+      "missingGeometryReferenceCount": 0
+    },
+    "images": {
+      "directory": "images",
+      "imageTagCount": 1,
+      "exportedImageCount": 1,
+      "missingImageCount": 0
+    }
   },
   "tags": [
     {
@@ -63,18 +95,58 @@ Exempel på en förkortad tagg-JSON-export:
       "customCategory": false,
       "geometryIds": ["geo-1"],
       "missingGeometryIds": [],
-      "geometries": [
-        {
-          "type": "Point",
-          "coordinates": [18.1, 59.3]
-        }
-      ]
+      "image": null,
+      "missingImage": false
+    },
+    {
+      "uuid": "tag-2",
+      "targetType": "image",
+      "text": "Bild",
+      "paragraphIndex": 3,
+      "startOffset": 0,
+      "endParagraphIndex": 3,
+      "endOffset": 0,
+      "runId": "p3_r1",
+      "tableId": null,
+      "categoryId": "detaljplanens-syfte--syfte",
+      "geometryIds": [],
+      "missingGeometryIds": [],
+      "image": {
+        "path": "images/tag-2.png",
+        "fileName": "tag-2.png",
+        "mimeType": "image/png",
+        "byteLength": 12345
+      },
+      "missingImage": false
     }
   ]
 }
 ```
 
-`geometries` innehåller bara GeoJSON Geometry-objekt. Råa properties från importerad detaljplan-JSON exporteras inte i tagg-JSON-filen.
+Exempel på ett förkortat `geometries.geojson`:
+
+```json
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "id": "geo-1",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [18.1, 59.3]
+      },
+      "properties": {}
+    }
+  ]
+}
+```
+
+`geometries.geojson` innehåller bara geometrier som minst en tagg länkar till. Om flera taggar pekar på samma geometri skrivs den en gång. Kopplingen från tagg till geometri finns i `tags.json` genom `geometryIds`.
+
+Råa properties från importerad detaljplan-JSON exporteras inte i `tags.json`. `geometries.geojson` innehåller endast `Feature.id`, `geometry` och ett tomt `properties`-objekt.
+
+För bildtaggar pekar `image.path` på filen inne i samma ZIP. Om bilden inte kan hittas sätts `image` till `null` och `missingImage` till `true`.
 
 ## `.pbproject`
 
