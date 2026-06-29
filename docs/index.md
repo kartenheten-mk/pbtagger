@@ -3,10 +3,15 @@
 ## Intro
 
 <div class="intro-video-crop">
-  <video autoplay muted playsinline controls class="docs-video">
+  <video preload="metadata" playsinline controls class="docs-video" data-intro-video>
     <source src="assets/videos/intro_pbtagger_v1.mp4" type="video/mp4">
     Din webbläsare kan inte spela upp videon.
   </video>
+  <div class="intro-video-overlay" data-intro-video-overlay>
+    <button class="intro-video-start" type="button" data-intro-video-start>
+      Starta introvideo
+    </button>
+  </div>
 </div>
 
 Planbeskrivning Tagger är ett webbverktyg för att läsa in planbeskrivningar i `.docx`, märka upp innehåll med taggar och koppla taggarna till geometrier från detaljplanedata. Dokumentationen här är uppdelad i två huvudspår:

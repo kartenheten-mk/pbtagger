@@ -43,6 +43,9 @@ markdown_extensions:
 extra_css:
   - assets/stylesheets/extra.css
 
+extra_javascript:
+  - assets/javascripts/intro-video.js
+
 nav:
   - Start: index.md
   - Användarmanual:
